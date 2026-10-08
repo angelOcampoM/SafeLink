@@ -1,0 +1,27 @@
+name: safelink
+description: "SafeLink - Servicio de respuesta de seguridad privada bajo demanda (prototipo UTEZ)."
+publish_to: 'none'
+version: 0.2.0+1
+
+environment:
+  sdk: ">=3.6.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  # Navegación declarativa con redirección por rol.
+  go_router: ^16.0.0
+  # Inyección de repositorios y estado de sesión.
+  provider: ^6.1.2
+  # Tipografía Inter (se descarga en la primera ejecución y queda en caché).
+  google_fonts: ^6.2.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
