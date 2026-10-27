@@ -133,8 +133,8 @@ class _Logo extends StatelessWidget {
       children: [
         Container(
           padding: const EdgeInsets.all(AppSpacing.sm),
-          decoration: BoxDecoration(color: AppColors.tint(AppColors.emergency), borderRadius: AppRadius.brMd),
-          child: const Icon(Icons.shield_rounded, color: AppColors.emergency, size: AppSizes.iconLg),
+          decoration: BoxDecoration(color: AppColors.tint(AppColors.info), borderRadius: AppRadius.brMd),
+          child: const Icon(Icons.shield_rounded, color: AppColors.info, size: AppSizes.iconLg),
         ),
         AppSpacing.gapSm,
         Text('SafeLink', style: context.text.headlineMedium),

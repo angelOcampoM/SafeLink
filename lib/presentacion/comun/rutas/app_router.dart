@@ -27,6 +27,7 @@ import '../../usuario/configuracion_page.dart';
 import '../../usuario/estado_alerta_page.dart';
 import '../../usuario/historial_usuario_page.dart';
 import '../../usuario/inicio_page.dart';
+import '../../usuario/permisos_page.dart';
 import 'app_routes.dart';
 import 'fabrica_view_models.dart';
 
@@ -47,18 +48,26 @@ GoRouter crearRouter(SesionViewModel sesion, FabricaViewModels f) {
       final usuario = sesion.usuario;
 
       if (usuario == null) return publicas.contains(ruta) ? null : AppRoutes.login;
-      if (ruta == AppRoutes.login || ruta == AppRoutes.register) return inicioPara(usuario.rol);
+
+      // Pantallas que el usuario protegido no puede saltarse: el aviso de
+      // bloqueo (sección 6.6) y los permisos recién registrado (U-01).
+      final obligatoria = switch (usuario.rol) {
+        RolUsuario.usuarioProtegido when sesion.bloqueado => AppRoutes.userBlocked,
+        RolUsuario.usuarioProtegido when sesion.permisosPendientes => AppRoutes.userPermissions,
+        _ => null,
+      };
+
+      if (ruta == AppRoutes.login || ruta == AppRoutes.register) return obligatoria ?? inicioPara(usuario.rol);
       if (ruta == AppRoutes.styleGuide) return null;
 
       // Cada rol solo entra a su sección (los permisos reales los valida la API).
       final prefijo = inicioPara(usuario.rol);
       if (!ruta.startsWith(prefijo)) return prefijo;
 
-      // Usuario bloqueado → aviso en lugar del botón (sección 6.6).
-      if (usuario.rol == RolUsuario.usuarioProtegido) {
-        if (sesion.bloqueado && ruta != AppRoutes.userBlocked) return AppRoutes.userBlocked;
-        if (!sesion.bloqueado && ruta == AppRoutes.userBlocked) return AppRoutes.userHome;
-      }
+      if (obligatoria != null) return ruta == obligatoria ? null : obligatoria;
+
+      // Ya no aplican: nadie se queda atrapado en ellas.
+      if (ruta == AppRoutes.userBlocked || ruta == AppRoutes.userPermissions) return AppRoutes.userHome;
       return null;
     },
     routes: [
@@ -75,6 +84,7 @@ GoRouter crearRouter(SesionViewModel sesion, FabricaViewModels f) {
           GoRoute(path: 'settings', builder: (_, __) => ConfiguracionPage(viewModel: f.configuracion())),
           GoRoute(path: 'history', builder: (_, __) => HistorialUsuarioPage(viewModel: f.historialUsuario())),
           GoRoute(path: 'blocked', builder: (_, __) => BloqueadoPage(sesion: sesion)),
+          GoRoute(path: 'permissions', builder: (_, __) => PermisosPage(sesion: sesion)),
         ],
       ),
 

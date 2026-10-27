@@ -10,6 +10,7 @@ abstract final class AppRoutes {
 
   // Usuario protegido
   static const userHome = '/user';
+  static const userPermissions = '/user/permissions';
   static const userAlert = '/user/alert';
   static const userSettings = '/user/settings';
   static const userBlocked = '/user/blocked';

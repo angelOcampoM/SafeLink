@@ -18,6 +18,10 @@ class SesionViewModel extends ViewModel {
   bool get haySesion => usuario != null;
   bool get bloqueado => usuario?.bloqueadoEn(_reloj()) ?? false;
 
+  /// U-01: tras registrarse hay que mostrar la pantalla de permisos una vez.
+  /// El router la consulta para redirigir; se apaga al tocar "Continuar".
+  bool permisosPendientes = false;
+
   /// Lanza `ErrorDominio`; quien llama decide cómo mostrarlo.
   Future<Usuario> iniciarSesion(String correo, String contrasena) async {
     final u = await _auth.iniciarSesion(correo: correo.trim(), contrasena: contrasena);
@@ -32,6 +36,7 @@ class SesionViewModel extends ViewModel {
     required String contrasena,
   }) async {
     final u = await _auth.registrar(nombre: nombre, correo: correo, telefono: telefono, contrasena: contrasena);
+    permisosPendientes = true;
     notifyListeners();
     return u;
   }
@@ -46,8 +51,15 @@ class SesionViewModel extends ViewModel {
     notifyListeners();
   }
 
+  /// La pantalla de permisos ya se mostró: el router deja pasar al inicio.
+  void permisosVistos() {
+    permisosPendientes = false;
+    notifyListeners();
+  }
+
   Future<void> cerrarSesion() async {
     await _auth.cerrarSesion();
+    permisosPendientes = false;
     notifyListeners();
   }
 }

@@ -40,8 +40,9 @@ class RegistroViewModel extends ViewModel {
     cargando = true;
     notifyListeners();
     try {
+      // La sesión queda con `permisosPendientes`: el router lleva a la
+      // pantalla de permisos antes del inicio (U-01).
       await _sesion.registrar(nombre: nombre, correo: correo, telefono: telefono, contrasena: contrasena);
-      // TODO(U-01): mostrar pantalla de permisos (cámara, ubicación, notificaciones).
       return true;
     } catch (e) {
       error = ViewModel.mensajeDe(e);
