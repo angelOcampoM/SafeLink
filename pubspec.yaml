@@ -13,8 +13,6 @@ dependencies:
     sdk: flutter
   # Navegación declarativa con redirección por rol.
   go_router: ^16.0.0
-  # Inyección de repositorios y estado de sesión.
-  provider: ^6.1.2
   # Tipografía Inter (se descarga en la primera ejecución y queda en caché).
   google_fonts: ^6.2.1
 
