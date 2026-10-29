@@ -1,7 +1,7 @@
 // CAPA: PRESENTACIÓN — View
-// G-02 Recepción (banner "Alerta entrante") · G-03 Listado por cercanía y prioridad · Fuera de turno
-// Pinta el turno, el banner de alerta entrante y el listado con pull-to-refresh.
-// No escucha streams, no ordena y no sabe de dónde vienen las alertas.
+// G-02 Recepción (banner "Alerta entrante") · G-03 Listado por cercanía y prioridad, con filtros · Fuera de turno
+// Pinta el turno, el banner de alerta entrante, los filtros y el listado con pull-to-refresh.
+// No escucha streams, no filtra ni ordena y no sabe de dónde vienen las alertas.
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -43,6 +43,16 @@ class _ListadoAlertasPageState extends State<ListadoAlertasPage> {
     context.push(AppRoutes.guardIncoming(id));
   }
 
+  /// Hoja inferior con opciones; solo avisa si se eligió una (cerrarla no cambia nada).
+  Future<void> _elegir<T>(String titulo, List<T> valores, String Function(T) etiqueta, T actual, ValueChanged<T> alElegir) async {
+    final i = await showModalBottomSheet<int>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => HojaOpciones(titulo: titulo, opciones: [for (final v in valores) etiqueta(v)], seleccionada: valores.indexOf(actual)),
+    );
+    if (i != null) alElegir(valores[i]);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -57,6 +67,7 @@ class _ListadoAlertasPageState extends State<ListadoAlertasPage> {
             final motivo = vm.motivoNoDisponible;
             if (motivo != null) return SinRecibirAlertasView(motivo: motivo);
             final entrante = vm.entrante;
+            final f = vm.filtro;
             return Column(
               children: [
                 Padding(padding: _margenFila, child: BarraTurno(guardia: guardia)),
@@ -69,6 +80,20 @@ class _ListadoAlertasPageState extends State<ListadoAlertasPage> {
                       onOcultar: vm.descartarEntrante,
                     ),
                   ),
+                FiltrosListado(
+                  filtro: f,
+                  onDistancia: () => _elegir<int?>(
+                    'Distancia',
+                    [null, ...FiltroAlertasDisponibles.distancias],
+                    etiquetaDistancia,
+                    f.distanciaMaxMetros,
+                    vm.cambiarDistancia,
+                  ),
+                  onEvidencia: () => _elegir('Evidencia', FiltroEvidencia.values, (e) => e.etiqueta, f.evidencia, vm.cambiarEvidencia),
+                  onOrden: () => _elegir('Ordenar por', OrdenAlertasDisponibles.values, (o) => o.etiqueta, f.orden, vm.cambiarOrden),
+                  onMetodo: vm.cambiarMetodo,
+                  onLimpiar: vm.limpiarFiltros,
+                ),
                 Expanded(
                   child: SlStateView<List<AlertaPriorizada>>(
                     estado: vm.estado,
@@ -80,11 +105,16 @@ class _ListadoAlertasPageState extends State<ListadoAlertasPage> {
                       title: 'Todo tranquilo',
                       message: 'No hay alertas en tu zona. Te avisaremos en cuanto llegue una.',
                     ),
-                    builder: (context, lista) => ListaAlertasDisponibles(
-                      alertas: lista,
-                      ahora: vm.ahora,
-                      onAbrir: (id) => context.push(AppRoutes.guardAlertDetail(id)),
-                    ),
+                    builder: (context, _) {
+                      final lista = vm.filtradas;
+                      if (lista.isEmpty) return SinResultadosFiltrosView(onLimpiar: vm.limpiarFiltros);
+                      return ListaAlertasDisponibles(
+                        alertas: lista,
+                        contador: f.filtraAlertas ? '${lista.length} de ${vm.total} alertas' : '${vm.total} alertas',
+                        ahora: vm.ahora,
+                        onAbrir: (id) => context.push(AppRoutes.guardAlertDetail(id)),
+                      );
+                    },
                   ),
                 ),
               ],

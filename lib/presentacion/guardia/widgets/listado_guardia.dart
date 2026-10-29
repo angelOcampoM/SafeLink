@@ -52,10 +52,11 @@ class SinRecibirAlertasView extends StatelessWidget {
   }
 }
 
-/// Lista de alertas disponibles en el orden que trae el dominio.
+/// Lista de alertas disponibles en el orden recibido, con un contador arriba ("3 de 4 alertas").
 class ListaAlertasDisponibles extends StatelessWidget {
-  const ListaAlertasDisponibles({super.key, required this.alertas, required this.ahora, required this.onAbrir});
+  const ListaAlertasDisponibles({super.key, required this.alertas, required this.contador, required this.ahora, required this.onAbrir});
   final List<AlertaPriorizada> alertas;
+  final String contador;
   final DateTime ahora;
   final ValueChanged<String> onAbrir;
 
@@ -63,16 +64,18 @@ class ListaAlertasDisponibles extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView.separated(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, AppSpacing.lg),
-      itemCount: alertas.length,
+      padding: AppSpacing.screen,
+      itemCount: alertas.length + 1,
       separatorBuilder: (_, __) => AppSpacing.gapSm,
-      itemBuilder: (_, i) => AlertCard(
-        alert: alertas[i].alerta,
-        now: ahora,
-        distanceMeters: alertas[i].distanciaMetros,
-        showStatus: false,
-        onTap: () => onAbrir(alertas[i].alerta.id),
-      ),
+      itemBuilder: (_, i) => i == 0
+          ? Text(contador, style: context.text.bodySmall)
+          : AlertCard(
+              alert: alertas[i - 1].alerta,
+              now: ahora,
+              distanceMeters: alertas[i - 1].distanciaMetros,
+              showStatus: false,
+              onTap: () => onAbrir(alertas[i - 1].alerta.id),
+            ),
     );
   }
 }
