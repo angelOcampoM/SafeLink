@@ -1,13 +1,15 @@
 // CAPA: PRESENTACIÓN — View
 // Historial de alertas atendidas por el guardia + métricas personales
-// Métricas arriba, lista abajo, pull-to-refresh y detalle en hoja inferior.
+// G-03 Filtros (fechas, resultado y método), resumen de lo filtrado y detalle en hoja inferior.
+// No filtra por su cuenta: solo pasa al ViewModel lo que se eligió.
 
 import 'package:flutter/material.dart';
 
-import '../comun/formato.dart';
+import '../../dominio/dominio.dart';
 import '../comun/tema/theme.dart';
 import '../comun/widgets/widgets.dart';
 import 'historial_guardia_view_model.dart';
+import 'widgets/widgets_guardia.dart';
 
 class HistorialGuardiaPage extends StatefulWidget {
   const HistorialGuardiaPage({super.key, required this.viewModel});
@@ -32,6 +34,32 @@ class _HistorialGuardiaPageState extends State<HistorialGuardiaPage> {
     super.dispose();
   }
 
+  Future<void> _elegirRango() async {
+    final hoy = vm.ahora;
+    final r = await showDateRangePicker(
+      context: context,
+      firstDate: hoy.subtract(const Duration(days: 365)),
+      lastDate: hoy,
+      initialDateRange: vm.desde == null ? null : DateTimeRange(start: vm.desde!, end: vm.hasta!),
+      helpText: 'Rango de fechas',
+    );
+    if (r != null) vm.cambiarRango(r.start, r.end);
+  }
+
+  Future<void> _elegirMetodo() async {
+    const valores = <MetodoDisparo?>[null, ...MetodoDisparo.values];
+    final i = await showModalBottomSheet<int>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => HojaOpciones(
+        titulo: 'Método de disparo',
+        opciones: [for (final m in valores) m == null ? 'Cualquier método' : etiquetaMetodo(m)],
+        seleccionada: valores.indexOf(vm.metodo),
+      ),
+    );
+    if (i != null) vm.cambiarMetodo(valores[i]);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -48,41 +76,53 @@ class _HistorialGuardiaPageState extends State<HistorialGuardiaPage> {
             message: 'Cuando cierres tu primera alerta aparecerá aquí con tus tiempos.',
           ),
           builder: (context, h) {
-            final m = h.metricas;
-            return ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: AppSpacing.screen,
+            final lista = vm.filtradas;
+            final resumen = vm.resumen;
+            return Column(
               children: [
-                const SectionHeader('Mis métricas'),
-                Row(
-                  children: [
-                    Expanded(child: MetricTile(label: 'Atendidas', value: '${m.atendidas}', icon: Icons.verified_rounded, color: AppColors.success)),
-                    AppSpacing.gapSm,
-                    Expanded(child: MetricTile(label: 'Aceptación', value: Fmt.duration(m.promedioAceptacionSeg), icon: Icons.timer_outlined)),
-                  ],
+                FiltrosHistorialGuardia(
+                  desde: vm.desde,
+                  hasta: vm.hasta,
+                  metodo: vm.metodo,
+                  estado: vm.estadoFiltro,
+                  estados: vm.estadosDisponibles,
+                  hayFiltros: vm.hayFiltros,
+                  onRango: _elegirRango,
+                  onMetodo: _elegirMetodo,
+                  onEstado: vm.cambiarEstado,
+                  onLimpiar: vm.limpiarFiltros,
                 ),
-                AppSpacing.gapSm,
-                Row(
-                  children: [
-                    Expanded(child: MetricTile(label: 'Llegada', value: Fmt.duration(m.promedioLlegadaSeg), icon: Icons.directions_run_rounded)),
-                    AppSpacing.gapSm,
-                    Expanded(child: MetricTile(label: 'Escaladas', value: '${m.escaladas}', icon: Icons.priority_high_rounded, color: AppColors.warning)),
-                  ],
-                ),
-                AppSpacing.gapLg,
-                SectionHeader('Historial (${h.alertas.length})'),
-                for (final a in h.alertas) ...[
-                  AlertCard(
-                    alert: a,
-                    now: vm.ahora,
-                    onTap: () => showModalBottomSheet<void>(
-                      context: context,
-                      isScrollControlled: true,
-                      builder: (_) => AlertDetailSheet(alert: a),
-                    ),
+                Expanded(
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: AppSpacing.screen,
+                    children: [
+                      MisMetricasGuardia(metricas: h.metricas),
+                      AppSpacing.gapLg,
+                      const SectionHeader('Alertas atendidas'),
+                      ResumenHistorialGuardia(conteo: resumen.conteo, promedioLlegadaSeg: resumen.promedioLlegadaSeg),
+                      AppSpacing.gapSm,
+                      if (lista.isEmpty)
+                        EmptyState(
+                          icon: Icons.filter_alt_off_outlined,
+                          title: 'Sin alertas con estos filtros',
+                          action: SlButton(label: 'Limpiar filtros', expand: false, variant: SlButtonVariant.secondary, onPressed: vm.limpiarFiltros),
+                        ),
+                      for (final a in lista) ...[
+                        AlertCard(
+                          alert: a,
+                          now: vm.ahora,
+                          onTap: () => showModalBottomSheet<void>(
+                            context: context,
+                            isScrollControlled: true,
+                            builder: (_) => AlertDetailSheet(alert: a),
+                          ),
+                        ),
+                        AppSpacing.gapSm,
+                      ],
+                    ],
                   ),
-                  AppSpacing.gapSm,
-                ],
+                ),
               ],
             );
           },

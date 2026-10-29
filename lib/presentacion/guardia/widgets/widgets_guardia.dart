@@ -5,6 +5,7 @@ library;
 
 export 'detalle_guardia.dart';
 export 'filtros_listado.dart';
+export 'historial_guardia.dart';
 export 'listado_guardia.dart';
 export 'navegacion_guardia.dart';
 export 'turno_guardia.dart';

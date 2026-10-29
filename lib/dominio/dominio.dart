@@ -8,6 +8,7 @@ export 'enums.dart';
 export 'errores.dart';
 export 'filtro_alertas_guardia.dart';
 export 'filtro_historial.dart';
+export 'filtro_mi_historial.dart';
 export 'guardia.dart';
 export 'metricas.dart';
 export 'punto_geo.dart';
