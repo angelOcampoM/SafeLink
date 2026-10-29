@@ -44,21 +44,7 @@ class _ListadoAlertasPageState extends State<ListadoAlertasPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Alertas cercanas'),
-        actions: [
-          IconButton(
-            tooltip: 'Alertas atendidas',
-            icon: const Icon(Icons.history_rounded),
-            onPressed: () => context.push(AppRoutes.guardHistory),
-          ),
-          IconButton(
-            tooltip: 'Cerrar sesión',
-            icon: const Icon(Icons.logout_rounded),
-            onPressed: vm.cerrarSesion,
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const Text('Alertas cercanas')),
       body: ListenableBuilder(
         listenable: vm,
         builder: (context, _) => SlStateView<Guardia>(

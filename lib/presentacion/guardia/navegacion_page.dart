@@ -62,7 +62,7 @@ class _NavegacionPageState extends State<NavegacionPage> {
                 color: AppColors.success,
                 title: 'Alerta atendida',
                 message: '${a.nombreUsuario ?? 'El usuario'} confirmó la atención. ¡Buen trabajo!',
-                action: SlButton(label: 'Volver al listado', expand: false, onPressed: () => context.go(AppRoutes.guardHome)),
+                action: SlButton(label: 'Volver al listado', expand: false, onPressed: () => context.go(AppRoutes.guardAlerts)),
               );
             }
             if (a.estado == EstadoAlerta.escalada) {
@@ -71,7 +71,7 @@ class _NavegacionPageState extends State<NavegacionPage> {
                 color: AppColors.warning,
                 title: 'Alerta escalada',
                 message: 'El administrador revisará esta alerta (${a.razonEscalamiento?.etiqueta ?? 'escalada'}).',
-                action: SlButton(label: 'Volver al listado', expand: false, onPressed: () => context.go(AppRoutes.guardHome)),
+                action: SlButton(label: 'Volver al listado', expand: false, onPressed: () => context.go(AppRoutes.guardAlerts)),
               );
             }
 

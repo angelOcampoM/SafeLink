@@ -59,7 +59,7 @@ class _AlertaEntrantePageState extends State<AlertaEntrantePage> {
             color: AppColors.success,
             title: 'Ya no está disponible',
             message: 'Otro guardia la tomó o la alerta cambió de estado.',
-            action: SlButton(label: 'Volver al listado', expand: false, onPressed: () => context.go(AppRoutes.guardHome)),
+            action: SlButton(label: 'Volver al listado', expand: false, onPressed: () => context.go(AppRoutes.guardAlerts)),
           ),
           builder: (context, d) {
             final a = d.alerta;

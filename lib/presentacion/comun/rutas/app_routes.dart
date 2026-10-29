@@ -16,9 +16,12 @@ abstract final class AppRoutes {
   static const userBlocked = '/user/blocked';
   static const userHistory = '/user/history';
 
-  // Guardia
+  // Guardia (pestañas de la barra inferior: Inicio, Alertas, Historial)
+  /// Pestaña Inicio. También es el destino tras el login (`inicioPara`).
   static const guardHome = '/guard';
+  static const guardAlerts = '/guard/alerts';
   static const guardHistory = '/guard/history';
+  // Flujo de atención: pantalla completa, sin la barra inferior.
   static String guardIncoming(String id) => '/guard/incoming/$id';
   static String guardAlertDetail(String id) => '/guard/alerts/$id';
   static String guardNavigation(String id) => '/guard/alerts/$id/navigate';

@@ -35,7 +35,7 @@ class _HistorialGuardiaPageState extends State<HistorialGuardiaPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Alertas atendidas')),
+      appBar: AppBar(title: const Text('Historial')),
       body: ListenableBuilder(
         listenable: vm,
         builder: (context, _) => SlStateView<HistorialGuardia>(

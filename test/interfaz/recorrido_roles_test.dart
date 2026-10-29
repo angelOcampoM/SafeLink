@@ -59,8 +59,9 @@ void main() {
 
   testWidgets('guardia', (tester) async {
     await abrir(tester, 'guardia@safelink.mx');
-    await ir(tester, AppRoutes.guardHome, 'Alertas cercanas');
-    await ir(tester, AppRoutes.guardHistory, 'Alertas atendidas');
+    await ir(tester, AppRoutes.guardHome, 'Ver alertas');
+    await ir(tester, AppRoutes.guardAlerts, 'Alertas cercanas');
+    await ir(tester, AppRoutes.guardHistory, 'MIS MÉTRICAS');
     await ir(tester, AppRoutes.guardIncoming('alt-101'), 'Ver detalle');
     await ir(tester, AppRoutes.guardAlertDetail('alt-102'), 'Aceptar alerta');
     await ir(tester, AppRoutes.guardNavigation('alt-202'), 'Llegué');
@@ -68,7 +69,8 @@ void main() {
 
   testWidgets('guardia nocturno fuera de turno o en turno', (tester) async {
     await abrir(tester, 'guardia.noche@safelink.mx');
-    await ir(tester, AppRoutes.guardHome, 'Alertas cercanas');
+    await ir(tester, AppRoutes.guardHome, 'Ver alertas');
+    await ir(tester, AppRoutes.guardAlerts, 'Alertas cercanas');
   });
 
   testWidgets('administrador', (tester) async {
