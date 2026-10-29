@@ -54,9 +54,9 @@ void main() {
     return int.parse(t.split(' ').first);
   }
 
-  testWidgets('muestra filtros, métricas y resumen; el filtro de resultado reduce la lista', (tester) async {
+  testWidgets('muestra filtros y resumen (sin métricas); el filtro de resultado reduce la lista', (tester) async {
     await abrirHistorial(tester, 'guardia@safelink.mx');
-    expect(find.text('MIS MÉTRICAS'), findsOneWidget);
+    expect(find.text('MIS MÉTRICAS'), findsNothing, reason: 'las métricas viven en Inicio');
     expect(find.widgetWithText(ActionChip, 'Todas las fechas'), findsOneWidget);
     expect(find.widgetWithText(ActionChip, 'Cualquier método'), findsOneWidget);
     final total = conteo(tester);
@@ -90,7 +90,6 @@ void main() {
 
     expect(conteo(tester), 0);
     expect(find.text('Sin alertas con estos filtros'), findsOneWidget);
-    expect(find.text('MIS MÉTRICAS'), findsOneWidget, reason: 'las métricas siguen visibles');
 
     await tocar(tester, find.text('Limpiar filtros'));
     expect(conteo(tester), total);

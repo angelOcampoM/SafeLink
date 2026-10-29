@@ -17,5 +17,6 @@ export 'regla_geocerca.dart';
 export 'regla_metricas.dart';
 export 'regla_prioridad.dart';
 export 'regla_registro.dart';
+export 'regla_tiempo_turno.dart';
 export 'regla_turno.dart';
 export 'usuario.dart';

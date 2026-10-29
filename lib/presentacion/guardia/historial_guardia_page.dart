@@ -1,5 +1,5 @@
 // CAPA: PRESENTACIÓN — View
-// Historial de alertas atendidas por el guardia + métricas personales
+// Historial de alertas atendidas por el guardia (sus métricas viven en el dashboard de Inicio)
 // G-03 Filtros (fechas, resultado y método), resumen de lo filtrado y detalle en hoja inferior.
 // No filtra por su cuenta: solo pasa al ViewModel lo que se eligió.
 
@@ -66,7 +66,7 @@ class _HistorialGuardiaPageState extends State<HistorialGuardiaPage> {
       appBar: AppBar(title: const Text('Historial')),
       body: ListenableBuilder(
         listenable: vm,
-        builder: (context, _) => SlStateView<HistorialGuardia>(
+        builder: (context, _) => SlStateView<List<Alerta>>(
           estado: vm.estado,
           onRetry: vm.cargar,
           onRefresh: vm.cargar,
@@ -75,7 +75,7 @@ class _HistorialGuardiaPageState extends State<HistorialGuardiaPage> {
             title: 'Aún no atiendes alertas',
             message: 'Cuando cierres tu primera alerta aparecerá aquí con tus tiempos.',
           ),
-          builder: (context, h) {
+          builder: (context, _) {
             final lista = vm.filtradas;
             final resumen = vm.resumen;
             return Column(
@@ -97,8 +97,6 @@ class _HistorialGuardiaPageState extends State<HistorialGuardiaPage> {
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: AppSpacing.screen,
                     children: [
-                      MisMetricasGuardia(metricas: h.metricas),
-                      AppSpacing.gapLg,
                       const SectionHeader('Alertas atendidas'),
                       ResumenHistorialGuardia(conteo: resumen.conteo, promedioLlegadaSeg: resumen.promedioLlegadaSeg),
                       AppSpacing.gapSm,

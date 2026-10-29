@@ -1,5 +1,5 @@
 // CAPA: PRESENTACIÓN — widgets del guardia
-// G-03 Historial de alertas atendidas: filtros, "Mis métricas" y resumen de lo filtrado.
+// G-03 Historial de alertas atendidas: filtros y resumen de lo filtrado.
 // Fila 1: rango de fechas y método de disparo + "Limpiar"; fila 2: resultado (estado).
 // No hacen: no filtran, no calculan métricas ni abren selectores; avisan con callbacks.
 
@@ -8,7 +8,6 @@ import 'package:flutter/material.dart';
 import '../../../dominio/dominio.dart';
 import '../../comun/formato.dart';
 import '../../comun/tema/theme.dart';
-import '../../comun/widgets/widgets.dart';
 import 'filtros_listado.dart';
 
 class FiltrosHistorialGuardia extends StatelessWidget {
@@ -85,37 +84,6 @@ class FiltrosHistorialGuardia extends StatelessWidget {
               ],
             ],
           ),
-        ),
-      ],
-    );
-  }
-}
-
-/// "Mis métricas" de todo el historial (se moverá al dashboard de Inicio).
-class MisMetricasGuardia extends StatelessWidget {
-  const MisMetricasGuardia({super.key, required this.metricas});
-  final MetricasGuardia metricas;
-
-  @override
-  Widget build(BuildContext context) {
-    final m = metricas;
-    return Column(
-      children: [
-        const SectionHeader('Mis métricas'),
-        Row(
-          children: [
-            Expanded(child: MetricTile(label: 'Atendidas', value: '${m.atendidas}', icon: Icons.verified_rounded, color: AppColors.success)),
-            AppSpacing.gapSm,
-            Expanded(child: MetricTile(label: 'Aceptación', value: Fmt.duration(m.promedioAceptacionSeg), icon: Icons.timer_outlined)),
-          ],
-        ),
-        AppSpacing.gapSm,
-        Row(
-          children: [
-            Expanded(child: MetricTile(label: 'Llegada', value: Fmt.duration(m.promedioLlegadaSeg), icon: Icons.directions_run_rounded)),
-            AppSpacing.gapSm,
-            Expanded(child: MetricTile(label: 'Escaladas', value: '${m.escaladas}', icon: Icons.priority_high_rounded, color: AppColors.warning)),
-          ],
         ),
       ],
     );
