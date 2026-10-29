@@ -2,8 +2,6 @@
 // G-06 Ruta hacia el usuario · G-07 Registro de llegada · Esperando confirmación
 // Pinta mapa, distancia y el botón "Llegué" según lo que diga el ViewModel.
 // No calcula geocercas ni llama repositorios.
-//
-// TODO(G-06): sustituir MapPlaceholder por GoogleMap.
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -14,6 +12,7 @@ import '../comun/rutas/app_routes.dart';
 import '../comun/tema/theme.dart';
 import '../comun/widgets/widgets.dart';
 import 'navegacion_view_model.dart';
+import 'widgets/widgets_guardia.dart';
 
 class NavegacionPage extends StatefulWidget {
   const NavegacionPage({super.key, required this.viewModel});
@@ -45,6 +44,8 @@ class _NavegacionPageState extends State<NavegacionPage> {
     vm.consumirMensaje();
   }
 
+  void _volverAlListado() => context.go(AppRoutes.guardAlerts);
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -55,69 +56,21 @@ class _NavegacionPageState extends State<NavegacionPage> {
           estado: vm.estado,
           onRetry: vm.iniciar,
           builder: (context, a) {
-            if (a.estado == EstadoAlerta.guardiaEnLugar) return const _EsperandoConfirmacion();
-            if (a.estado == EstadoAlerta.cerrada) {
-              return EmptyState(
-                icon: Icons.check_circle_rounded,
-                color: AppColors.success,
-                title: 'Alerta atendida',
-                message: '${a.nombreUsuario ?? 'El usuario'} confirmó la atención. ¡Buen trabajo!',
-                action: SlButton(label: 'Volver al listado', expand: false, onPressed: () => context.go(AppRoutes.guardAlerts)),
-              );
-            }
-            if (a.estado == EstadoAlerta.escalada) {
-              return EmptyState(
-                icon: Icons.priority_high_rounded,
-                color: AppColors.warning,
-                title: 'Alerta escalada',
-                message: 'El administrador revisará esta alerta (${a.razonEscalamiento?.etiqueta ?? 'escalada'}).',
-                action: SlButton(label: 'Volver al listado', expand: false, onPressed: () => context.go(AppRoutes.guardAlerts)),
-              );
-            }
+            if (a.estado == EstadoAlerta.guardiaEnLugar) return const EsperandoConfirmacionView();
+            if (a.estado == EstadoAlerta.cerrada) return AlertaAtendidaView(alerta: a, onVolver: _volverAlListado);
+            if (a.estado == EstadoAlerta.escalada) return AlertaEscaladaView(alerta: a, onVolver: _volverAlListado);
 
             final distancia = vm.distancia ?? 0;
             final dentro = vm.dentroDeGeocerca;
-            // Posición relativa del guardia en el mapa simulado (se acerca al centro).
-            final f = (distancia / 3000).clamp(0.08, 0.9).toDouble();
-
             return Column(
               children: [
                 Expanded(
                   child: ListView(
                     padding: AppSpacing.screen,
                     children: [
-                      MapPlaceholder(
-                        height: 300,
-                        showRoute: true,
-                        radiusFraction: 0.08,
-                        markers: [
-                          MapMarker(offset: Offset(-f, f), color: AppColors.info, icon: Icons.shield_rounded),
-                          const MapMarker(offset: Offset.zero, color: AppColors.emergency, icon: Icons.person_pin_circle_rounded),
-                        ],
-                      ),
+                      MapaRutaGuardia(distancia: distancia),
                       AppSpacing.gapMd,
-                      SlCard(
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(a.nombreUsuario ?? 'Usuario', style: context.text.titleMedium),
-                                  Text(a.telefonoUsuario == null ? '' : Fmt.phone(a.telefonoUsuario!), style: context.text.bodySmall),
-                                ],
-                              ),
-                            ),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text(Fmt.distance(distancia), style: context.text.displaySmall?.copyWith(color: dentro ? AppColors.success : AppColors.info)),
-                                Text(dentro ? 'Dentro de la zona' : 'restantes', style: context.text.bodySmall),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
+                      TarjetaUsuarioDistancia(alerta: a, distancia: distancia, dentro: dentro),
                       AppSpacing.gapMd,
                       SlButton(
                         label: 'Abrir en Google Maps',
@@ -155,20 +108,6 @@ class _NavegacionPageState extends State<NavegacionPage> {
           },
         ),
       ),
-    );
-  }
-}
-
-class _EsperandoConfirmacion extends StatelessWidget {
-  const _EsperandoConfirmacion();
-
-  @override
-  Widget build(BuildContext context) {
-    return const EmptyState(
-      icon: Icons.hourglass_top_rounded,
-      color: AppColors.info,
-      title: 'Esperando confirmación',
-      message: 'Registramos tu llegada. El usuario debe confirmar que fue atendido para cerrar la alerta.',
     );
   }
 }

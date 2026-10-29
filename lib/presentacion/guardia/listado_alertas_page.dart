@@ -7,11 +7,11 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../dominio/dominio.dart';
-import '../comun/formato.dart';
 import '../comun/rutas/app_routes.dart';
 import '../comun/tema/theme.dart';
 import '../comun/widgets/widgets.dart';
 import 'listado_alertas_view_model.dart';
+import 'widgets/widgets_guardia.dart';
 
 class ListadoAlertasPage extends StatefulWidget {
   const ListadoAlertasPage({super.key, required this.viewModel});
@@ -23,6 +23,8 @@ class ListadoAlertasPage extends StatefulWidget {
 
 class _ListadoAlertasPageState extends State<ListadoAlertasPage> {
   late final ListadoAlertasViewModel vm = widget.viewModel;
+
+  static const _margenFila = EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, AppSpacing.sm);
 
   @override
   void initState() {
@@ -53,36 +55,18 @@ class _ListadoAlertasPageState extends State<ListadoAlertasPage> {
           onRefresh: vm.recargar,
           builder: (context, guardia) {
             final motivo = vm.motivoNoDisponible;
-            if (motivo != null) {
-              return ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                children: [
-                  EmptyState(icon: Icons.bedtime_outlined, title: 'No estás recibiendo alertas', message: motivo),
-                ],
-              );
-            }
+            if (motivo != null) return SinRecibirAlertasView(motivo: motivo);
             final entrante = vm.entrante;
             return Column(
               children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, AppSpacing.sm),
-                  child: _BarraTurno(guardia: guardia),
-                ),
+                Padding(padding: _margenFila, child: BarraTurno(guardia: guardia)),
                 if (entrante != null)
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, AppSpacing.sm),
-                    child: SlBanner(
-                      type: entrante.alerta.esUrgente ? SlBannerType.warning : SlBannerType.info,
-                      icon: Icons.notifications_active_rounded,
-                      title: 'Alerta entrante',
-                      message: '${entrante.alerta.nombreUsuario ?? 'Usuario'} · ${Fmt.distance(entrante.distanciaMetros)} · ${entrante.alerta.metodo.etiqueta}',
-                      action: Wrap(
-                        spacing: AppSpacing.xs,
-                        children: [
-                          TextButton(onPressed: () => _verEntrante(entrante.alerta.id), child: const Text('Ver')),
-                          TextButton(onPressed: vm.descartarEntrante, child: const Text('Ocultar aviso')),
-                        ],
-                      ),
+                    padding: _margenFila,
+                    child: BannerAlertaEntrante(
+                      entrante: entrante,
+                      onVer: () => _verEntrante(entrante.alerta.id),
+                      onOcultar: vm.descartarEntrante,
                     ),
                   ),
                 Expanded(
@@ -96,18 +80,10 @@ class _ListadoAlertasPageState extends State<ListadoAlertasPage> {
                       title: 'Todo tranquilo',
                       message: 'No hay alertas en tu zona. Te avisaremos en cuanto llegue una.',
                     ),
-                    builder: (context, lista) => ListView.separated(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, AppSpacing.lg),
-                      itemCount: lista.length,
-                      separatorBuilder: (_, __) => AppSpacing.gapSm,
-                      itemBuilder: (_, i) => AlertCard(
-                        alert: lista[i].alerta,
-                        now: vm.ahora,
-                        distanceMeters: lista[i].distanciaMetros,
-                        showStatus: false,
-                        onTap: () => context.push(AppRoutes.guardAlertDetail(lista[i].alerta.id)),
-                      ),
+                    builder: (context, lista) => ListaAlertasDisponibles(
+                      alertas: lista,
+                      ahora: vm.ahora,
+                      onAbrir: (id) => context.push(AppRoutes.guardAlertDetail(id)),
                     ),
                   ),
                 ),
@@ -116,24 +92,6 @@ class _ListadoAlertasPageState extends State<ListadoAlertasPage> {
           },
         ),
       ),
-    );
-  }
-}
-
-class _BarraTurno extends StatelessWidget {
-  const _BarraTurno({required this.guardia});
-  final Guardia guardia;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        const SlChip(label: 'En turno', color: AppColors.success, icon: Icons.circle),
-        AppSpacing.gapXs,
-        Text('${guardia.perfil.inicioTurno} – ${guardia.perfil.finTurno}', style: context.text.bodySmall),
-        const Spacer(),
-        Text('Radio ${Fmt.distance(guardia.perfil.radioCoberturaMetros!)}', style: context.text.bodySmall),
-      ],
     );
   }
 }

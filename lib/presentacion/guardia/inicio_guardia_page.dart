@@ -7,11 +7,11 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../dominio/dominio.dart';
-import '../comun/formato.dart';
 import '../comun/rutas/app_routes.dart';
 import '../comun/tema/theme.dart';
 import '../comun/widgets/widgets.dart';
 import 'inicio_guardia_view_model.dart';
+import 'widgets/widgets_guardia.dart';
 
 class InicioGuardiaPage extends StatefulWidget {
   const InicioGuardiaPage({super.key, required this.viewModel});
@@ -58,7 +58,7 @@ class _InicioGuardiaPageState extends State<InicioGuardiaPage> {
               padding: AppSpacing.screen,
               children: [
                 const SectionHeader('Mi turno'),
-                _TarjetaTurno(guardia: guardia, estado: vm.estadoTurno!),
+                TarjetaTurno(guardia: guardia, estado: vm.estadoTurno!.etiqueta, enTurno: vm.estadoTurno == EstadoTurno.enTurno),
                 if (motivo != null) ...[
                   AppSpacing.gapSm,
                   SlBanner(type: SlBannerType.warning, title: 'No estás recibiendo alertas', message: motivo),
@@ -73,33 +73,6 @@ class _InicioGuardiaPageState extends State<InicioGuardiaPage> {
             );
           },
         ),
-      ),
-    );
-  }
-}
-
-class _TarjetaTurno extends StatelessWidget {
-  const _TarjetaTurno({required this.guardia, required this.estado});
-  final Guardia guardia;
-  final EstadoTurno estado;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = guardia.perfil;
-    final color = estado == EstadoTurno.enTurno ? AppColors.success : AppColors.warning;
-    return SlCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SlChip(label: estado.etiqueta, color: color, icon: Icons.circle),
-          AppSpacing.gapSm,
-          InfoRow(icon: Icons.schedule_rounded, label: 'Horario', value: '${p.inicioTurno} – ${p.finTurno}'),
-          InfoRow(
-            icon: Icons.radar_rounded,
-            label: 'Radio de cobertura',
-            value: p.radioCoberturaMetros == null ? 'Sin asignar' : Fmt.distance(p.radioCoberturaMetros!),
-          ),
-        ],
       ),
     );
   }
