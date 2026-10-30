@@ -1,10 +1,11 @@
 // CAPA: PRESENTACIÓN — View
 // A-06 Métricas generales · A-08 Usuarios bloqueados
-// Selector de periodo, mosaicos de métricas, gráfica por hora y bloqueados.
-// No calcula métricas ni llama repositorios.
+// Selector de periodo y rango, mosaicos de métricas, gráficas por hora y por
+// zona, y bloqueados. No calcula métricas ni llama repositorios.
 
 import 'package:flutter/material.dart';
 
+import '../../dominio/dominio.dart';
 import '../comun/estado_vista.dart';
 import '../comun/formato.dart';
 import '../comun/tema/theme.dart';
@@ -41,6 +42,18 @@ class _PanelPageState extends State<PanelPage> {
     vm.consumirMensaje();
   }
 
+  Future<void> _elegirRango() async {
+    final hoy = vm.ahora;
+    final r = await showDateRangePicker(
+      context: context,
+      firstDate: hoy.subtract(const Duration(days: 365)),
+      lastDate: hoy,
+      initialDateRange: vm.desde == null ? null : DateTimeRange(start: vm.desde!, end: vm.hasta!),
+      helpText: 'Rango de fechas',
+    );
+    if (r != null) await vm.cambiarRango(r.start, r.end);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -63,10 +76,16 @@ class _PanelPageState extends State<PanelPage> {
                 children: [
                   for (final p in PeriodoPanel.values)
                     ChoiceChip(label: Text(p.etiqueta), selected: vm.periodo == p, onSelected: (_) => vm.cambiarPeriodo(p)),
+                  ChoiceChip(
+                    avatar: const Icon(Icons.date_range_outlined, size: 18),
+                    label: const Text('Personalizado'),
+                    selected: vm.periodo == null,
+                    onSelected: (_) => _elegirRango(),
+                  ),
                 ],
               ),
               AppSpacing.gapMd,
-              SectionHeader('Últimos ${vm.periodo.etiqueta}'),
+              SectionHeader(_tituloPeriodo(vm)),
               _Metricas(vm: vm),
               AppSpacing.gapLg,
               const SectionHeader('Usuarios bloqueados'),
@@ -77,6 +96,12 @@ class _PanelPageState extends State<PanelPage> {
       ),
     );
   }
+}
+
+String _tituloPeriodo(PanelViewModel vm) {
+  final p = vm.periodo;
+  if (p != null) return 'Últimos ${p.etiqueta}';
+  return 'Del ${Fmt.date(vm.desde!)} al ${Fmt.date(vm.hasta!)}';
 }
 
 class _Metricas extends StatelessWidget {
@@ -115,6 +140,9 @@ class _Metricas extends StatelessWidget {
             AppSpacing.gapLg,
             const SectionHeader('Alertas por hora'),
             SlCard(child: _GraficaHoras(valores: m.alertasPorHora)),
+            AppSpacing.gapLg,
+            const SectionHeader('Alertas por zona'),
+            SlCard(child: _GraficaZonas(valores: m.alertasPorZona)),
           ],
         ),
     };
@@ -161,6 +189,34 @@ class _Bloqueados extends StatelessWidget {
           ],
         ),
     };
+  }
+}
+
+/// Gráfica de barras por zona de cobertura (A-06).
+/// El tema ya colorea ProgressIndicator; solo se calcula la proporción.
+class _GraficaZonas extends StatelessWidget {
+  const _GraficaZonas({required this.valores});
+  final List<ZonaConteo> valores;
+
+  @override
+  Widget build(BuildContext context) {
+    final max = valores.fold<int>(1, (a, b) => b.total > a ? b.total : a);
+    return Column(
+      children: [
+        for (final z in valores) ...[
+          Row(
+            children: [
+              SizedBox(width: 132, child: Text(z.zona, style: context.text.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis)),
+              AppSpacing.gapSm,
+              Expanded(child: LinearProgressIndicator(value: z.total / max, minHeight: 14)),
+              AppSpacing.gapSm,
+              SizedBox(width: 28, child: Text('${z.total}', textAlign: TextAlign.end, style: context.text.labelSmall)),
+            ],
+          ),
+          AppSpacing.gapXs,
+        ],
+      ],
+    );
   }
 }
 
