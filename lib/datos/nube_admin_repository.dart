@@ -64,8 +64,8 @@ class NubeAdminRepository implements AdminRepository {
       _service.escuchar('admin/alerts/escalated').map((e) => AlertaJson.lista(RespuestaJson.datos(e)));
 
   @override
-  Future<Alerta> resolverAlerta(String alertaId, Resolucion resolucion) async {
-    final r = await _service.post('/admin/alerts/$alertaId/resolve', {'resolution': CodigosJson.resolucion[resolucion]});
+  Future<Alerta> resolverAlerta(String alertaId, Resolucion resolucion, {required String nota}) async {
+    final r = await _service.post('/admin/alerts/$alertaId/resolve', {'resolution': CodigosJson.resolucion[resolucion], 'adminNote': nota});
     return AlertaJson.desdeJson(RespuestaJson.datos(r)! as Json);
   }
 

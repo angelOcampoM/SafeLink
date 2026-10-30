@@ -9,6 +9,7 @@ import '../../../dominio/enums.dart';
 import '../../admin/admin_shell.dart';
 import '../../admin/cobertura_guardia_page.dart';
 import '../../admin/detalle_alerta_admin_page.dart';
+import '../../admin/detalle_escalada_page.dart';
 import '../../admin/editar_guardia_page.dart';
 import '../../admin/escaladas_page.dart';
 import '../../admin/guardias_page.dart';
@@ -151,6 +152,13 @@ GoRouter crearRouter(SesionViewModel sesion, FabricaViewModels f) {
       GoRoute(
         path: '/admin/alerts/:id',
         builder: (_, s) => DetalleAlertaAdminPage(viewModel: f.detalleAlertaAdmin(s.pathParameters['id']!)),
+      ),
+
+      // Detalle de una alerta escalada (A-04): pantalla completa con nota y
+      // confirmación de revisión antes de resolver.
+      GoRoute(
+        path: '/admin/escalated/:id',
+        builder: (_, s) => DetalleEscaladaPage(viewModel: f.detalleEscalada(s.pathParameters['id']!)),
       ),
     ],
   );

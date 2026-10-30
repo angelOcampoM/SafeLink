@@ -37,8 +37,9 @@ abstract interface class AdminRepository {
   /// Bandeja de escaladas en tiempo real, las más antiguas primero.
   Stream<List<Alerta>> escucharEscaladas();
 
-  /// A-08: `falsaAlarma` suma al contador del usuario y lo bloquea al llegar al límite.
-  Future<Alerta> resolverAlerta(String alertaId, Resolucion resolucion);
+  /// A-04/A-08: exige la nota administrativa; `falsaAlarma` suma al contador
+  /// del usuario y lo bloquea al llegar al límite.
+  Future<Alerta> resolverAlerta(String alertaId, Resolucion resolucion, {required String nota});
 
   Future<List<Alerta>> obtenerHistorial(FiltroHistorial filtro);
 

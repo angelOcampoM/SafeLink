@@ -247,7 +247,11 @@ class SafeLinkService {
         'POST',
         '/admin/alerts/:id/resolve',
         (p, c, _) async => AlertaJson.aJson(
-          await _admin.resolverAlerta(p['id']!, CodigosJson.desde(CodigosJson.resolucion, c['resolution'])),
+          await _admin.resolverAlerta(
+            p['id']!,
+            CodigosJson.desde(CodigosJson.resolucion, c['resolution']),
+            nota: (c['adminNote'] as String?) ?? '',
+          ),
         ),
       ),
       _Ruta(

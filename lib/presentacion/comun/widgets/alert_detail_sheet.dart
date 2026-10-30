@@ -76,6 +76,21 @@ class AlertDetailSheet extends StatelessWidget {
               AppSpacing.gapSm,
               const SlBanner(type: SlBannerType.warning, message: 'Evidencia incompleta: se envió sin foto.'),
             ],
+            if (a.notaAdmin != null) ...[
+              AppSpacing.gapSm,
+              Text('NOTA ADMINISTRATIVA', style: context.text.labelSmall?.copyWith(letterSpacing: 1.2)),
+              AppSpacing.gapXs,
+              Container(
+                width: double.infinity,
+                padding: AppSpacing.card,
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceElevated,
+                  borderRadius: AppRadius.brMd,
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Text(a.notaAdmin!, style: context.text.bodyMedium),
+              ),
+            ],
           ],
         ),
       ),

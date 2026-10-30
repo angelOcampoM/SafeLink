@@ -31,6 +31,7 @@ abstract final class AppRoutes {
   static String adminGuardCoverage(String id) => '/admin/guards/$id/coverage';
   static String adminGuardMetrics(String id) => '/admin/guards/$id/metrics';
   static const adminEscalated = '/admin/escalated';
+  static String adminEscalatedDetail(String id) => '/admin/escalated/$id';
   static const adminHistory = '/admin/history';
   static String adminAlertDetail(String id) => '/admin/alerts/$id';
 }

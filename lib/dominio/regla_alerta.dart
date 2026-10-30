@@ -57,6 +57,16 @@ abstract final class ReglaAlerta {
   static String? validarResolucion(Alerta a) =>
       a.estado == EstadoAlerta.escalada ? null : 'Esta alerta ya no está escalada';
 
+  /// A-04: el admin debe dejar una nota administrativa al resolver.
+  static const maxNota = 300;
+
+  static String? nota(String? nota) {
+    final texto = nota?.trim() ?? '';
+    if (texto.isEmpty) return 'Escribe una nota administrativa para resolver la alerta';
+    if (texto.length > maxNota) return 'La nota no puede pasar de $maxNota caracteres';
+    return null;
+  }
+
   /// A-08: aplica una resolución de falsa alarma al usuario.
   static Usuario aplicarFalsaAlarma(
     Usuario usuario, {

@@ -132,6 +132,7 @@ abstract final class AlertaJson {
         cerradaEn: _fecha(j['closedAt']),
         razonEscalamiento: CodigosJson.desdeOpcional(CodigosJson.razon, j['escalationReason']),
         resolucion: CodigosJson.desdeOpcional(CodigosJson.resolucion, j['resolution']),
+        notaAdmin: j['adminNote'] as String?,
         etaSegundos: j['etaSeconds'] as int?,
       );
 
@@ -154,6 +155,7 @@ abstract final class AlertaJson {
         'closedAt': _iso(a.cerradaEn),
         'escalationReason': CodigosJson.razon[a.razonEscalamiento],
         'resolution': CodigosJson.resolucion[a.resolucion],
+        'adminNote': a.notaAdmin,
         'etaSeconds': a.etaSegundos,
       };
 

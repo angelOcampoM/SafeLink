@@ -130,6 +130,7 @@ class DatosSemilla {
       DateTime? cerrada,
       RazonEscalamiento? razon,
       Resolucion? resolucion,
+      String? nota,
       bool sinFoto = false,
       int? eta,
     }) {
@@ -149,6 +150,7 @@ class DatosSemilla {
         cerradaEn: cerrada,
         razonEscalamiento: razon,
         resolucion: resolucion,
+        notaAdmin: nota,
         ubicacion: ubicacion,
         rumbo: rumbo,
         fotoUrl: sinFoto ? null : foto('sl$id'),
@@ -174,7 +176,7 @@ class DatosSemilla {
       alerta('alt-301', 'usr-3', EstadoAlerta.escalada, MetodoDisparo.agitacion, 22, razon: RazonEscalamiento.sinRespuesta, ubicacion: cerca(ez, 0.0300, 0.0250), rumbo: 75),
       alerta('alt-302', 'usr-2', EstadoAlerta.escalada, MetodoDisparo.toque, 48, guardiaId: 'grd-1', aceptada: hace(47), llegada: hace(38), razon: RazonEscalamiento.sinConfirmacion, ubicacion: cerca(ez, -0.0060, 0.0080), rumbo: 260),
       alerta('alt-303', 'usr-6', EstadoAlerta.escalada, MetodoDisparo.mantener, 75, guardiaId: 'grd-6', aceptada: hace(73), llegada: hace(60), razon: RazonEscalamiento.sinConfirmacion, ubicacion: cerca(cva, 0.0020, 0.0050), rumbo: 330),
-      alerta('alt-304', 'usr-4', EstadoAlerta.resueltaPorAdmin, MetodoDisparo.toque, 60 * 26, guardiaId: 'grd-1', aceptada: hace(60 * 26 - 1), llegada: hace(60 * 26 - 9), cerrada: hace(60 * 25), razon: RazonEscalamiento.sinConfirmacion, resolucion: Resolucion.falsaAlarma, ubicacion: cerca(ez, 0.0020, -0.0030), rumbo: 0),
+      alerta('alt-304', 'usr-4', EstadoAlerta.resueltaPorAdmin, MetodoDisparo.toque, 60 * 26, guardiaId: 'grd-1', aceptada: hace(60 * 26 - 1), llegada: hace(60 * 26 - 9), cerrada: hace(60 * 25), razon: RazonEscalamiento.sinConfirmacion, resolucion: Resolucion.falsaAlarma, nota: 'Se verificó con la usuaria; no hubo riesgo.', ubicacion: cerca(ez, 0.0020, -0.0030), rumbo: 0),
     ]);
   }
 

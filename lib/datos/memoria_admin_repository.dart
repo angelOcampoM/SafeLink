@@ -109,13 +109,13 @@ class MemoriaAdminRepository implements AdminRepository {
       );
 
   @override
-  Future<Alerta> resolverAlerta(String alertaId, Resolucion resolucion) async {
+  Future<Alerta> resolverAlerta(String alertaId, Resolucion resolucion, {required String nota}) async {
     await _db.esperar();
     final a = _db.alertaPorId(alertaId);
-    final motivo = ReglaAlerta.validarResolucion(a);
+    final motivo = ReglaAlerta.validarResolucion(a) ?? ReglaAlerta.nota(nota);
     if (motivo != null) throw EstadoInvalidoError(motivo);
     final ahora = _db.reloj();
-    final resuelta = a.copyWith(estado: EstadoAlerta.resueltaPorAdmin, resolucion: resolucion, cerradaEn: ahora);
+    final resuelta = a.copyWith(estado: EstadoAlerta.resueltaPorAdmin, resolucion: resolucion, notaAdmin: nota.trim(), cerradaEn: ahora);
     if (resolucion == Resolucion.falsaAlarma) {
       _db.usuarios[a.usuarioId] = ReglaAlerta.aplicarFalsaAlarma(
         _db.usuarios[a.usuarioId]!,
