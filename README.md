@@ -47,7 +47,7 @@ lib/
     auth/                    login y registro
     usuario/                 inicio (botón), estado de alerta, configuración, bloqueado, historial
     guardia/                 listado, alerta entrante, detalle, navegación, historial
-    admin/                   shell, panel, guardias, editar guardia, cobertura, escaladas, historial
+    admin/                   shell, panel, guardias, editar guardia, cobertura, métricas por guardia, escaladas, historial
     dev/                     guía de estilos viva
 test/
   dominio/                   una prueba por regla

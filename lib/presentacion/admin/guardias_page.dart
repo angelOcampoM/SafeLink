@@ -177,13 +177,18 @@ class _DetalleGuardiaSheet extends StatelessWidget {
             ListenableBuilder(
               listenable: vm,
               builder: (context, _) => switch (vm.metricasSeleccion) {
-                Listo(datos: final m) => Row(
+                Listo(datos: final m) => GridView.count(
+                    crossAxisCount: 2,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    mainAxisSpacing: AppSpacing.sm,
+                    crossAxisSpacing: AppSpacing.sm,
+                    childAspectRatio: 1.6,
                     children: [
-                      Expanded(child: MetricTile(label: 'Atendidas', value: '${m.atendidas}')),
-                      AppSpacing.gapSm,
-                      Expanded(child: MetricTile(label: 'Aceptación', value: Fmt.duration(m.promedioAceptacionSeg))),
-                      AppSpacing.gapSm,
-                      Expanded(child: MetricTile(label: 'Escaladas', value: '${m.escaladas}', color: AppColors.warning)),
+                      MetricTile(label: 'Atendidas', value: '${m.atendidas}'),
+                      MetricTile(label: 'Aceptación', value: Fmt.duration(m.promedioAceptacionSeg)),
+                      MetricTile(label: 'Llegada', value: Fmt.duration(m.promedioLlegadaSeg), color: AppColors.success),
+                      MetricTile(label: 'Escaladas', value: '${m.escaladas}', color: AppColors.warning),
                     ],
                   ),
                 ErrorVista(:final mensaje) => SlBanner(type: SlBannerType.danger, message: mensaje),
@@ -191,6 +196,13 @@ class _DetalleGuardiaSheet extends StatelessWidget {
               },
             ),
             AppSpacing.gapLg,
+            SlButton(
+              label: 'Ver métricas',
+              icon: Icons.insights_outlined,
+              variant: SlButtonVariant.secondary,
+              onPressed: () => Navigator.pop(context, AppRoutes.adminGuardMetrics(id)),
+            ),
+            AppSpacing.gapSm,
             SlButton(
               label: 'Editar datos',
               icon: Icons.edit_outlined,

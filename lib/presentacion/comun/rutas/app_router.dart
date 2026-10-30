@@ -12,6 +12,7 @@ import '../../admin/editar_guardia_page.dart';
 import '../../admin/escaladas_page.dart';
 import '../../admin/guardias_page.dart';
 import '../../admin/historial_page.dart';
+import '../../admin/metricas_guardia_page.dart';
 import '../../admin/panel_page.dart';
 import '../../auth/login_page.dart';
 import '../../auth/registro_page.dart';
@@ -130,6 +131,10 @@ GoRouter crearRouter(SesionViewModel sesion, FabricaViewModels f) {
                   GoRoute(
                     path: ':id/coverage',
                     builder: (_, s) => CoberturaGuardiaPage(viewModel: f.coberturaGuardia(s.pathParameters['id']!)),
+                  ),
+                  GoRoute(
+                    path: ':id/metrics',
+                    builder: (_, s) => MetricasGuardiaPage(viewModel: f.metricasGuardia(s.pathParameters['id']!)),
                   ),
                 ],
               ),
