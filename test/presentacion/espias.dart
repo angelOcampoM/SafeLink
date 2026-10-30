@@ -146,13 +146,14 @@ typedef CoberturaGuardada = ({String id, String inicio, String fin, PuntoGeo cen
 typedef LlamadaMetricasGuardia = ({String id, DateTime? desde, DateTime? hasta});
 
 class AdminEspia implements AdminRepository {
-  AdminEspia({required this.guardia, this.metricasGuardia = MetricasGuardia.vacias, this.falla});
+  AdminEspia({required this.guardia, this.metricasGuardia = MetricasGuardia.vacias, this.falla, this.usuarios = const []});
 
   Guardia guardia;
   final coberturas = <CoberturaGuardada>[];
   final llamadasMetricasGuardia = <LlamadaMetricasGuardia>[];
   MetricasGuardia metricasGuardia;
   ErrorDominio? falla;
+  List<Usuario> usuarios;
 
   @override
   Future<Guardia> obtenerGuardia(String guardiaId) async => guardia;
@@ -182,7 +183,10 @@ class AdminEspia implements AdminRepository {
   Future<Alerta> resolverAlerta(String alertaId, Resolucion resolucion) async => alertaPrueba(estado: EstadoAlerta.resueltaPorAdmin);
 
   @override
-  Future<List<Alerta>> obtenerHistorial(FiltroHistorial filtro) async => [];
+  Future<List<Alerta>> obtenerHistorial(FiltroHistorial filtro) async {
+    if (falla != null) throw falla!;
+    return [];
+  }
 
   @override
   Future<MetricasGenerales> obtenerMetricas({DateTime? desde, DateTime? hasta}) async => MetricasGenerales.vacias;
@@ -193,6 +197,9 @@ class AdminEspia implements AdminRepository {
     if (falla != null) throw falla!;
     return metricasGuardia;
   }
+
+  @override
+  Future<List<Usuario>> obtenerUsuarios() async => usuarios;
 
   @override
   Future<List<Usuario>> obtenerUsuariosBloqueados() async => [];

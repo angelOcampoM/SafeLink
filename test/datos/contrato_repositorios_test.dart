@@ -96,6 +96,8 @@ Future<List<String>> escenario(Repos r) async {
   await paso('guardias', () async => (await r.admin.obtenerGuardias(busqueda: 'a')).map((g) => g.usuario.id).join(','));
   await paso('historial cerradas', () async => (await r.admin.obtenerHistorial(const FiltroHistorial(estado: EstadoAlerta.cerrada))).length);
   await paso('historial 7 días grd-1', () async => (await r.admin.obtenerHistorial(FiltroHistorial(desde: ahora.subtract(const Duration(days: 7)), guardiaId: 'grd-1'))).length);
+  await paso('historial usuario', () async => (await r.admin.obtenerHistorial(const FiltroHistorial(usuarioId: 'usr-1'))).length);
+  await paso('usuarios', () async => (await r.admin.obtenerUsuarios()).map((u) => u.id).join(','));
   await paso('métricas', () async {
     final m = await r.admin.obtenerMetricas(desde: ahora.subtract(const Duration(days: 30)), hasta: ahora);
     return '${m.totalAlertas} ${m.promedioAceptacionSeg.toStringAsFixed(2)} ${m.alertasPorHora}';
@@ -150,6 +152,8 @@ void main() {
     expect(enMemoria, contains('confirmar antes de tiempo: ERROR INVALID_STATE'));
     expect(enMemoria.any((l) => l.startsWith('métricas guardia:')), isTrue);
     expect(enMemoria.any((l) => l.startsWith('métricas guardia: ERROR')), isFalse);
+    expect(enMemoria.any((l) => l.startsWith('historial usuario: ERROR')), isFalse);
+    expect(enMemoria.any((l) => l.startsWith('usuarios: ERROR')), isFalse);
   });
 
   test('el servicio con tasaFallo = 1 siempre responde "servicio no disponible"', () async {

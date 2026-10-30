@@ -83,6 +83,7 @@ void main() {
     await ir(tester, AppRoutes.adminGuardCoverage('grd-1'), 'Turno y radio');
     await ir(tester, AppRoutes.adminGuardMetrics('grd-1'), 'Métricas del guardia');
     await ir(tester, AppRoutes.adminEscalated, 'Escaladas');
-    await ir(tester, AppRoutes.adminHistory, 'alertas');
+    await ir(tester, AppRoutes.adminHistory, 'Todos los usuarios');
+    await ir(tester, AppRoutes.adminAlertDetail('alt-302'), 'Detalle de la alerta');
   });
 }
