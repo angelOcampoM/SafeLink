@@ -81,7 +81,7 @@ void main() {
     await ir(tester, AppRoutes.adminGuardNew, 'Nuevo guardia');
     await ir(tester, AppRoutes.adminGuardEdit('grd-1'), 'Editar guardia');
     await ir(tester, AppRoutes.adminGuardCoverage('grd-1'), 'Turno y radio');
-    await ir(tester, AppRoutes.adminGuardMetrics('grd-1'), 'Métricas de Carlos Hernández López');
+    await ir(tester, AppRoutes.adminGuardMetrics('grd-1'), 'Métricas del guardia');
     await ir(tester, AppRoutes.adminEscalated, 'Escaladas');
     await ir(tester, AppRoutes.adminHistory, 'alertas');
   });

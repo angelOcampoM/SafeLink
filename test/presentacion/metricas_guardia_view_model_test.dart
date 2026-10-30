@@ -26,7 +26,16 @@ void main() {
       db.dispose();
     });
 
-    test('carga el nombre y las métricas del guardia', () {
+    test('carga el perfil del guardia y sus últimas atendidas', () {
+      expect(vm.nombreGuardia, 'Carlos Hernández López');
+      expect(vm.guardia?.usuario.correo, 'guardia@safelink.mx');
+      // La más reciente con llegada en la semilla es alt-302 (hace 48 min).
+      expect(vm.ultimasAtendidas, hasLength(3));
+      expect(vm.ultimasAtendidas.first.id, 'alt-302');
+      expect(vm.ultimasAtendidas.every((a) => a.llegadaEn != null), isTrue);
+    });
+
+    test('carga las métricas del guardia', () {
       expect(vm.nombreGuardia, 'Carlos Hernández López');
       final m = vm.estado.datos!;
       // grd-1 atendió alt-302 y alt-304 (con llegada) además de su historial.

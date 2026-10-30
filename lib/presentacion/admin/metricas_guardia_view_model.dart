@@ -16,7 +16,11 @@ class MetricasGuardiaViewModel extends ViewModel {
   final DateTime Function() _reloj;
 
   String nombreGuardia = '';
+  Guardia? guardia;
   EstadoVista<MetricasGuardia> estado = const Cargando();
+
+  /// Últimas 3 alertas con llegada del guardia (resumen del perfil, sin filtro).
+  List<Alerta> ultimasAtendidas = const [];
 
   /// Días completos, inclusivos (la View los toma de un DateRangePicker).
   DateTime? desde;
@@ -27,13 +31,35 @@ class MetricasGuardiaViewModel extends ViewModel {
   DateTime get ahora => _reloj();
 
   Future<void> iniciar() async {
-    try {
-      nombreGuardia = (await _admin.obtenerGuardia(guardiaId)).usuario.nombre;
-    } catch (_) {
-      nombreGuardia = 'Guardia'; // el título genérico; las métricas igual cargan
-    }
+    await Future.wait([_cargarGuardia(), _cargarUltimasAtendidas()]);
     await cargar();
   }
+
+  Future<void> _cargarGuardia() async {
+    try {
+      guardia = await _admin.obtenerGuardia(guardiaId);
+      nombreGuardia = guardia!.usuario.nombre;
+    } catch (_) {
+      guardia = null;
+      nombreGuardia = 'Guardia'; // el título genérico; las métricas igual cargan
+    }
+    notifyListeners();
+  }
+
+  Future<void> _cargarUltimasAtendidas() async {
+    try {
+      final historial = await _admin.obtenerHistorial(FiltroHistorial(guardiaId: guardiaId));
+      // "Atendidas" = con llegada, igual que ReglaMetricas.deGuardia.
+      ultimasAtendidas = historial.where((a) => a.llegadaEn != null).take(3).toList();
+    } catch (_) {
+      ultimasAtendidas = const []; // el resumen no debe tumbar las métricas
+    }
+    notifyListeners();
+  }
+
+  /// Etiqueta de estado del guardia para su chip (misma lógica que GuardiasViewModel).
+  ({String etiqueta, bool activo, bool enTurno}) estadoDe(Guardia g) =>
+      (etiqueta: !g.usuario.activo ? 'Dado de baja' : g.disponibleA(ahora) ? 'En turno' : 'Fuera de turno', activo: g.usuario.activo, enTurno: g.disponibleA(ahora));
 
   Future<void> cargar() async {
     final mia = ++_peticion;

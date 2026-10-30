@@ -1,7 +1,7 @@
 // CAPA: PRESENTACIÓN — View
 // A-07 Métricas por guardia (filtro por rango de fechas)
-// Chip de rango con DateRangePicker, mosaico 2×2 de métricas y los cuatro
-// estados de vista. No calcula métricas ni llama repositorios.
+// Tarjeta de perfil del guardia, chip de rango con DateRangePicker, mosaico
+// 2×2 de métricas y sus últimas 3 alertas atendidas. No calcula ni llama repositorios.
 
 import 'package:flutter/material.dart';
 
@@ -49,12 +49,7 @@ class _MetricasGuardiaPageState extends State<MetricasGuardiaPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: ListenableBuilder(
-          listenable: vm,
-          builder: (_, __) => Text(vm.nombreGuardia.isEmpty ? 'Métricas del guardia' : 'Métricas de ${vm.nombreGuardia}'),
-        ),
-      ),
+      appBar: AppBar(title: const Text('Métricas del guardia')),
       body: ListenableBuilder(
         listenable: vm,
         builder: (context, _) => RefreshIndicator(
@@ -63,6 +58,10 @@ class _MetricasGuardiaPageState extends State<MetricasGuardiaPage> {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: AppSpacing.screen,
             children: [
+              if (vm.guardia != null) ...[
+                _TarjetaGuardia(vm: vm),
+                AppSpacing.gapMd,
+              ],
               Wrap(
                 spacing: AppSpacing.xs,
                 children: [
@@ -103,10 +102,82 @@ class _MetricasGuardiaPageState extends State<MetricasGuardiaPage> {
                     ],
                   ),
               },
+              AppSpacing.gapLg,
+              const SectionHeader('Últimas alertas atendidas'),
+              _UltimasAtendidas(vm: vm),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Tarjeta de perfil: nombre, correo, estado (chip) y turno.
+class _TarjetaGuardia extends StatelessWidget {
+  const _TarjetaGuardia({required this.vm});
+  final MetricasGuardiaViewModel vm;
+
+  @override
+  Widget build(BuildContext context) {
+    final g = vm.guardia!;
+    final e = vm.estadoDe(g);
+    final color = !e.activo ? AppColors.textMuted : (e.enTurno ? AppColors.success : AppColors.textSecondary);
+
+    return SlCard(
+      child: Row(
+        children: [
+          InitialsAvatar(g.usuario.iniciales),
+          AppSpacing.gapSm,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(g.usuario.nombre, style: context.text.titleMedium),
+                Text(g.usuario.correo, style: context.text.bodySmall),
+                AppSpacing.gapXs,
+                Wrap(
+                  spacing: AppSpacing.xs,
+                  runSpacing: AppSpacing.xs,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    SlChip(label: e.etiqueta, color: color),
+                    Text('${g.perfil.inicioTurno} – ${g.perfil.finTurno}', style: context.text.bodySmall),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Hasta 3 alertas con llegada del guardia, más recientes primero.
+class _UltimasAtendidas extends StatelessWidget {
+  const _UltimasAtendidas({required this.vm});
+  final MetricasGuardiaViewModel vm;
+
+  @override
+  Widget build(BuildContext context) {
+    final lista = vm.ultimasAtendidas;
+    if (lista.isEmpty) return const SlBanner(message: 'Sin alertas atendidas todavía.');
+    return Column(
+      children: [
+        for (final a in lista) ...[
+          AlertCard(
+            alert: a,
+            now: vm.ahora,
+            onTap: () => showModalBottomSheet<void>(
+              context: context,
+              isScrollControlled: true,
+              builder: (_) => AlertDetailSheet(alert: a),
+            ),
+          ),
+          AppSpacing.gapSm,
+        ],
+      ],
     );
   }
 }
