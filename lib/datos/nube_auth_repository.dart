@@ -47,6 +47,13 @@ class NubeAuthRepository implements AuthRepository {
   Future<Usuario> refrescarSesion() async => _guardar(await _service.get('/auth/me'));
 
   @override
+  Future<Usuario?> restaurarSesion(String usuarioId) async {
+    final respuesta = await _service.post('/auth/session', {'userId': usuarioId});
+    final datos = RespuestaJson.datos(respuesta);
+    return datos == null ? null : _guardar(respuesta);
+  }
+
+  @override
   Future<Usuario> actualizarAgitacion({required bool activa}) async =>
       _guardar(await _service.patch('/users/me/settings', {'shakeEnabled': activa}));
 }

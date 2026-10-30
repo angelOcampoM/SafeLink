@@ -1,6 +1,7 @@
 // U-03 Toque con cuenta regresiva · U-04 Mantener con zona de descarte · U-05 Agitación
 // El intervalo de la cuenta se inyecta (10 ms) para no esperar segundos reales.
 import 'package:flutter_test/flutter_test.dart';
+import 'package:safelink/datos/memoria_sesion_guardada.dart';
 import 'package:safelink/dominio/dominio.dart';
 import 'package:safelink/presentacion/sesion/sesion_view_model.dart';
 import 'package:safelink/presentacion/usuario/inicio_view_model.dart';
@@ -15,7 +16,7 @@ void main() {
     alertas = AlertaUsuarioEspia();
     return InicioViewModel(
       alertas,
-      SesionViewModel(AuthEspia(usuarioActual: usuario ?? usuarioPrueba()), reloj: () => ahoraPrueba),
+      SesionViewModel(AuthEspia(usuarioActual: usuario ?? usuarioPrueba()), MemoriaSesionGuardada(), reloj: () => ahoraPrueba),
       config: const Configuracion(segundosCuentaRegresiva: 3),
       ubicacionDispositivo: () => puntoAlerta,
       reloj: () => ahoraPrueba,

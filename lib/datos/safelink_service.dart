@@ -146,6 +146,10 @@ class SafeLinkService {
         return null;
       }),
       _Ruta('GET', '/auth/me', (_, __, ___) async => UsuarioJson.aJson(await _auth.refrescarSesion())),
+      _Ruta('POST', '/auth/session', (_, c, __) async {
+        final u = await _auth.restaurarSesion(c['userId']! as String);
+        return u == null ? null : UsuarioJson.aJson(u);
+      }),
       _Ruta(
         'PATCH',
         '/users/me/settings',

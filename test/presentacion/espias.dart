@@ -68,6 +68,9 @@ class AuthEspia implements AuthRepository {
   Future<Usuario> refrescarSesion() async => usuarioActual!;
 
   @override
+  Future<Usuario?> restaurarSesion(String usuarioId) async => usuarioActual = usuarioPrueba();
+
+  @override
   Future<Usuario> actualizarAgitacion({required bool activa}) async =>
       usuarioActual = usuarioActual!.copyWith(agitacionActiva: activa);
 }

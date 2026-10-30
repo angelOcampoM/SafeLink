@@ -19,12 +19,15 @@ import 'datos/memoria_admin_repository.dart';
 import 'datos/memoria_alerta_guardia_repository.dart';
 import 'datos/memoria_alerta_usuario_repository.dart';
 import 'datos/memoria_auth_repository.dart';
+import 'datos/dispositivo_sesion_guardada.dart';
 import 'datos/memoria_base_datos.dart';
+import 'datos/memoria_sesion_guardada.dart';
 import 'datos/nube_admin_repository.dart';
 import 'datos/nube_alerta_guardia_repository.dart';
 import 'datos/nube_alerta_usuario_repository.dart';
 import 'datos/nube_auth_repository.dart';
 import 'datos/safelink_service.dart';
+import 'datos/sesion_guardada.dart';
 import 'dominio/configuracion.dart';
 import 'presentacion/comun/rutas/app_router.dart';
 import 'presentacion/comun/rutas/fabrica_view_models.dart';
@@ -36,9 +39,16 @@ const usarNube = false; // cámbialo a true y haz hot restart.
 /// Solo con `usarNube = true`: probabilidad de que falle cada petición (0.0–1.0).
 const tasaFallo = 0.0;
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(SafeLinkApp(dependencias: Dependencias.crear(usarNube: usarNube, tasaFallo: tasaFallo)));
+  final dependencias = Dependencias.crear(
+    usarNube: usarNube,
+    tasaFallo: tasaFallo,
+    sesionGuardada: DispositivoSesionGuardada(),
+  );
+  // U-02: si quedó una sesión abierta, se entra directo sin pasar por el login.
+  await dependencias.sesion.restaurar();
+  runApp(SafeLinkApp(dependencias: dependencias));
 }
 
 /// Los cuatro contratos ya armados, más la fábrica de ViewModels.
@@ -49,9 +59,11 @@ class Dependencias {
     required this.alertasGuardia,
     required this.admin,
     this.config = Configuracion.porDefecto,
+    SesionGuardada? sesionGuardada,
     void Function()? iniciarSimulaciones,
-  }) : iniciarSimulaciones = iniciarSimulaciones ?? _nada {
-    sesion = SesionViewModel(auth);
+  })  : sesionGuardada = sesionGuardada ?? MemoriaSesionGuardada(),
+        iniciarSimulaciones = iniciarSimulaciones ?? _nada {
+    sesion = SesionViewModel(auth, this.sesionGuardada);
     fabrica = FabricaViewModels(
       sesion: sesion,
       alertasUsuario: alertasUsuario,
@@ -67,7 +79,12 @@ class Dependencias {
 
   /// Arma memoria o nube. Las simulaciones de tiempo real (alertas nuevas,
   /// escalamiento) se arrancan desde [SafeLinkApp], nunca en las pruebas.
-  factory Dependencias.crear({required bool usarNube, double tasaFallo = 0.0, Configuracion config = Configuracion.porDefecto}) {
+  factory Dependencias.crear({
+    required bool usarNube,
+    double tasaFallo = 0.0,
+    Configuracion config = Configuracion.porDefecto,
+    SesionGuardada? sesionGuardada,
+  }) {
     if (usarNube) {
       final servicio = SafeLinkService(servidor: MemoriaBaseDatos(config: config, latencia: Duration.zero), tasaFallo: tasaFallo);
       return Dependencias(
@@ -76,6 +93,7 @@ class Dependencias {
         alertasGuardia: NubeAlertaGuardiaRepository(servicio),
         admin: NubeAdminRepository(servicio),
         config: config,
+        sesionGuardada: sesionGuardada,
         iniciarSimulaciones: servicio.iniciarSimulaciones,
       );
     }
@@ -86,6 +104,7 @@ class Dependencias {
       alertasGuardia: MemoriaAlertaGuardiaRepository(db),
       admin: MemoriaAdminRepository(db),
       config: config,
+      sesionGuardada: sesionGuardada,
       iniciarSimulaciones: db.iniciarSimulaciones,
     );
   }
@@ -95,6 +114,7 @@ class Dependencias {
   final AlertaGuardiaRepository alertasGuardia;
   final AdminRepository admin;
   final Configuracion config;
+  final SesionGuardada sesionGuardada;
   final void Function() iniciarSimulaciones;
   late final SesionViewModel sesion;
   late final FabricaViewModels fabrica;
