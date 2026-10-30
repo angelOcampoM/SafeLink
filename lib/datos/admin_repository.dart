@@ -17,8 +17,9 @@ abstract interface class AdminRepository {
 
   Future<Guardia> obtenerGuardia(String guardiaId);
 
-  /// Lanza `CorreoRegistradoError`.
-  Future<Guardia> crearGuardia({required String nombre, required String correo, required String telefono});
+  /// Lanza `CorreoRegistradoError`. La [contrasena] inicial la elige el
+  /// administrador (A-01); nunca se fija en el código.
+  Future<Guardia> crearGuardia({required String nombre, required String correo, required String telefono, required String contrasena});
 
   /// Lanza `CorreoRegistradoError`.
   Future<Guardia> actualizarGuardia(String guardiaId, {String? nombre, String? correo, String? telefono});
@@ -26,12 +27,14 @@ abstract interface class AdminRepository {
   /// Baja lógica.
   Future<void> darDeBajaGuardia(String guardiaId);
 
+  /// A-06: la [zona] de cobertura etiqueta al guardia para las métricas.
   Future<Guardia> actualizarCobertura(
     String guardiaId, {
     required String inicioTurno,
     required String finTurno,
     required PuntoGeo centro,
     required int radioMetros,
+    required String zona,
   });
 
   /// Bandeja de escaladas en tiempo real, las más antiguas primero.

@@ -74,6 +74,8 @@ void main() {
   testWidgets('administrador', (tester) async {
     await abrir(tester, 'admin@safelink.mx');
     await ir(tester, AppRoutes.adminDashboard, 'Panel general');
+    expect(find.textContaining('ALERTAS POR ZONA'), findsOneWidget);
+    expect(find.text('Personalizado'), findsOneWidget);
     await tester.tap(find.text('7 días'));
     await tester.pump(const Duration(milliseconds: 100));
     expect(tester.takeException(), isNull);

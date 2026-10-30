@@ -34,4 +34,32 @@ void main() {
     expect(g.atendidas, 2);
     expect(g.escaladas, 0);
   });
+
+  test('agrupa las alertas por la zona del guardia que las atendió', () {
+    Alerta conGuardia(String id, String? guardiaId) =>
+        Alerta(id: id, usuarioId: 'u', guardiaId: guardiaId, estado: EstadoAlerta.cerrada, metodo: MetodoDisparo.toque, disparadaEn: t);
+    final alertas = [
+      conGuardia('1', 'g1'),
+      conGuardia('2', 'g1'),
+      conGuardia('3', 'g1'),
+      conGuardia('4', 'g2'),
+      conGuardia('5', null), // nunca fue aceptada
+    ];
+    final m = ReglaMetricas.generales(alertas, zonasPorGuardia: {'g1': 'Zona A', 'g2': 'Zona B'});
+    expect(m.alertasPorZona, [
+      (zona: 'Zona A', total: 3),
+      (zona: ReglaMetricas.sinZona, total: 1),
+      (zona: 'Zona B', total: 1),
+    ]);
+    expect(m.alertasPorZona.fold<int>(0, (s, z) => s + z.total), m.totalAlertas);
+  });
+
+  test('el guardia sin zona conocida cae en Sin zona asignada', () {
+    final alertas = [
+      Alerta(id: '1', usuarioId: 'u', guardiaId: 'g9', estado: EstadoAlerta.cerrada, metodo: MetodoDisparo.toque, disparadaEn: t),
+      Alerta(id: '2', usuarioId: 'u', guardiaId: 'g9', estado: EstadoAlerta.cerrada, metodo: MetodoDisparo.toque, disparadaEn: t),
+    ];
+    final m = ReglaMetricas.generales(alertas);
+    expect(m.alertasPorZona.single, (zona: ReglaMetricas.sinZona, total: 2));
+  });
 }

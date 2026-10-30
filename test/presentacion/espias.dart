@@ -142,18 +142,32 @@ class AlertaGuardiaEspia implements AlertaGuardiaRepository {
   Future<MetricasGuardia> obtenerMisMetricas() async => MetricasGuardia.vacias;
 }
 
-typedef CoberturaGuardada = ({String id, String inicio, String fin, PuntoGeo centro, int radio});
+typedef CoberturaGuardada = ({String id, String inicio, String fin, PuntoGeo centro, int radio, String zona});
 typedef LlamadaMetricasGuardia = ({String id, DateTime? desde, DateTime? hasta});
+typedef LlamadaMetricas = ({DateTime? desde, DateTime? hasta});
 typedef LlamadaResolucion = ({String id, Resolucion resolucion, String nota});
+typedef GuardiaCreada = ({String nombre, String correo, String telefono, String contrasena});
 
 class AdminEspia implements AdminRepository {
-  AdminEspia({required this.guardia, this.metricasGuardia = MetricasGuardia.vacias, this.falla, this.fallaResolver, this.usuarios = const [], this.historial = const []});
+  AdminEspia({
+    required this.guardia,
+    this.metricasGuardia = MetricasGuardia.vacias,
+    this.metricasGenerales = MetricasGenerales.vacias,
+    this.falla,
+    this.fallaResolver,
+    this.usuarios = const [],
+    this.historial = const [],
+  });
 
   Guardia guardia;
   final coberturas = <CoberturaGuardada>[];
   final llamadasMetricasGuardia = <LlamadaMetricasGuardia>[];
+  final llamadasMetricas = <LlamadaMetricas>[];
   final resoluciones = <LlamadaResolucion>[];
+  final creadas = <GuardiaCreada>[];
+  final desbloqueados = <String>[];
   MetricasGuardia metricasGuardia;
+  MetricasGenerales metricasGenerales;
   ErrorDominio? falla;
   ErrorDominio? fallaResolver;
   List<Usuario> usuarios;
@@ -163,16 +177,29 @@ class AdminEspia implements AdminRepository {
   Future<Guardia> obtenerGuardia(String guardiaId) async => guardia;
 
   @override
-  Future<Guardia> actualizarCobertura(String guardiaId, {required String inicioTurno, required String finTurno, required PuntoGeo centro, required int radioMetros}) async {
-    coberturas.add((id: guardiaId, inicio: inicioTurno, fin: finTurno, centro: centro, radio: radioMetros));
+  Future<Guardia> actualizarCobertura(
+    String guardiaId, {
+    required String inicioTurno,
+    required String finTurno,
+    required PuntoGeo centro,
+    required int radioMetros,
+    required String zona,
+  }) async {
+    coberturas.add((id: guardiaId, inicio: inicioTurno, fin: finTurno, centro: centro, radio: radioMetros, zona: zona));
     return guardia;
   }
 
   @override
-  Future<List<Guardia>> obtenerGuardias({String busqueda = ''}) async => [guardia];
+  Future<List<Guardia>> obtenerGuardias({String busqueda = ''}) async {
+    if (falla != null) throw falla!;
+    return [guardia];
+  }
 
   @override
-  Future<Guardia> crearGuardia({required String nombre, required String correo, required String telefono}) async => guardia;
+  Future<Guardia> crearGuardia({required String nombre, required String correo, required String telefono, required String contrasena}) async {
+    creadas.add((nombre: nombre, correo: correo, telefono: telefono, contrasena: contrasena));
+    return guardia;
+  }
 
   @override
   Future<Guardia> actualizarGuardia(String guardiaId, {String? nombre, String? correo, String? telefono}) async => guardia;
@@ -197,7 +224,11 @@ class AdminEspia implements AdminRepository {
   }
 
   @override
-  Future<MetricasGenerales> obtenerMetricas({DateTime? desde, DateTime? hasta}) async => MetricasGenerales.vacias;
+  Future<MetricasGenerales> obtenerMetricas({DateTime? desde, DateTime? hasta}) async {
+    llamadasMetricas.add((desde: desde, hasta: hasta));
+    if (falla != null) throw falla!;
+    return metricasGenerales;
+  }
 
   @override
   Future<MetricasGuardia> obtenerMetricasGuardia(String guardiaId, {DateTime? desde, DateTime? hasta}) async {
@@ -213,5 +244,5 @@ class AdminEspia implements AdminRepository {
   Future<List<Usuario>> obtenerUsuariosBloqueados() async => [];
 
   @override
-  Future<void> desbloquearUsuario(String usuarioId) async {}
+  Future<void> desbloquearUsuario(String usuarioId) async => desbloqueados.add(usuarioId);
 }

@@ -100,7 +100,7 @@ Future<List<String>> escenario(Repos r) async {
   await paso('usuarios', () async => (await r.admin.obtenerUsuarios()).map((u) => u.id).join(','));
   await paso('métricas', () async {
     final m = await r.admin.obtenerMetricas(desde: ahora.subtract(const Duration(days: 30)), hasta: ahora);
-    return '${m.totalAlertas} ${m.promedioAceptacionSeg.toStringAsFixed(2)} ${m.alertasPorHora}';
+    return '${m.totalAlertas} ${m.promedioAceptacionSeg.toStringAsFixed(2)} ${m.alertasPorHora} ${m.alertasPorZona}';
   });
   await paso('métricas guardia', () async {
     final m = await r.admin.obtenerMetricasGuardia('grd-1', desde: ahora.subtract(const Duration(days: 7)), hasta: ahora);
@@ -114,9 +114,13 @@ Future<List<String>> escenario(Repos r) async {
   await paso('resolver sin nota', () => r.admin.resolverAlerta('alt-303', Resolucion.resuelta, nota: '   '));
   await paso('resolver otra vez', () => r.admin.resolverAlerta('alt-302', Resolucion.resuelta, nota: 'Intento repetido'));
   await paso('bloqueados', () async => (await r.admin.obtenerUsuariosBloqueados()).map((u) => '${u.id}:${u.falsasAlarmas}').join(','));
-  await paso('correo repetido', () => r.admin.crearGuardia(nombre: 'Otro', correo: 'guardia@safelink.mx', telefono: '7770000000'));
-  await paso('cobertura', () async =>
-      (await r.admin.actualizarCobertura('grd-8', inicioTurno: '22:00', finTurno: '06:00', centro: const PuntoGeo(18.84, -99.18), radioMetros: 2500)).perfil.radioCoberturaMetros,);
+  await paso('correo repetido', () => r.admin.crearGuardia(nombre: 'Otro', correo: 'guardia@safelink.mx', telefono: '7770000000', contrasena: 'SafeLink1'));
+  await paso('alta con contraseña débil', () => r.admin.crearGuardia(nombre: 'Otra', correo: 'otra@safelink.mx', telefono: '7770000000', contrasena: 'corta'));
+  await paso('alta de guardia', () async => (await r.admin.crearGuardia(nombre: 'Nuevo Guardia', correo: 'nuevo@safelink.mx', telefono: '7770000001', contrasena: 'Guardia123')).usuario.correo);
+  await paso('cobertura', () async {
+    final g = await r.admin.actualizarCobertura('grd-8', inicioTurno: '22:00', finTurno: '06:00', centro: const PuntoGeo(18.84, -99.18), radioMetros: 2500, zona: 'Emiliano Zapata');
+    return '${g.perfil.radioCoberturaMetros} ${g.perfil.zona}';
+  });
   await paso('editar', () async => (await r.admin.actualizarGuardia('grd-8', telefono: '7771112233')).usuario.telefono);
   await paso('desbloquear', () async {
     await r.admin.desbloquearUsuario('usr-4');
@@ -134,6 +138,9 @@ Future<List<String>> escenario(Repos r) async {
   });
   await paso('mi historial', () async => (await r.usuario.obtenerHistorial()).length);
   await paso('agitación', () async => (await r.auth.actualizarAgitacion(activa: false)).agitacionActiva);
+
+  // El guardia dado de alta entra con la contraseña que eligió el admin.
+  await paso('login guardia nuevo', () async => (await r.auth.iniciarSesion(correo: 'nuevo@safelink.mx', contrasena: 'Guardia123')).rol);
 
   r.cerrar();
   return log;
@@ -155,6 +162,11 @@ void main() {
     expect(enMemoria, contains('resolver falsa alarma: EstadoAlerta.resueltaPorAdmin Revisado con la usuaria.'));
     expect(enMemoria, contains('resolver sin nota: ERROR INVALID_STATE'));
     expect(enMemoria, contains('correo repetido: ERROR EMAIL_TAKEN'));
+    expect(enMemoria, contains('alta con contraseña débil: ERROR INVALID_STATE'));
+    expect(enMemoria, contains('alta de guardia: nuevo@safelink.mx'));
+    expect(enMemoria, contains('cobertura: 2500 Emiliano Zapata'));
+    expect(enMemoria, contains('login guardia nuevo: RolUsuario.guardia'));
+    expect(enMemoria.any((l) => l.startsWith('métricas: ') && l.contains('Emiliano Zapata')), isTrue);
     expect(enMemoria, contains('confirmar antes de tiempo: ERROR INVALID_STATE'));
     expect(enMemoria.any((l) => l.startsWith('métricas guardia:')), isTrue);
     expect(enMemoria.any((l) => l.startsWith('métricas guardia: ERROR')), isFalse);
