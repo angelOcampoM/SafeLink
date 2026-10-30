@@ -100,6 +100,10 @@ Future<List<String>> escenario(Repos r) async {
     final m = await r.admin.obtenerMetricas(desde: ahora.subtract(const Duration(days: 30)), hasta: ahora);
     return '${m.totalAlertas} ${m.promedioAceptacionSeg.toStringAsFixed(2)} ${m.alertasPorHora}';
   });
+  await paso('métricas guardia', () async {
+    final m = await r.admin.obtenerMetricasGuardia('grd-1', desde: ahora.subtract(const Duration(days: 7)), hasta: ahora);
+    return '${m.atendidas} ${m.promedioAceptacionSeg.toStringAsFixed(2)} ${m.promedioLlegadaSeg.toStringAsFixed(2)} ${m.escaladas}';
+  });
   await paso('escaladas', () async => (await r.admin.escucharEscaladas().first).map((a) => a.id).join(','));
   await paso('resolver falsa alarma', () async => (await r.admin.resolverAlerta('alt-302', Resolucion.falsaAlarma)).estado);
   await paso('resolver otra vez', () => r.admin.resolverAlerta('alt-302', Resolucion.resuelta));
@@ -144,6 +148,8 @@ void main() {
     expect(enMemoria, contains('resolver otra vez: ERROR INVALID_STATE'));
     expect(enMemoria, contains('correo repetido: ERROR EMAIL_TAKEN'));
     expect(enMemoria, contains('confirmar antes de tiempo: ERROR INVALID_STATE'));
+    expect(enMemoria.any((l) => l.startsWith('métricas guardia:')), isTrue);
+    expect(enMemoria.any((l) => l.startsWith('métricas guardia: ERROR')), isFalse);
   });
 
   test('el servicio con tasaFallo = 1 siempre responde "servicio no disponible"', () async {
