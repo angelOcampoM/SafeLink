@@ -272,6 +272,11 @@ class SafeLinkService {
       ),
       _Ruta(
         'GET',
+        '/admin/users',
+        (_, __, ___) async => [for (final u in await _admin.obtenerUsuarios()) UsuarioJson.aJson(u)],
+      ),
+      _Ruta(
+        'GET',
         '/admin/users/blocked',
         (_, __, ___) async => [for (final u in await _admin.obtenerUsuariosBloqueados()) UsuarioJson.aJson(u)],
       ),

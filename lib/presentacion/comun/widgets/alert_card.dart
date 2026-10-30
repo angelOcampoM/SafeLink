@@ -20,6 +20,7 @@ class AlertCard extends StatelessWidget {
     this.distanceMeters,
     this.onTap,
     this.showStatus = true,
+    this.showGuardia = false,
   });
 
   final Alerta alert;
@@ -27,6 +28,9 @@ class AlertCard extends StatelessWidget {
   final double? distanceMeters;
   final VoidCallback? onTap;
   final bool showStatus;
+
+  /// A-05: el historial del admin audita también el guardia asignado.
+  final bool showGuardia;
 
   @override
   Widget build(BuildContext context) {
@@ -67,6 +71,8 @@ class AlertCard extends StatelessWidget {
             children: [
               TriggerChip(alert.metodo),
               if (showStatus) StatusChip(alert.estado),
+              if (showGuardia)
+                SlChip(label: alert.nombreGuardia ?? 'Sin guardia', color: AppColors.info, icon: Icons.shield_outlined),
               if (alert.evidenciaIncompleta)
                 const SlChip(label: 'Sin foto', color: AppColors.textSecondary, icon: Icons.no_photography_outlined),
               if (alert.razonEscalamiento != null)

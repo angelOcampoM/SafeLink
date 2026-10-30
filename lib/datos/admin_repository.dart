@@ -46,6 +46,9 @@ abstract interface class AdminRepository {
 
   Future<MetricasGuardia> obtenerMetricasGuardia(String guardiaId, {DateTime? desde, DateTime? hasta});
 
+  /// A-05: usuarios protegidos para el filtro del historial.
+  Future<List<Usuario>> obtenerUsuarios();
+
   Future<List<Usuario>> obtenerUsuariosBloqueados();
 
   Future<void> desbloquearUsuario(String usuarioId);

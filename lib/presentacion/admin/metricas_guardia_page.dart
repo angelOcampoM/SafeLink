@@ -4,9 +4,11 @@
 // 2×2 de métricas y sus últimas 3 alertas atendidas. No calcula ni llama repositorios.
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../comun/estado_vista.dart';
 import '../comun/formato.dart';
+import '../comun/rutas/app_routes.dart';
 import '../comun/tema/theme.dart';
 import '../comun/widgets/widgets.dart';
 import 'metricas_guardia_view_model.dart';
@@ -169,11 +171,7 @@ class _UltimasAtendidas extends StatelessWidget {
           AlertCard(
             alert: a,
             now: vm.ahora,
-            onTap: () => showModalBottomSheet<void>(
-              context: context,
-              isScrollControlled: true,
-              builder: (_) => AlertDetailSheet(alert: a),
-            ),
+            onTap: () => context.push(AppRoutes.adminAlertDetail(a.id)),
           ),
           AppSpacing.gapSm,
         ],

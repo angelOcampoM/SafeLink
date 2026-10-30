@@ -1,12 +1,14 @@
 // CAPA: PRESENTACIÓN — View
-// A-05 Historial con filtros (rango de fechas, guardia y estado, combinables)
+// A-05 Historial con filtros (rango de fechas, guardia, usuario y estado, combinables)
 // Chips de filtro, lista con pull-to-refresh y detalle en hoja inferior.
 // No filtra por su cuenta: solo pasa al ViewModel lo que se eligió.
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../dominio/dominio.dart';
 import '../comun/formato.dart';
+import '../comun/rutas/app_routes.dart';
 import '../comun/tema/theme.dart';
 import '../comun/widgets/widgets.dart';
 import 'historial_view_model.dart';
@@ -69,6 +71,29 @@ class _HistorialPageState extends State<HistorialPage> {
     if (id != null) vm.cambiarGuardia(id.isEmpty ? null : id);
   }
 
+  Future<void> _elegirUsuario() async {
+    final id = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (c) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            ListTile(leading: const Icon(Icons.person_outline_rounded), title: const Text('Todos los usuarios'), onTap: () => Navigator.pop(c, '')),
+            for (final u in vm.usuarios)
+              ListTile(
+                leading: InitialsAvatar(u.iniciales),
+                title: Text(u.nombre),
+                selected: u.id == vm.usuarioId,
+                onTap: () => Navigator.pop(c, u.id),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (id != null) vm.cambiarUsuario(id.isEmpty ? null : id);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -77,34 +102,37 @@ class _HistorialPageState extends State<HistorialPage> {
         listenable: vm,
         builder: (context, _) => Column(
           children: [
-            SizedBox(
-              height: 48,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+              child: Wrap(
+                spacing: AppSpacing.xs,
+                runSpacing: AppSpacing.xs,
                 children: [
                   ActionChip(
                     avatar: const Icon(Icons.date_range_rounded, size: AppSizes.iconSm),
                     label: Text(vm.desde == null ? 'Todas las fechas' : '${Fmt.date(vm.desde!)} – ${Fmt.date(vm.hasta!)}'),
                     onPressed: _elegirRango,
                   ),
-                  AppSpacing.gapXs,
                   ActionChip(
                     avatar: const Icon(Icons.shield_outlined, size: AppSizes.iconSm),
                     label: Text(vm.nombreGuardia ?? 'Todos los guardias'),
                     onPressed: _elegirGuardia,
                   ),
-                  if (vm.hayFiltros) ...[
-                    AppSpacing.gapXs,
+                  ActionChip(
+                    avatar: const Icon(Icons.person_outline_rounded, size: AppSizes.iconSm),
+                    label: Text(vm.nombreUsuario ?? 'Todos los usuarios'),
+                    onPressed: _elegirUsuario,
+                  ),
+                  if (vm.hayFiltros)
                     ActionChip(
                       avatar: const Icon(Icons.filter_alt_off_outlined, size: AppSizes.iconSm),
                       label: const Text('Limpiar'),
                       onPressed: vm.limpiarFiltros,
                     ),
-                  ],
                 ],
               ),
             ),
+            AppSpacing.gapXs,
             SizedBox(
               height: 48,
               child: ListView(
@@ -136,11 +164,8 @@ class _HistorialPageState extends State<HistorialPage> {
                       : AlertCard(
                           alert: lista[i - 1],
                           now: vm.ahora,
-                          onTap: () => showModalBottomSheet<void>(
-                            context: context,
-                            isScrollControlled: true,
-                            builder: (_) => AlertDetailSheet(alert: lista[i - 1]),
-                          ),
+                          showGuardia: true,
+                          onTap: () => context.push(AppRoutes.adminAlertDetail(lista[i - 1].id)),
                         ),
                 ),
               ),

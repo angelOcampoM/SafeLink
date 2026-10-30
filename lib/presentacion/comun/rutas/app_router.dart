@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../../dominio/enums.dart';
 import '../../admin/admin_shell.dart';
 import '../../admin/cobertura_guardia_page.dart';
+import '../../admin/detalle_alerta_admin_page.dart';
 import '../../admin/editar_guardia_page.dart';
 import '../../admin/escaladas_page.dart';
 import '../../admin/guardias_page.dart';
@@ -143,6 +144,13 @@ GoRouter crearRouter(SesionViewModel sesion, FabricaViewModels f) {
           StatefulShellBranch(routes: [GoRoute(path: AppRoutes.adminEscalated, builder: (_, __) => EscaladasPage(viewModel: f.escaladas()))]),
           StatefulShellBranch(routes: [GoRoute(path: AppRoutes.adminHistory, builder: (_, __) => HistorialPage(viewModel: f.historial()))]),
         ],
+      ),
+
+      // Detalle de una alerta del historial del admin: pantalla completa, sin
+      // barra inferior, fuera del shell (se abre con push desde las listas).
+      GoRoute(
+        path: '/admin/alerts/:id',
+        builder: (_, s) => DetalleAlertaAdminPage(viewModel: f.detalleAlertaAdmin(s.pathParameters['id']!)),
       ),
     ],
   );

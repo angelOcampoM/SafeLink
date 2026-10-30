@@ -147,6 +147,13 @@ class MemoriaAdminRepository implements AdminRepository {
   }
 
   @override
+  Future<List<Usuario>> obtenerUsuarios() async {
+    await _db.esperar();
+    return _db.usuarios.values.where((u) => u.rol == RolUsuario.usuarioProtegido).toList()
+      ..sort((a, b) => a.nombre.compareTo(b.nombre));
+  }
+
+  @override
   Future<List<Usuario>> obtenerUsuariosBloqueados() async {
     await _db.esperar();
     final ahora = _db.reloj();

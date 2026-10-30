@@ -86,6 +86,12 @@ class NubeAdminRepository implements AdminRepository {
   }
 
   @override
+  Future<List<Usuario>> obtenerUsuarios() async {
+    final d = RespuestaJson.datos(await _service.get('/admin/users'));
+    return [for (final j in d! as List) UsuarioJson.desdeJson(j as Json)];
+  }
+
+  @override
   Future<List<Usuario>> obtenerUsuariosBloqueados() async {
     final d = RespuestaJson.datos(await _service.get('/admin/users/blocked'));
     return [for (final j in d! as List) UsuarioJson.desdeJson(j as Json)];

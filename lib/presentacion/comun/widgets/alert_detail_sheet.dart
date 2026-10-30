@@ -37,17 +37,41 @@ class AlertDetailSheet extends StatelessWidget {
             InfoRow(icon: Icons.person_outline_rounded, label: 'Usuario', value: a.nombreUsuario ?? '—'),
             InfoRow(icon: Icons.shield_outlined, label: 'Guardia', value: a.nombreGuardia ?? 'Sin asignar'),
             if (a.aceptadaEn != null)
-              InfoRow(icon: Icons.timer_outlined, label: 'Aceptación', value: Fmt.duration(a.aceptadaEn!.difference(a.disparadaEn).inSeconds)),
+              InfoRow(
+                icon: Icons.timer_outlined,
+                label: 'Aceptación',
+                value: '${Fmt.dateTime(a.aceptadaEn!)} · ${Fmt.duration(a.aceptadaEn!.difference(a.disparadaEn).inSeconds)}',
+              ),
             if (a.llegadaEn != null)
               InfoRow(
                 icon: Icons.directions_run_rounded,
                 label: 'Llegada',
-                value: Fmt.duration(a.llegadaEn!.difference(a.aceptadaEn ?? a.disparadaEn).inSeconds),
+                value: '${Fmt.dateTime(a.llegadaEn!)} · ${Fmt.duration(a.llegadaEn!.difference(a.aceptadaEn ?? a.disparadaEn).inSeconds)}',
               ),
+            if (a.cerradaEn != null)
+              InfoRow(icon: Icons.check_circle_outline_rounded, label: 'Cierre', value: Fmt.dateTime(a.cerradaEn!)),
             if (a.razonEscalamiento != null)
               InfoRow(icon: Icons.priority_high_rounded, label: 'Escalada', value: a.razonEscalamiento!.etiqueta, valueColor: AppColors.warning),
             if (a.resolucion != null)
               InfoRow(icon: a.resolucion!.style.icon, label: 'Resolución', value: a.resolucion!.etiqueta, valueColor: a.resolucion!.style.color),
+            if (a.fotoUrl != null) ...[
+              AppSpacing.gapSm,
+              ClipRRect(
+                borderRadius: AppRadius.brMd,
+                child: Image.network(
+                  a.fotoUrl!,
+                  height: 160,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    height: 160,
+                    color: AppColors.surfaceElevated,
+                    alignment: Alignment.center,
+                    child: Text('No se pudo cargar la evidencia', style: context.text.bodySmall),
+                  ),
+                ),
+              ),
+            ],
             if (a.evidenciaIncompleta) ...[
               AppSpacing.gapSm,
               const SlBanner(type: SlBannerType.warning, message: 'Evidencia incompleta: se envió sin foto.'),
