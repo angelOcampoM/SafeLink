@@ -53,8 +53,22 @@ void main() {
     });
   });
 
-  group('A-08 aplicarFalsaAlarma', () {
-    final usuario = Usuario(id: 'u', nombre: 'Rosa', correo: 'r@m.com', telefono: '7772233445', rol: RolUsuario.usuarioProtegido, creadoEn: ahora, falsasAlarmas: 1);
+  group('A-04 nota administrativa', () {
+    test('vacía o solo espacios pide escribirla', () {
+      expect(ReglaAlerta.nota(null), 'Escribe una nota administrativa para resolver la alerta');
+      expect(ReglaAlerta.nota('   '), 'Escribe una nota administrativa para resolver la alerta');
+    });
+
+    test('no acepta más de ${ReglaAlerta.maxNota} caracteres', () {
+      expect(ReglaAlerta.nota('a' * (ReglaAlerta.maxNota + 1)), 'La nota no puede pasar de ${ReglaAlerta.maxNota} caracteres');
+    });
+
+    test('una nota válida no tiene error', () {
+      expect(ReglaAlerta.nota('Se revisó con la usuaria; sin riesgo.'), isNull);
+    });
+  });
+
+  group('A-08 aplicarFalsaAlarma', () {    final usuario = Usuario(id: 'u', nombre: 'Rosa', correo: 'r@m.com', telefono: '7772233445', rol: RolUsuario.usuarioProtegido, creadoEn: ahora, falsasAlarmas: 1);
 
     test('debajo del límite solo incrementa', () {
       final r = ReglaAlerta.aplicarFalsaAlarma(usuario, ahora: ahora, limite: 3, diasBloqueo: 7);

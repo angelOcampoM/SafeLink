@@ -83,6 +83,11 @@ void main() {
     await ir(tester, AppRoutes.adminGuardCoverage('grd-1'), 'Turno y radio');
     await ir(tester, AppRoutes.adminGuardMetrics('grd-1'), 'Métricas del guardia');
     await ir(tester, AppRoutes.adminEscalated, 'Escaladas');
+    await ir(tester, AppRoutes.adminEscalatedDetail('alt-301'), 'Alerta escalada');
+    expect(find.text('Nota administrativa'), findsWidgets);
+    await tester.ensureVisible(find.text('Confirmo que revisé y atendí esta alerta'));
+    await tester.tap(find.text('Confirmo que revisé y atendí esta alerta'));
+    await tester.pump();
     await ir(tester, AppRoutes.adminHistory, 'Todos los usuarios');
     await ir(tester, AppRoutes.adminAlertDetail('alt-302'), 'Detalle de la alerta');
   });

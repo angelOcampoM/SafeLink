@@ -144,16 +144,20 @@ class AlertaGuardiaEspia implements AlertaGuardiaRepository {
 
 typedef CoberturaGuardada = ({String id, String inicio, String fin, PuntoGeo centro, int radio});
 typedef LlamadaMetricasGuardia = ({String id, DateTime? desde, DateTime? hasta});
+typedef LlamadaResolucion = ({String id, Resolucion resolucion, String nota});
 
 class AdminEspia implements AdminRepository {
-  AdminEspia({required this.guardia, this.metricasGuardia = MetricasGuardia.vacias, this.falla, this.usuarios = const []});
+  AdminEspia({required this.guardia, this.metricasGuardia = MetricasGuardia.vacias, this.falla, this.fallaResolver, this.usuarios = const [], this.historial = const []});
 
   Guardia guardia;
   final coberturas = <CoberturaGuardada>[];
   final llamadasMetricasGuardia = <LlamadaMetricasGuardia>[];
+  final resoluciones = <LlamadaResolucion>[];
   MetricasGuardia metricasGuardia;
   ErrorDominio? falla;
+  ErrorDominio? fallaResolver;
   List<Usuario> usuarios;
+  List<Alerta> historial;
 
   @override
   Future<Guardia> obtenerGuardia(String guardiaId) async => guardia;
@@ -177,15 +181,19 @@ class AdminEspia implements AdminRepository {
   Future<void> darDeBajaGuardia(String guardiaId) async {}
 
   @override
-  Stream<List<Alerta>> escucharEscaladas() => Stream.value(const []);
+  Stream<List<Alerta>> escucharEscaladas() => falla == null ? Stream.value(const []) : Stream.error(falla!);
 
   @override
-  Future<Alerta> resolverAlerta(String alertaId, Resolucion resolucion) async => alertaPrueba(estado: EstadoAlerta.resueltaPorAdmin);
+  Future<Alerta> resolverAlerta(String alertaId, Resolucion resolucion, {required String nota}) async {
+    if (fallaResolver != null) throw fallaResolver!;
+    resoluciones.add((id: alertaId, resolucion: resolucion, nota: nota));
+    return alertaPrueba(estado: EstadoAlerta.resueltaPorAdmin);
+  }
 
   @override
   Future<List<Alerta>> obtenerHistorial(FiltroHistorial filtro) async {
     if (falla != null) throw falla!;
-    return [];
+    return historial;
   }
 
   @override

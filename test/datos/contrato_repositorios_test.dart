@@ -107,8 +107,12 @@ Future<List<String>> escenario(Repos r) async {
     return '${m.atendidas} ${m.promedioAceptacionSeg.toStringAsFixed(2)} ${m.promedioLlegadaSeg.toStringAsFixed(2)} ${m.escaladas}';
   });
   await paso('escaladas', () async => (await r.admin.escucharEscaladas().first).map((a) => a.id).join(','));
-  await paso('resolver falsa alarma', () async => (await r.admin.resolverAlerta('alt-302', Resolucion.falsaAlarma)).estado);
-  await paso('resolver otra vez', () => r.admin.resolverAlerta('alt-302', Resolucion.resuelta));
+  await paso('resolver falsa alarma', () async {
+    final a = await r.admin.resolverAlerta('alt-302', Resolucion.falsaAlarma, nota: '  Revisado con la usuaria.  ');
+    return '${a.estado} ${a.notaAdmin}';
+  });
+  await paso('resolver sin nota', () => r.admin.resolverAlerta('alt-303', Resolucion.resuelta, nota: '   '));
+  await paso('resolver otra vez', () => r.admin.resolverAlerta('alt-302', Resolucion.resuelta, nota: 'Intento repetido'));
   await paso('bloqueados', () async => (await r.admin.obtenerUsuariosBloqueados()).map((u) => '${u.id}:${u.falsasAlarmas}').join(','));
   await paso('correo repetido', () => r.admin.crearGuardia(nombre: 'Otro', correo: 'guardia@safelink.mx', telefono: '7770000000'));
   await paso('cobertura', () async =>
@@ -148,6 +152,8 @@ void main() {
     expect(enMemoria, contains('llegar lejos: ERROR OUTSIDE_GEOFENCE'));
     expect(enMemoria, contains('llegar: EstadoAlerta.guardiaEnLugar'));
     expect(enMemoria, contains('resolver otra vez: ERROR INVALID_STATE'));
+    expect(enMemoria, contains('resolver falsa alarma: EstadoAlerta.resueltaPorAdmin Revisado con la usuaria.'));
+    expect(enMemoria, contains('resolver sin nota: ERROR INVALID_STATE'));
     expect(enMemoria, contains('correo repetido: ERROR EMAIL_TAKEN'));
     expect(enMemoria, contains('confirmar antes de tiempo: ERROR INVALID_STATE'));
     expect(enMemoria.any((l) => l.startsWith('métricas guardia:')), isTrue);
