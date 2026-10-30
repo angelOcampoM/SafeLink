@@ -14,6 +14,7 @@ class PerfilGuardia {
     required this.finTurno,
     required this.centroCobertura,
     required this.radioCoberturaMetros,
+    this.zona,
     this.ultimaUbicacion,
     this.ultimaUbicacionEn,
   });
@@ -23,6 +24,9 @@ class PerfilGuardia {
   final String finTurno;
   final PuntoGeo? centroCobertura;
   final int? radioCoberturaMetros;
+
+  /// Nombre de la zona de cobertura (A-06 distribución por zona).
+  final String? zona;
   final PuntoGeo? ultimaUbicacion;
   final DateTime? ultimaUbicacionEn;
 
@@ -35,6 +39,7 @@ class PerfilGuardia {
     String? finTurno,
     PuntoGeo? centroCobertura,
     int? radioCoberturaMetros,
+    String? zona,
     PuntoGeo? ultimaUbicacion,
     DateTime? ultimaUbicacionEn,
   }) =>
@@ -44,6 +49,7 @@ class PerfilGuardia {
         finTurno: finTurno ?? this.finTurno,
         centroCobertura: centroCobertura ?? this.centroCobertura,
         radioCoberturaMetros: radioCoberturaMetros ?? this.radioCoberturaMetros,
+        zona: zona ?? this.zona,
         ultimaUbicacion: ultimaUbicacion ?? this.ultimaUbicacion,
         ultimaUbicacionEn: ultimaUbicacionEn ?? this.ultimaUbicacionEn,
       );

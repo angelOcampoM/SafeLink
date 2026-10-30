@@ -95,14 +95,14 @@ class DatosSemilla {
     final fueraFin = hhmm(ahora.add(const Duration(hours: 11)));
 
     perfiles.addAll([
-      PerfilGuardia(usuarioId: 'grd-1', inicioTurno: enInicio, finTurno: enFin, centroCobertura: centroEmilianoZapata, radioCoberturaMetros: 4000, ultimaUbicacion: const PuntoGeo(18.8385, -99.1835), ultimaUbicacionEn: ahora),
-      PerfilGuardia(usuarioId: 'grd-2', inicioTurno: enInicio, finTurno: enFin, centroCobertura: centroCuernavaca, radioCoberturaMetros: 5000, ultimaUbicacion: const PuntoGeo(18.9150, -99.2300), ultimaUbicacionEn: ahora),
-      PerfilGuardia(usuarioId: 'grd-3', inicioTurno: enInicio, finTurno: enFin, centroCobertura: const PuntoGeo(18.8600, -99.1950), radioCoberturaMetros: 3000, ultimaUbicacion: const PuntoGeo(18.8590, -99.1940), ultimaUbicacionEn: ahora),
+      PerfilGuardia(usuarioId: 'grd-1', inicioTurno: enInicio, finTurno: enFin, centroCobertura: centroEmilianoZapata, radioCoberturaMetros: 4000, zona: 'Emiliano Zapata', ultimaUbicacion: const PuntoGeo(18.8385, -99.1835), ultimaUbicacionEn: ahora),
+      PerfilGuardia(usuarioId: 'grd-2', inicioTurno: enInicio, finTurno: enFin, centroCobertura: centroCuernavaca, radioCoberturaMetros: 5000, zona: 'Cuernavaca', ultimaUbicacion: const PuntoGeo(18.9150, -99.2300), ultimaUbicacionEn: ahora),
+      PerfilGuardia(usuarioId: 'grd-3', inicioTurno: enInicio, finTurno: enFin, centroCobertura: const PuntoGeo(18.8600, -99.1950), radioCoberturaMetros: 3000, zona: 'Jiutepec', ultimaUbicacion: const PuntoGeo(18.8590, -99.1940), ultimaUbicacionEn: ahora),
       // Turno nocturno que cruza medianoche.
-      const PerfilGuardia(usuarioId: 'grd-4', inicioTurno: '22:00', finTurno: '06:00', centroCobertura: centroEmilianoZapata, radioCoberturaMetros: 4000, ultimaUbicacion: PuntoGeo(18.8420, -99.1790)),
-      PerfilGuardia(usuarioId: 'grd-5', inicioTurno: fueraInicio, finTurno: fueraFin, centroCobertura: centroEmilianoZapata, radioCoberturaMetros: 2000),
-      PerfilGuardia(usuarioId: 'grd-6', inicioTurno: enInicio, finTurno: enFin, centroCobertura: const PuntoGeo(18.9220, -99.2380), radioCoberturaMetros: 3500, ultimaUbicacion: const PuntoGeo(18.9230, -99.2370), ultimaUbicacionEn: ahora),
-      PerfilGuardia(usuarioId: 'grd-7', inicioTurno: fueraInicio, finTurno: fueraFin, centroCobertura: const PuntoGeo(18.8300, -99.1700), radioCoberturaMetros: 2500),
+      const PerfilGuardia(usuarioId: 'grd-4', inicioTurno: '22:00', finTurno: '06:00', centroCobertura: centroEmilianoZapata, radioCoberturaMetros: 4000, zona: 'Emiliano Zapata', ultimaUbicacion: PuntoGeo(18.8420, -99.1790)),
+      PerfilGuardia(usuarioId: 'grd-5', inicioTurno: fueraInicio, finTurno: fueraFin, centroCobertura: centroEmilianoZapata, radioCoberturaMetros: 2000, zona: 'Emiliano Zapata'),
+      PerfilGuardia(usuarioId: 'grd-6', inicioTurno: enInicio, finTurno: enFin, centroCobertura: const PuntoGeo(18.9220, -99.2380), radioCoberturaMetros: 3500, zona: 'Cuernavaca', ultimaUbicacion: const PuntoGeo(18.9230, -99.2370), ultimaUbicacionEn: ahora),
+      PerfilGuardia(usuarioId: 'grd-7', inicioTurno: fueraInicio, finTurno: fueraFin, centroCobertura: const PuntoGeo(18.8300, -99.1700), radioCoberturaMetros: 2500, zona: 'Emiliano Zapata'),
       // Recién dado de alta: aún sin radio de cobertura (no recibe alertas).
       const PerfilGuardia(usuarioId: 'grd-8', inicioTurno: '08:00', finTurno: '16:00', centroCobertura: null, radioCoberturaMetros: null),
     ]);

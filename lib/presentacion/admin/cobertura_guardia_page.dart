@@ -24,6 +24,8 @@ class CoberturaGuardiaPage extends StatefulWidget {
 
 class _CoberturaGuardiaPageState extends State<CoberturaGuardiaPage> {
   late final CoberturaGuardiaViewModel vm = widget.viewModel;
+  final _zona = TextEditingController();
+  var _rellenado = false;
 
   @override
   void initState() {
@@ -33,8 +35,15 @@ class _CoberturaGuardiaPageState extends State<CoberturaGuardiaPage> {
 
   @override
   void dispose() {
+    _zona.dispose();
     vm.dispose();
     super.dispose();
+  }
+
+  void _rellenar(Guardia g) {
+    if (_rellenado) return;
+    _rellenado = true;
+    _zona.text = vm.zona;
   }
 
   Future<void> _elegirHora({required bool inicio}) async {
@@ -64,42 +73,56 @@ class _CoberturaGuardiaPageState extends State<CoberturaGuardiaPage> {
         builder: (context, _) => SlStateView<Guardia>(
           estado: vm.estado,
           onRetry: vm.cargar,
-          builder: (context, g) => Column(
-            children: [
-              Expanded(
-                child: ListView(
-                  padding: AppSpacing.screen,
-                  children: [
-                    Text(g.usuario.nombre, style: context.text.titleLarge),
-                    AppSpacing.gapMd,
-                    if (vm.error != null) ...[SlBanner(type: SlBannerType.danger, message: vm.error!), AppSpacing.gapMd],
-                    const SectionHeader('Turno'),
-                    SlCard(
-                      padding: EdgeInsets.zero,
-                      child: Column(
-                        children: [
-                          ListTile(
-                            leading: const Icon(Icons.login_rounded),
-                            title: const Text('Inicio'),
-                            trailing: Text(vm.inicioTurno, style: context.text.titleMedium),
-                            onTap: () => _elegirHora(inicio: true),
-                          ),
-                          ListTile(
-                            leading: const Icon(Icons.logout_rounded),
-                            title: const Text('Fin'),
-                            trailing: Text(vm.finTurno, style: context.text.titleMedium),
-                            onTap: () => _elegirHora(inicio: false),
-                          ),
-                        ],
+          builder: (context, g) {
+            _rellenar(g);
+            return Column(
+              children: [
+                Expanded(
+                  child: ListView(
+                    padding: AppSpacing.screen,
+                    children: [
+                      Text(g.usuario.nombre, style: context.text.titleLarge),
+                      AppSpacing.gapMd,
+                      if (vm.error != null) ...[SlBanner(type: SlBannerType.danger, message: vm.error!), AppSpacing.gapMd],
+                      const SectionHeader('Turno'),
+                      SlCard(
+                        padding: EdgeInsets.zero,
+                        child: Column(
+                          children: [
+                            ListTile(
+                              leading: const Icon(Icons.login_rounded),
+                              title: const Text('Inicio'),
+                              trailing: Text(vm.inicioTurno, style: context.text.titleMedium),
+                              onTap: () => _elegirHora(inicio: true),
+                            ),
+                            ListTile(
+                              leading: const Icon(Icons.logout_rounded),
+                              title: const Text('Fin'),
+                              trailing: Text(vm.finTurno, style: context.text.titleMedium),
+                              onTap: () => _elegirHora(inicio: false),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    AppSpacing.gapXs,
-                    Text(
-                      'Duración ${Fmt.duration(vm.duracionMinutos * 60)}${vm.cruzaMedianoche ? ' · cruza medianoche' : ''}',
-                      style: context.text.bodySmall,
-                    ),
-                    AppSpacing.gapLg,
-                    SectionHeader('Radio de cobertura · ${Fmt.distance(vm.radioMetros)}'),
+                      AppSpacing.gapXs,
+                      Text(
+                        'Duración ${Fmt.duration(vm.duracionMinutos * 60)}${vm.cruzaMedianoche ? ' · cruza medianoche' : ''}',
+                        style: context.text.bodySmall,
+                      ),
+                      AppSpacing.gapLg,
+                      const SectionHeader('Zona de cobertura'),
+                      SlTextField(
+                        label: 'Zona',
+                        hint: 'Ej. Emiliano Zapata',
+                        controller: _zona,
+                        icon: Icons.map_outlined,
+                        maxLength: 40,
+                        errorText: vm.errorZona,
+                        onChanged: vm.cambiarZona,
+                        enabled: !vm.guardando,
+                      ),
+                      AppSpacing.gapLg,
+                      SectionHeader('Radio de cobertura · ${Fmt.distance(vm.radioMetros)}'),
                     MapPlaceholder(
                       height: 260,
                       radiusFraction: vm.radioFraccion,
@@ -135,7 +158,8 @@ class _CoberturaGuardiaPageState extends State<CoberturaGuardiaPage> {
                 ),
               ),
             ],
-          ),
+            );
+          },
         ),
       ),
     );
