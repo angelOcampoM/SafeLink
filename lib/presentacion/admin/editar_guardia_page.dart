@@ -23,6 +23,7 @@ class _EditarGuardiaPageState extends State<EditarGuardiaPage> {
   final _nombre = TextEditingController();
   final _correo = TextEditingController();
   final _telefono = TextEditingController();
+  final _contrasena = TextEditingController();
   var _rellenado = false;
 
   @override
@@ -33,7 +34,7 @@ class _EditarGuardiaPageState extends State<EditarGuardiaPage> {
 
   @override
   void dispose() {
-    for (final c in [_nombre, _correo, _telefono]) {
+    for (final c in [_nombre, _correo, _telefono, _contrasena]) {
       c.dispose();
     }
     vm.dispose();
@@ -49,9 +50,14 @@ class _EditarGuardiaPageState extends State<EditarGuardiaPage> {
   }
 
   Future<void> _alGuardar() async {
-    final ok = await vm.guardar(nombre: _nombre.text, correo: _correo.text, telefono: _telefono.text);
+    final ok = await vm.guardar(
+      nombre: _nombre.text,
+      correo: _correo.text,
+      telefono: _telefono.text,
+      contrasena: _contrasena.text,
+    );
     if (!ok || !mounted) return;
-    context.showSnack(vm.esEdicion ? 'Datos actualizados' : 'Guardia dado de alta. Contraseña inicial: SafeLink1');
+    context.showSnack(vm.esEdicion ? 'Datos actualizados' : 'Guardia dado de alta');
     context.pop(true);
   }
 
@@ -75,6 +81,17 @@ class _EditarGuardiaPageState extends State<EditarGuardiaPage> {
                 SlTextField(label: 'Correo', controller: _correo, icon: Icons.mail_outline_rounded, keyboardType: TextInputType.emailAddress, errorText: vm.errorCorreo),
                 AppSpacing.gapMd,
                 SlTextField(label: 'Teléfono', controller: _telefono, icon: Icons.phone_outlined, keyboardType: TextInputType.phone, digitsOnly: true, maxLength: 10, errorText: vm.errorTelefono),
+                if (!vm.esEdicion) ...[
+                  AppSpacing.gapMd,
+                  SlTextField(
+                    label: 'Contraseña inicial',
+                    hint: 'Mínimo 8 caracteres y un número',
+                    controller: _contrasena,
+                    icon: Icons.lock_outline_rounded,
+                    obscure: true,
+                    errorText: vm.errorContrasena,
+                  ),
+                ],
                 AppSpacing.gapLg,
                 SlButton(label: 'Guardar', icon: Icons.save_outlined, loading: vm.guardando, onPressed: _alGuardar),
               ],
