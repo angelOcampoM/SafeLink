@@ -50,7 +50,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
     }
 
-    expect(find.text('Hola, Ana'), findsOneWidget);
+    expect(find.text('Toca o mantén presionado'), findsOneWidget);
     expect(find.text('Permisos para protegerte'), findsNothing);
   });
 }

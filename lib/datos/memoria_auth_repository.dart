@@ -62,6 +62,15 @@ class MemoriaAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<Usuario?> restaurarSesion(String usuarioId) async {
+    await _db.esperar();
+    final u = _db.usuarios[usuarioId];
+    if (u == null || !u.activo) return null;
+    _db.usuarioActualId = u.id;
+    return u;
+  }
+
+  @override
   Future<Usuario> actualizarAgitacion({required bool activa}) async {
     await _db.esperar();
     final u = _db.yo.copyWith(agitacionActiva: activa);

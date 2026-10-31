@@ -30,6 +30,9 @@ class ConfiguracionViewModel extends ViewModel {
     }
   }
 
+  /// U-02: vuelve a abrir la explicación de permisos (el router la muestra).
+  void revisarPermisos() => _sesion.revisarPermisos();
+
   Future<void> cerrarSesion() => _sesion.cerrarSesion();
 
   void consumirMensaje() => mensaje = null;

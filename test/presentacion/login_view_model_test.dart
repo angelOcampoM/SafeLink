@@ -1,5 +1,6 @@
 // U-02 Inicio de sesión — ViewModel sin pantalla y sin red.
 import 'package:flutter_test/flutter_test.dart';
+import 'package:safelink/datos/memoria_sesion_guardada.dart';
 import 'package:safelink/dominio/errores.dart';
 import 'package:safelink/presentacion/auth/login_view_model.dart';
 import 'package:safelink/presentacion/sesion/sesion_view_model.dart';
@@ -9,7 +10,7 @@ import 'espias.dart';
 void main() {
   test('con credenciales vacías muestra errores y no llama al repositorio', () async {
     final auth = AuthEspia();
-    final vm = LoginViewModel(SesionViewModel(auth));
+    final vm = LoginViewModel(SesionViewModel(auth, MemoriaSesionGuardada()));
 
     final ok = await vm.entrar('', '');
 
@@ -21,7 +22,7 @@ void main() {
 
   test('si el repositorio rechaza, muestra el mensaje del dominio', () async {
     final auth = AuthEspia(falla: const CredencialesInvalidasError());
-    final sesion = SesionViewModel(auth);
+    final sesion = SesionViewModel(auth, MemoriaSesionGuardada());
     final vm = LoginViewModel(sesion);
 
     final ok = await vm.entrar('usuario@safelink.mx', 'incorrecta');
@@ -34,7 +35,7 @@ void main() {
 
   test('con credenciales válidas abre la sesión y avisa al router', () async {
     final auth = AuthEspia();
-    final sesion = SesionViewModel(auth);
+    final sesion = SesionViewModel(auth, MemoriaSesionGuardada());
     var avisos = 0;
     sesion.addListener(() => avisos++);
     final vm = LoginViewModel(sesion);
