@@ -2,7 +2,8 @@
 // Historial de alertas atendidas por el guardia (sus métricas viven en el dashboard de Inicio)
 // G-03 Filtros del historial: rango de fechas, resultado y método de disparo, aplicados en memoria.
 // Carga el historial completo y lo filtra con FiltroMiHistorial (dominio).
-// No importa material.dart y no cambia el contrato: pide la lista completa una vez.
+// No importa material.dart y no cambia el contrato: pide la lista completa al abrir y al
+// volver a verse la pestaña (los filtros elegidos se conservan).
 
 import '../../datos/alerta_guardia_repository.dart';
 import '../../dominio/dominio.dart';

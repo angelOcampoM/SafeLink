@@ -100,12 +100,16 @@ class MemoriaAlertaGuardiaRepository implements AlertaGuardiaRepository {
   @override
   Future<List<Alerta>> obtenerMiHistorial() async {
     await _db.esperar();
-    return FiltroHistorial(guardiaId: _db.yo.id).aplicar(_db.alertas.where((a) => !a.estado.activa));
+    return _miHistorial();
   }
+
+  /// Lo que ya terminó y atendió el guardia en sesión (sin las alertas en curso).
+  List<Alerta> _miHistorial() => FiltroHistorial(guardiaId: _db.yo.id).aplicar(_db.alertas.where((a) => !a.estado.activa));
 
   @override
   Future<MetricasGuardia> obtenerMisMetricas() async {
     await _db.esperar();
-    return ReglaMetricas.deGuardia(_db.yo.id, _db.alertas);
+    // La misma lista que el historial y el dashboard, para que las cifras coincidan.
+    return ReglaMetricas.deGuardia(_db.yo.id, _miHistorial());
   }
 }

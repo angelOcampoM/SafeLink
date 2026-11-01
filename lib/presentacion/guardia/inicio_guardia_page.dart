@@ -1,7 +1,7 @@
 // CAPA: PRESENTACIÓN — View
 // G-03 Dashboard de Inicio del guardia: turno, alertas disponibles, mis métricas por periodo,
 // alertas por hora y última alerta atendida. Logout en el AppBar (como el panel del admin).
-// Pinta lo que expone InicioGuardiaViewModel con pull-to-refresh.
+// Pinta lo que expone InicioGuardiaViewModel con pull-to-refresh y recarga al volver a verse.
 // No calcula nada ni llama repositorios.
 
 import 'package:flutter/material.dart';
@@ -13,6 +13,7 @@ import '../comun/rutas/app_routes.dart';
 import '../comun/tema/theme.dart';
 import '../comun/widgets/widgets.dart';
 import 'inicio_guardia_view_model.dart';
+import 'recarga_al_volver.dart';
 import 'widgets/widgets_guardia.dart';
 
 class InicioGuardiaPage extends StatefulWidget {
@@ -23,7 +24,7 @@ class InicioGuardiaPage extends StatefulWidget {
   State<InicioGuardiaPage> createState() => _InicioGuardiaPageState();
 }
 
-class _InicioGuardiaPageState extends State<InicioGuardiaPage> {
+class _InicioGuardiaPageState extends State<InicioGuardiaPage> with RecargaAlVolver {
   late final InicioGuardiaViewModel vm = widget.viewModel;
 
   @override
@@ -31,6 +32,10 @@ class _InicioGuardiaPageState extends State<InicioGuardiaPage> {
     super.initState();
     vm.cargar();
   }
+
+  /// Al volver a la pestaña (o del flujo de atención) recalcula con lo último; conserva el periodo.
+  @override
+  void alVolverAVerse() => vm.cargar();
 
   @override
   void dispose() {

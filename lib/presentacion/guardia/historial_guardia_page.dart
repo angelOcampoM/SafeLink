@@ -1,6 +1,7 @@
 // CAPA: PRESENTACIÓN — View
 // Historial de alertas atendidas por el guardia (sus métricas viven en el dashboard de Inicio)
 // G-03 Filtros (fechas, resultado y método), resumen de lo filtrado y detalle en hoja inferior.
+// Recarga al volver a verse (otra pestaña o el flujo de atención) sin perder los filtros.
 // No filtra por su cuenta: solo pasa al ViewModel lo que se eligió.
 
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import '../../dominio/dominio.dart';
 import '../comun/tema/theme.dart';
 import '../comun/widgets/widgets.dart';
 import 'historial_guardia_view_model.dart';
+import 'recarga_al_volver.dart';
 import 'widgets/widgets_guardia.dart';
 
 class HistorialGuardiaPage extends StatefulWidget {
@@ -19,7 +21,7 @@ class HistorialGuardiaPage extends StatefulWidget {
   State<HistorialGuardiaPage> createState() => _HistorialGuardiaPageState();
 }
 
-class _HistorialGuardiaPageState extends State<HistorialGuardiaPage> {
+class _HistorialGuardiaPageState extends State<HistorialGuardiaPage> with RecargaAlVolver {
   late final HistorialGuardiaViewModel vm = widget.viewModel;
 
   @override
@@ -27,6 +29,10 @@ class _HistorialGuardiaPageState extends State<HistorialGuardiaPage> {
     super.initState();
     vm.cargar();
   }
+
+  /// Al volver a la pestaña (o del flujo de atención) trae lo último sin perder los filtros.
+  @override
+  void alVolverAVerse() => vm.cargar();
 
   @override
   void dispose() {

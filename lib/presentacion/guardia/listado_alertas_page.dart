@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../dominio/dominio.dart';
+import '../comun/estado_vista.dart';
 import '../comun/rutas/app_routes.dart';
 import '../comun/tema/theme.dart';
 import '../comun/widgets/widgets.dart';
@@ -62,10 +63,12 @@ class _ListadoAlertasPageState extends State<ListadoAlertasPage> {
         builder: (context, _) => SlStateView<Guardia>(
           estado: vm.perfil,
           onRetry: vm.recargar,
-          onRefresh: vm.recargar,
+          // Con el perfil listo, el pull-to-refresh lo pone la vista interna: dos
+          // RefreshIndicator anidados sin un Scrollable en medio dibujan dos spinners.
+          onRefresh: vm.perfil is Listo ? null : vm.recargar,
           builder: (context, guardia) {
             final motivo = vm.motivoNoDisponible;
-            if (motivo != null) return SinRecibirAlertasView(motivo: motivo);
+            if (motivo != null) return SinRecibirAlertasView(motivo: motivo, onRefresh: vm.recargar);
             final entrante = vm.entrante;
             final f = vm.filtro;
             return Column(

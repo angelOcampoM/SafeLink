@@ -38,16 +38,20 @@ class BannerAlertaEntrante extends StatelessWidget {
 
 /// Fuera de turno o sin zona: explica por qué no llegan alertas (con pull-to-refresh).
 class SinRecibirAlertasView extends StatelessWidget {
-  const SinRecibirAlertasView({super.key, required this.motivo});
+  const SinRecibirAlertasView({super.key, required this.motivo, required this.onRefresh});
   final String motivo;
+  final Future<void> Function() onRefresh;
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      children: [
-        EmptyState(icon: Icons.bedtime_outlined, title: 'No estás recibiendo alertas', message: motivo),
-      ],
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          EmptyState(icon: Icons.bedtime_outlined, title: 'No estás recibiendo alertas', message: motivo),
+        ],
+      ),
     );
   }
 }
