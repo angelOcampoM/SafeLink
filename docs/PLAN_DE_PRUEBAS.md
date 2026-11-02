@@ -139,3 +139,9 @@ en rojo para siempre sin que eso signifique nada.
 - **02/11/2026 · A-06.** El esquema pide que un periodo sin alertas muestre las
   métricas en cero. El panel mostraba solo un aviso; ahora pinta las tarjetas
   en cero además del aviso.
+- **02/11/2026 · A-02.** El esquema pide que la búsqueda devuelva *únicamente
+  los guardias cuyo nombre coincide*. La búsqueda también encontraba por correo
+  y el campo decía "Buscar por nombre o correo"; se retiró el correo para
+  cumplir el criterio al pie de la letra. La normalización de mayúsculas y
+  acentos se conserva: el esquema ya no la pide, pero tampoco la prohíbe y
+  evita que "hernandez" deje fuera a Hernández.

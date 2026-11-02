@@ -73,7 +73,7 @@ class _GuardiasPageState extends State<GuardiasPage> {
           Padding(
             padding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, AppSpacing.sm),
             child: TextField(
-              decoration: const InputDecoration(hintText: 'Buscar por nombre o correo', prefixIcon: Icon(Icons.search_rounded)),
+              decoration: const InputDecoration(hintText: 'Buscar por nombre', prefixIcon: Icon(Icons.search_rounded)),
               onChanged: vm.buscar,
             ),
           ),

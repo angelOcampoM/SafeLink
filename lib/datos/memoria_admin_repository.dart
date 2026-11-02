@@ -17,10 +17,10 @@ class MemoriaAdminRepository implements AdminRepository {
   @override
   Future<List<Guardia>> obtenerGuardias({String busqueda = ''}) async {
     await _db.esperar();
-    // A-02: ignora mayúsculas y acentos.
+    // A-02: solo por nombre, ignorando mayúsculas y acentos.
     return _db.perfiles.keys
         .map(_db.guardiaPorId)
-        .where((g) => TextoBusqueda.contiene(g.usuario.nombre, busqueda) || TextoBusqueda.contiene(g.usuario.correo, busqueda))
+        .where((g) => TextoBusqueda.contiene(g.usuario.nombre, busqueda))
         .toList()
       ..sort((a, b) {
         if (a.usuario.activo != b.usuario.activo) return a.usuario.activo ? -1 : 1;

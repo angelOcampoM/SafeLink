@@ -28,7 +28,7 @@ void main() {
     vm.dispose();
   });
 
-  test('A-02: la búsqueda ignora mayúsculas y acentos', () async {
+  test('A-02: la búsqueda es por nombre e ignora mayúsculas y acentos', () async {
     final vm = GuardiasViewModel(MemoriaAdminRepository(db), reloj: () => ahoraPrueba);
     await vm.cargar();
 
@@ -37,6 +37,10 @@ void main() {
       await vm.buscar(consulta);
       expect(vm.estado.datos!.map((g) => g.usuario.id), contains('grd-1'), reason: 'con "$consulta"');
     }
+
+    // Solo por nombre: el correo no cuenta como coincidencia (A-02).
+    await vm.buscar('safelink.mx');
+    expect(vm.estado, isA<Vacio<List<Guardia>>>(), reason: 'el correo no es criterio de búsqueda');
 
     await vm.buscar('rodriguez-que-no-existe');
     expect(vm.estado, isA<Vacio<List<Guardia>>>(), reason: 'sin coincidencias queda el estado vacío');
