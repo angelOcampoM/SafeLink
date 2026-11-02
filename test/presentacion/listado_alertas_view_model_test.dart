@@ -2,6 +2,7 @@
 import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:safelink/datos/memoria_sesion_guardada.dart';
 import 'package:safelink/datos/memoria_alerta_guardia_repository.dart';
 import 'package:safelink/datos/memoria_auth_repository.dart';
 import 'package:safelink/datos/memoria_base_datos.dart';
@@ -15,7 +16,7 @@ void main() {
   test('cuando llega una alerta nueva aparece como "entrante" y el listado se actualiza solo', () async {
     final db = MemoriaBaseDatos(reloj: () => ahoraPrueba, latencia: Duration.zero, azar: Random(3));
     db.usuarioActualId = 'grd-1';
-    final vm = ListadoAlertasViewModel(MemoriaAlertaGuardiaRepository(db), SesionViewModel(MemoriaAuthRepository(db)), reloj: () => ahoraPrueba);
+    final vm = ListadoAlertasViewModel(MemoriaAlertaGuardiaRepository(db), SesionViewModel(MemoriaAuthRepository(db), MemoriaSesionGuardada()), reloj: () => ahoraPrueba);
 
     await vm.iniciar();
     await Future<void>.delayed(Duration.zero);
@@ -38,7 +39,7 @@ void main() {
   test('un guardia fuera de turno no se suscribe y ve el motivo', () async {
     final db = MemoriaBaseDatos(reloj: () => ahoraPrueba, latencia: Duration.zero);
     db.usuarioActualId = 'grd-7';
-    final vm = ListadoAlertasViewModel(MemoriaAlertaGuardiaRepository(db), SesionViewModel(MemoriaAuthRepository(db)), reloj: () => ahoraPrueba);
+    final vm = ListadoAlertasViewModel(MemoriaAlertaGuardiaRepository(db), SesionViewModel(MemoriaAuthRepository(db), MemoriaSesionGuardada()), reloj: () => ahoraPrueba);
 
     await vm.iniciar();
 

@@ -29,6 +29,7 @@ void main() {
       admin: MemoriaAdminRepository(db),
     );
     await deps.sesion.iniciarSesion(correo, 'SafeLink1');
+    deps.sesion.permisosVistos(); // U-02: el recorrido no se detiene en los permisos.
     await tester.pumpWidget(SafeLinkApp(dependencias: deps, simular: false));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
@@ -46,7 +47,7 @@ void main() {
 
   testWidgets('usuario protegido', (tester) async {
     await abrir(tester, 'usuario@safelink.mx');
-    await ir(tester, AppRoutes.userHome, 'Hola, Fernanda');
+    await ir(tester, AppRoutes.userHome, 'Toca o mantén presionado');
     await ir(tester, AppRoutes.userAlert, 'Sin alertas activas');
     await ir(tester, AppRoutes.userSettings, 'Alerta por agitación');
     await ir(tester, AppRoutes.userHistory, 'Mis alertas');
@@ -59,8 +60,9 @@ void main() {
 
   testWidgets('guardia', (tester) async {
     await abrir(tester, 'guardia@safelink.mx');
-    await ir(tester, AppRoutes.guardHome, 'Alertas cercanas');
-    await ir(tester, AppRoutes.guardHistory, 'Alertas atendidas');
+    await ir(tester, AppRoutes.guardHome, 'MI TURNO');
+    await ir(tester, AppRoutes.guardAlerts, 'Alertas cercanas');
+    await ir(tester, AppRoutes.guardHistory, 'ALERTAS ATENDIDAS');
     await ir(tester, AppRoutes.guardIncoming('alt-101'), 'Ver detalle');
     await ir(tester, AppRoutes.guardAlertDetail('alt-102'), 'Aceptar alerta');
     await ir(tester, AppRoutes.guardNavigation('alt-202'), 'Llegué');
@@ -68,7 +70,8 @@ void main() {
 
   testWidgets('guardia nocturno fuera de turno o en turno', (tester) async {
     await abrir(tester, 'guardia.noche@safelink.mx');
-    await ir(tester, AppRoutes.guardHome, 'Alertas cercanas');
+    await ir(tester, AppRoutes.guardHome, 'MI TURNO');
+    await ir(tester, AppRoutes.guardAlerts, 'Alertas cercanas');
   });
 
   testWidgets('administrador', (tester) async {

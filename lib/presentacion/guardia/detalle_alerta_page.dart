@@ -7,11 +7,11 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../dominio/dominio.dart';
-import '../comun/formato.dart';
 import '../comun/rutas/app_routes.dart';
 import '../comun/tema/theme.dart';
 import '../comun/widgets/widgets.dart';
 import 'detalle_alerta_view_model.dart';
+import 'widgets/widgets_guardia.dart';
 
 class DetalleAlertaPage extends StatefulWidget {
   const DetalleAlertaPage({super.key, required this.viewModel});
@@ -58,7 +58,6 @@ class _DetalleAlertaPageState extends State<DetalleAlertaPage> {
           onRetry: vm.cargar,
           builder: (context, d) {
             final a = d.alerta;
-            final distancia = vm.distancia;
             return Column(
               children: [
                 Expanded(
@@ -72,28 +71,11 @@ class _DetalleAlertaPageState extends State<DetalleAlertaPage> {
                         ],
                       ),
                       AppSpacing.gapMd,
-                      _FotoEvidencia(url: a.fotoUrl),
+                      FotoEvidencia(url: a.fotoUrl),
                       AppSpacing.gapMd,
-                      MapPlaceholder(
-                        height: 200,
-                        markers: [
-                          const MapMarker(offset: Offset(-0.5, 0.5), color: AppColors.info, icon: Icons.shield_rounded),
-                          MapMarker(offset: Offset.zero, color: AppColors.emergency, icon: Icons.person_pin_circle_rounded, heading: a.rumbo),
-                        ],
-                      ),
+                      MapaDetalleAlerta(rumbo: a.rumbo),
                       AppSpacing.gapMd,
-                      SlCard(
-                        child: Column(
-                          children: [
-                            InfoRow(icon: Icons.schedule_rounded, label: 'Hora', value: '${Fmt.time(a.disparadaEn)} · ${Fmt.ago(a.disparadaEn, vm.ahora)}'),
-                            if (distancia != null)
-                              InfoRow(icon: Icons.near_me_outlined, label: 'Distancia', value: Fmt.distance(distancia), valueColor: AppColors.info),
-                            if (a.rumbo != null)
-                              InfoRow(icon: Icons.explore_outlined, label: 'Rumbo de la cámara', value: '${a.rumbo}° ${ReglaGeocerca.puntoCardinal(a.rumbo!)}'),
-                            InfoRow(icon: a.metodo.style.icon, label: 'Método', value: a.metodo.etiqueta),
-                          ],
-                        ),
-                      ),
+                      TarjetaDatosAlerta(alerta: a, ahora: vm.ahora, distancia: vm.distancia),
                       if (a.estado != EstadoAlerta.buscando) ...[
                         AppSpacing.gapMd,
                         SlBanner(type: SlBannerType.warning, message: 'Esta alerta ya está ${a.estado.etiqueta.toLowerCase()}.'),
@@ -118,42 +100,6 @@ class _DetalleAlertaPageState extends State<DetalleAlertaPage> {
           },
         ),
       ),
-    );
-  }
-}
-
-class _FotoEvidencia extends StatelessWidget {
-  const _FotoEvidencia({required this.url});
-  final String? url;
-
-  @override
-  Widget build(BuildContext context) {
-    final placeholder = Container(
-      height: 200,
-      color: AppColors.surface,
-      alignment: Alignment.center,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.no_photography_outlined, color: AppColors.textMuted, size: AppSizes.iconLg),
-          AppSpacing.gapXs,
-          Text(url == null ? 'Evidencia incompleta: sin foto' : 'No se pudo cargar la foto', style: context.text.bodyMedium),
-        ],
-      ),
-    );
-
-    return ClipRRect(
-      borderRadius: AppRadius.brMd,
-      child: url == null
-          ? placeholder
-          : Image.network(
-              url!,
-              height: 200,
-              width: double.infinity,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => placeholder,
-              loadingBuilder: (_, child, p) => p == null ? child : const SizedBox(height: 200, child: LoadingView()),
-            ),
     );
   }
 }

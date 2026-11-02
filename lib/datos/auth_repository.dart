@@ -26,5 +26,10 @@ abstract interface class AuthRepository {
   /// Vuelve a leer al usuario en sesión (bloqueo, falsas alarmas…).
   Future<Usuario> refrescarSesion();
 
+  /// U-02: reabre la sesión que quedó guardada en el dispositivo.
+  /// Devuelve `null` si ese usuario ya no existe o fue dado de baja.
+  /// Mañana recibirá un token en vez del id.
+  Future<Usuario?> restaurarSesion(String usuarioId);
+
   Future<Usuario> actualizarAgitacion({required bool activa});
 }
