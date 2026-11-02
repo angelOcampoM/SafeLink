@@ -13,6 +13,7 @@ class Configuracion {
     this.diasBloqueo = 7, // provisional
     this.segundosActualizacionUbicacion = 5, // provisional
     this.metrosPorMinutoEspera = 100, // provisional (sección 6.3)
+    this.metrosPorMinutoGuardia = 250, // provisional: ~15 km/h en ciudad
     this.radioCoberturaMinMetros = 500,
     this.radioCoberturaMaxMetros = 10000,
     this.segundosEscalamientoDemo = 90, // demo: en producción son minutosAceptacion
@@ -29,6 +30,9 @@ class Configuracion {
   final int diasBloqueo;
   final int segundosActualizacionUbicacion;
   final int metrosPorMinutoEspera;
+
+  /// U-08: velocidad con la que se estima la llegada del guardia.
+  final int metrosPorMinutoGuardia;
   final int radioCoberturaMinMetros;
   final int radioCoberturaMaxMetros;
 

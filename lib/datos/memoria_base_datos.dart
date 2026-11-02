@@ -116,6 +116,18 @@ class MemoriaBaseDatos {
   /// El usuario tiene una alerta que sigue en curso (nadie tiene dos a la vez).
   bool tieneAlertaActiva(String usuarioId) => alertas.any((a) => a.usuarioId == usuarioId && a.estado.activa);
 
+  /// U-08: segundos estimados entre el guardia y el punto de la alerta.
+  /// Sin coordenadas de alguno de los dos no hay nada que estimar.
+  int _etaDe(Guardia g, Alerta a) {
+    final desde = g.perfil.ultimaUbicacion ?? g.perfil.centroCobertura;
+    final hasta = a.ubicacion;
+    if (desde == null || hasta == null) return 0;
+    return ReglaEta.segundos(
+      distanciaMetros: ReglaGeocerca.distanciaMetros(desde, hasta),
+      metrosPorMinutoGuardia: config.metrosPorMinutoGuardia,
+    );
+  }
+
   /// U-08: el guardia que cubre la zona acepta, se acerca (baja la ETA) y llega.
   /// Si ningún guardia disponible la cubre, sigue buscando y A-04 la escala.
   void simularRespuestaGuardia(String alertaId) {
@@ -132,7 +144,8 @@ class MemoriaBaseDatos {
           guardiaId: g.usuario.id,
           nombreGuardia: g.usuario.nombre,
           aceptadaEn: reloj(),
-          etaSegundos: 300,
+          // U-08: la estimación sale de la distancia real al punto.
+          etaSegundos: _etaDe(g, a),
         ),);
       } else if (a.estado == EstadoAlerta.enAtencion) {
         final eta = (a.etaSegundos ?? 0) - 40;
