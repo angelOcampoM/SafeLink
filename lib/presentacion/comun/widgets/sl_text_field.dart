@@ -30,6 +30,8 @@ class SlTextField extends StatefulWidget {
     this.textInputAction,
     this.obscure = false,
     this.maxLength,
+    this.maxLines = 1,
+    this.minLines,
     this.digitsOnly = false,
     this.enabled = true,
     this.onChanged,
@@ -49,6 +51,8 @@ class SlTextField extends StatefulWidget {
   final TextInputAction? textInputAction;
   final bool obscure;
   final int? maxLength;
+  final int maxLines;
+  final int? minLines;
   final bool digitsOnly;
   final bool enabled;
   final ValueChanged<String>? onChanged;
@@ -76,6 +80,9 @@ class _SlTextFieldState extends State<SlTextField> {
           textInputAction: widget.textInputAction,
           obscureText: _hidden,
           enabled: widget.enabled,
+          minLines: widget.minLines,
+          maxLines: widget.maxLines,
+          textAlignVertical: widget.maxLines == 1 ? null : TextAlignVertical.top,
           onChanged: widget.onChanged,
           onFieldSubmitted: widget.onSubmitted,
           autofillHints: widget.autofillHints,

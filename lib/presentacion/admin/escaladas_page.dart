@@ -1,11 +1,13 @@
 // CAPA: PRESENTACIÓN — View
-// A-04 Bandeja de escaladas · A-08 Falsas alarmas
-// Lista en tiempo real con pull-to-refresh y hoja para elegir la resolución.
+// A-04 Bandeja de escaladas
+// Lista en tiempo real con pull-to-refresh; al tocar una alerta se abre su
+// pantalla de detalle para revisarla y resolverla. No carga datos.
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../dominio/dominio.dart';
-import '../comun/formato.dart';
+import '../comun/rutas/app_routes.dart';
 import '../comun/tema/theme.dart';
 import '../comun/widgets/widgets.dart';
 import 'escaladas_view_model.dart';
@@ -24,29 +26,13 @@ class _EscaladasPageState extends State<EscaladasPage> {
   @override
   void initState() {
     super.initState();
-    vm.addListener(_alCambiar);
     vm.iniciar();
   }
 
   @override
   void dispose() {
-    vm.removeListener(_alCambiar);
     vm.dispose();
     super.dispose();
-  }
-
-  void _alCambiar() {
-    if (vm.mensaje != null) context.showSnack(vm.mensaje!);
-    vm.consumirMensaje();
-  }
-
-  Future<void> _abrir(Alerta a) async {
-    final resolucion = await showModalBottomSheet<Resolucion>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => _HojaResolver(alerta: a),
-    );
-    if (resolucion != null) await vm.resolver(a, resolucion);
   }
 
   @override
@@ -73,43 +59,9 @@ class _EscaladasPageState extends State<EscaladasPage> {
             itemBuilder: (_, i) => AlertCard(
               alert: lista[i],
               now: vm.ahora,
-              onTap: vm.resolviendo == null ? () => _abrir(lista[i]) : null,
+              onTap: () => context.push(AppRoutes.adminEscalatedDetail(lista[i].id)),
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _HojaResolver extends StatelessWidget {
-  const _HojaResolver({required this.alerta});
-  final Alerta alerta;
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, AppSpacing.md),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('Resolver alerta', style: context.text.titleLarge),
-            AppSpacing.gapSm,
-            SlBanner(type: SlBannerType.warning, message: alerta.razonEscalamiento?.etiqueta ?? 'Escalada'),
-            AppSpacing.gapSm,
-            InfoRow(icon: Icons.person_outline_rounded, label: 'Usuario', value: alerta.nombreUsuario ?? '—'),
-            InfoRow(icon: Icons.phone_outlined, label: 'Teléfono', value: alerta.telefonoUsuario == null ? '—' : Fmt.phone(alerta.telefonoUsuario!)),
-            InfoRow(icon: Icons.shield_outlined, label: 'Guardia', value: alerta.nombreGuardia ?? 'Sin asignar'),
-            InfoRow(icon: Icons.schedule_rounded, label: 'Disparada', value: Fmt.dateTime(alerta.disparadaEn)),
-            AppSpacing.gapLg,
-            SlButton(label: 'Resuelta', icon: Icons.check_rounded, variant: SlButtonVariant.success, onPressed: () => Navigator.pop(context, Resolucion.resuelta)),
-            AppSpacing.gapSm,
-            SlButton(label: 'Incidencia del servicio', icon: Icons.build_circle_outlined, variant: SlButtonVariant.secondary, onPressed: () => Navigator.pop(context, Resolucion.incidenciaServicio)),
-            AppSpacing.gapSm,
-            SlButton(label: 'Falsa alarma', icon: Icons.report_outlined, variant: SlButtonVariant.danger, onPressed: () => Navigator.pop(context, Resolucion.falsaAlarma)),
-          ],
         ),
       ),
     );

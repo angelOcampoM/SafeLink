@@ -77,6 +77,8 @@ void main() {
   testWidgets('administrador', (tester) async {
     await abrir(tester, 'admin@safelink.mx');
     await ir(tester, AppRoutes.adminDashboard, 'Panel general');
+    expect(find.textContaining('ALERTAS POR ZONA'), findsOneWidget);
+    expect(find.text('Personalizado'), findsOneWidget);
     await tester.tap(find.text('7 días'));
     await tester.pump(const Duration(milliseconds: 100));
     expect(tester.takeException(), isNull);
@@ -84,7 +86,14 @@ void main() {
     await ir(tester, AppRoutes.adminGuardNew, 'Nuevo guardia');
     await ir(tester, AppRoutes.adminGuardEdit('grd-1'), 'Editar guardia');
     await ir(tester, AppRoutes.adminGuardCoverage('grd-1'), 'Turno y radio');
+    await ir(tester, AppRoutes.adminGuardMetrics('grd-1'), 'Métricas del guardia');
     await ir(tester, AppRoutes.adminEscalated, 'Escaladas');
-    await ir(tester, AppRoutes.adminHistory, 'alertas');
+    await ir(tester, AppRoutes.adminEscalatedDetail('alt-301'), 'Alerta escalada');
+    expect(find.text('Nota administrativa'), findsWidgets);
+    await tester.ensureVisible(find.text('Confirmo que revisé y atendí esta alerta'));
+    await tester.tap(find.text('Confirmo que revisé y atendí esta alerta'));
+    await tester.pump();
+    await ir(tester, AppRoutes.adminHistory, 'Todos los usuarios');
+    await ir(tester, AppRoutes.adminAlertDetail('alt-302'), 'Detalle de la alerta');
   });
 }

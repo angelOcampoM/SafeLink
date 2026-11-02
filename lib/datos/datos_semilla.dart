@@ -182,14 +182,14 @@ class DatosSemilla {
 
     // Cada guardia con zona tiene la suya, sin traslapes (≥ 500 m entre bordes; ver cabecera).
     perfiles.addAll([
-      PerfilGuardia(usuarioId: 'grd-1', inicioTurno: enInicio, finTurno: enFin, centroCobertura: centroEmilianoZapata, radioCoberturaMetros: 4000, ultimaUbicacion: ubicacionGrd1, ultimaUbicacionEn: ahora),
-      PerfilGuardia(usuarioId: 'grd-2', inicioTurno: enInicio, finTurno: enFin, centroCobertura: centroCuernavaca, radioCoberturaMetros: 5000, ultimaUbicacion: ubicacionGrd2, ultimaUbicacionEn: ahora),
-      PerfilGuardia(usuarioId: 'grd-3', inicioTurno: enInicio, finTurno: enFin, centroCobertura: centroYautepec, radioCoberturaMetros: 4000, ultimaUbicacion: ubicacionGrd3, ultimaUbicacionEn: ahora),
+      PerfilGuardia(usuarioId: 'grd-1', inicioTurno: enInicio, finTurno: enFin, centroCobertura: centroEmilianoZapata, radioCoberturaMetros: 4000, zona: 'Emiliano Zapata', ultimaUbicacion: ubicacionGrd1, ultimaUbicacionEn: ahora),
+      PerfilGuardia(usuarioId: 'grd-2', inicioTurno: enInicio, finTurno: enFin, centroCobertura: centroCuernavaca, radioCoberturaMetros: 5000, zona: 'Cuernavaca', ultimaUbicacion: ubicacionGrd2, ultimaUbicacionEn: ahora),
+      PerfilGuardia(usuarioId: 'grd-3', inicioTurno: enInicio, finTurno: enFin, centroCobertura: centroYautepec, radioCoberturaMetros: 4000, zona: 'Yautepec', ultimaUbicacion: ubicacionGrd3, ultimaUbicacionEn: ahora),
       // Turno nocturno que cruza medianoche.
-      PerfilGuardia(usuarioId: 'grd-4', inicioTurno: '22:00', finTurno: '06:00', centroCobertura: centroCuautla, radioCoberturaMetros: 4000, ultimaUbicacion: ubicacionGrd4),
-      PerfilGuardia(usuarioId: 'grd-5', inicioTurno: fueraInicio, finTurno: fueraFin, centroCobertura: centroJojutla, radioCoberturaMetros: 2000),
-      PerfilGuardia(usuarioId: 'grd-6', inicioTurno: enInicio, finTurno: enFin, centroCobertura: centroTepoztlan, radioCoberturaMetros: 3500, ultimaUbicacion: ubicacionGrd6, ultimaUbicacionEn: ahora),
-      PerfilGuardia(usuarioId: 'grd-7', inicioTurno: fueraInicio, finTurno: fueraFin, centroCobertura: centroXochitepec, radioCoberturaMetros: 2500),
+      PerfilGuardia(usuarioId: 'grd-4', inicioTurno: '22:00', finTurno: '06:00', centroCobertura: centroCuautla, radioCoberturaMetros: 4000, zona: 'Cuautla', ultimaUbicacion: ubicacionGrd4),
+      PerfilGuardia(usuarioId: 'grd-5', inicioTurno: fueraInicio, finTurno: fueraFin, centroCobertura: centroJojutla, radioCoberturaMetros: 2000, zona: 'Jojutla'),
+      PerfilGuardia(usuarioId: 'grd-6', inicioTurno: enInicio, finTurno: enFin, centroCobertura: centroTepoztlan, radioCoberturaMetros: 3500, zona: 'Tepoztlán', ultimaUbicacion: ubicacionGrd6, ultimaUbicacionEn: ahora),
+      PerfilGuardia(usuarioId: 'grd-7', inicioTurno: fueraInicio, finTurno: fueraFin, centroCobertura: centroXochitepec, radioCoberturaMetros: 2500, zona: 'Xochitepec'),
       // Recién dado de alta: aún sin radio de cobertura (no recibe alertas).
       const PerfilGuardia(usuarioId: 'grd-8', inicioTurno: '08:00', finTurno: '16:00', centroCobertura: null, radioCoberturaMetros: null),
     ]);
@@ -214,6 +214,7 @@ class DatosSemilla {
       DateTime? cerrada,
       RazonEscalamiento? razon,
       Resolucion? resolucion,
+      String? nota,
       bool sinFoto = false,
       int? eta,
     }) {
@@ -233,6 +234,7 @@ class DatosSemilla {
         cerradaEn: cerrada,
         razonEscalamiento: razon,
         resolucion: resolucion,
+        notaAdmin: nota,
         ubicacion: ubicacion,
         rumbo: rumbo,
         fotoUrl: sinFoto ? null : foto('sl$id'),

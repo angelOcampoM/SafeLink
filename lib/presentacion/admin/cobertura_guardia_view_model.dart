@@ -1,7 +1,8 @@
 // CAPA: PRESENTACIÓN — ViewModel
 // A-03 Turnos y radios de cobertura
-// Guarda el turno y el radio elegidos, pregunta a ReglaTurno y ReglaGeocerca si
-// son válidos y pide el guardado al repositorio. No importa material.dart.
+// Guarda el turno, la zona y el radio elegidos, pregunta a ReglaTurno y
+// ReglaGeocerca si son válidos y pide el guardado al repositorio.
+// No importa material.dart.
 
 import '../../datos/admin_repository.dart';
 import '../../dominio/dominio.dart';
@@ -19,10 +20,12 @@ class CoberturaGuardiaViewModel extends ViewModel {
   EstadoVista<Guardia> estado = const Cargando();
   String inicioTurno = '08:00';
   String finTurno = '16:00';
+  String zona = '';
   int radioMetros = 3000;
   PuntoGeo? _centro;
   bool guardando = false;
   String? error;
+  String? errorZona;
 
   int get radioMin => config.radioCoberturaMinMetros;
   int get radioMax => config.radioCoberturaMaxMetros;
@@ -41,6 +44,7 @@ class CoberturaGuardiaViewModel extends ViewModel {
       final g = await _admin.obtenerGuardia(guardiaId);
       inicioTurno = g.perfil.inicioTurno;
       finTurno = g.perfil.finTurno;
+      zona = g.perfil.zona ?? '';
       radioMetros = (g.perfil.radioCoberturaMetros ?? 3000).clamp(radioMin, radioMax);
       _centro = g.perfil.centroCobertura;
       estado = Listo(g);
@@ -66,10 +70,16 @@ class CoberturaGuardiaViewModel extends ViewModel {
     notifyListeners();
   }
 
+  void cambiarZona(String valor) {
+    zona = valor;
+    notifyListeners();
+  }
+
   Future<bool> guardar() async {
+    errorZona = ReglaGeocerca.validarZona(zona);
     error = ReglaTurno.validar(inicioTurno, finTurno) ??
         ReglaGeocerca.validarRadio(radioMetros, minimo: radioMin, maximo: radioMax);
-    if (error != null) {
+    if (error != null || errorZona != null) {
       notifyListeners();
       return false;
     }
@@ -82,6 +92,7 @@ class CoberturaGuardiaViewModel extends ViewModel {
         finTurno: finTurno,
         centro: centro,
         radioMetros: radioMetros,
+        zona: zona,
       );
       estado = Listo(g);
       return true;

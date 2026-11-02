@@ -1,8 +1,8 @@
 // CAPA: PRESENTACIÓN — ViewModel
 // A-01 Alta de guardia · A-02 Edición de guardia
 // Sin [guardiaId] es alta; con él, carga los datos y edita. Las reglas de
-// nombre, correo y teléfono vienen de ReglaRegistro (dominio).
-// No importa material.dart y no navega (devuelve si guardó).
+// nombre, correo, teléfono y contraseña inicial vienen de ReglaRegistro
+// (dominio). No importa material.dart y no navega (devuelve si guardó).
 
 import '../../datos/admin_repository.dart';
 import '../../dominio/dominio.dart';
@@ -22,6 +22,7 @@ class EditarGuardiaViewModel extends ViewModel {
   String? errorNombre;
   String? errorCorreo;
   String? errorTelefono;
+  String? errorContrasena;
 
   bool get esEdicion => guardiaId != null;
 
@@ -41,12 +42,13 @@ class EditarGuardiaViewModel extends ViewModel {
     notifyListeners();
   }
 
-  Future<bool> guardar({required String nombre, required String correo, required String telefono}) async {
+  Future<bool> guardar({required String nombre, required String correo, required String telefono, String contrasena = ''}) async {
     errorNombre = ReglaRegistro.nombre(nombre);
     errorCorreo = ReglaRegistro.correo(correo);
     errorTelefono = ReglaRegistro.telefono(telefono);
+    errorContrasena = esEdicion ? null : ReglaRegistro.contrasena(contrasena);
     error = null;
-    if (errorNombre != null || errorCorreo != null || errorTelefono != null) {
+    if (errorNombre != null || errorCorreo != null || errorTelefono != null || errorContrasena != null) {
       notifyListeners();
       return false;
     }
@@ -56,7 +58,7 @@ class EditarGuardiaViewModel extends ViewModel {
       if (esEdicion) {
         await _admin.actualizarGuardia(guardiaId!, nombre: nombre.trim(), correo: correo.trim(), telefono: telefono.trim());
       } else {
-        await _admin.crearGuardia(nombre: nombre.trim(), correo: correo.trim(), telefono: telefono.trim());
+        await _admin.crearGuardia(nombre: nombre.trim(), correo: correo.trim(), telefono: telefono.trim(), contrasena: contrasena);
       }
       return true;
     } catch (e) {

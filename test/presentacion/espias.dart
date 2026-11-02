@@ -145,28 +145,64 @@ class AlertaGuardiaEspia implements AlertaGuardiaRepository {
   Future<MetricasGuardia> obtenerMisMetricas() async => MetricasGuardia.vacias;
 }
 
-typedef CoberturaGuardada = ({String id, String inicio, String fin, PuntoGeo centro, int radio});
+typedef CoberturaGuardada = ({String id, String inicio, String fin, PuntoGeo centro, int radio, String zona});
+typedef LlamadaMetricasGuardia = ({String id, DateTime? desde, DateTime? hasta});
+typedef LlamadaMetricas = ({DateTime? desde, DateTime? hasta});
+typedef LlamadaResolucion = ({String id, Resolucion resolucion, String nota});
+typedef GuardiaCreada = ({String nombre, String correo, String telefono, String contrasena});
 
 class AdminEspia implements AdminRepository {
-  AdminEspia({required this.guardia});
+  AdminEspia({
+    required this.guardia,
+    this.metricasGuardia = MetricasGuardia.vacias,
+    this.metricasGenerales = MetricasGenerales.vacias,
+    this.falla,
+    this.fallaResolver,
+    this.usuarios = const [],
+    this.historial = const [],
+  });
 
   Guardia guardia;
   final coberturas = <CoberturaGuardada>[];
+  final llamadasMetricasGuardia = <LlamadaMetricasGuardia>[];
+  final llamadasMetricas = <LlamadaMetricas>[];
+  final resoluciones = <LlamadaResolucion>[];
+  final creadas = <GuardiaCreada>[];
+  final desbloqueados = <String>[];
+  MetricasGuardia metricasGuardia;
+  MetricasGenerales metricasGenerales;
+  ErrorDominio? falla;
+  ErrorDominio? fallaResolver;
+  List<Usuario> usuarios;
+  List<Alerta> historial;
 
   @override
   Future<Guardia> obtenerGuardia(String guardiaId) async => guardia;
 
   @override
-  Future<Guardia> actualizarCobertura(String guardiaId, {required String inicioTurno, required String finTurno, required PuntoGeo centro, required int radioMetros}) async {
-    coberturas.add((id: guardiaId, inicio: inicioTurno, fin: finTurno, centro: centro, radio: radioMetros));
+  Future<Guardia> actualizarCobertura(
+    String guardiaId, {
+    required String inicioTurno,
+    required String finTurno,
+    required PuntoGeo centro,
+    required int radioMetros,
+    required String zona,
+  }) async {
+    coberturas.add((id: guardiaId, inicio: inicioTurno, fin: finTurno, centro: centro, radio: radioMetros, zona: zona));
     return guardia;
   }
 
   @override
-  Future<List<Guardia>> obtenerGuardias({String busqueda = ''}) async => [guardia];
+  Future<List<Guardia>> obtenerGuardias({String busqueda = ''}) async {
+    if (falla != null) throw falla!;
+    return [guardia];
+  }
 
   @override
-  Future<Guardia> crearGuardia({required String nombre, required String correo, required String telefono}) async => guardia;
+  Future<Guardia> crearGuardia({required String nombre, required String correo, required String telefono, required String contrasena}) async {
+    creadas.add((nombre: nombre, correo: correo, telefono: telefono, contrasena: contrasena));
+    return guardia;
+  }
 
   @override
   Future<Guardia> actualizarGuardia(String guardiaId, {String? nombre, String? correo, String? telefono}) async => guardia;
@@ -175,23 +211,41 @@ class AdminEspia implements AdminRepository {
   Future<void> darDeBajaGuardia(String guardiaId) async {}
 
   @override
-  Stream<List<Alerta>> escucharEscaladas() => Stream.value(const []);
+  Stream<List<Alerta>> escucharEscaladas() => falla == null ? Stream.value(const []) : Stream.error(falla!);
 
   @override
-  Future<Alerta> resolverAlerta(String alertaId, Resolucion resolucion) async => alertaPrueba(estado: EstadoAlerta.resueltaPorAdmin);
+  Future<Alerta> resolverAlerta(String alertaId, Resolucion resolucion, {required String nota}) async {
+    if (fallaResolver != null) throw fallaResolver!;
+    resoluciones.add((id: alertaId, resolucion: resolucion, nota: nota));
+    return alertaPrueba(estado: EstadoAlerta.resueltaPorAdmin);
+  }
 
   @override
-  Future<List<Alerta>> obtenerHistorial(FiltroHistorial filtro) async => [];
+  Future<List<Alerta>> obtenerHistorial(FiltroHistorial filtro) async {
+    if (falla != null) throw falla!;
+    return historial;
+  }
 
   @override
-  Future<MetricasGenerales> obtenerMetricas({DateTime? desde, DateTime? hasta}) async => MetricasGenerales.vacias;
+  Future<MetricasGenerales> obtenerMetricas({DateTime? desde, DateTime? hasta}) async {
+    llamadasMetricas.add((desde: desde, hasta: hasta));
+    if (falla != null) throw falla!;
+    return metricasGenerales;
+  }
 
   @override
-  Future<MetricasGuardia> obtenerMetricasGuardia(String guardiaId, {DateTime? desde, DateTime? hasta}) async => MetricasGuardia.vacias;
+  Future<MetricasGuardia> obtenerMetricasGuardia(String guardiaId, {DateTime? desde, DateTime? hasta}) async {
+    llamadasMetricasGuardia.add((id: guardiaId, desde: desde, hasta: hasta));
+    if (falla != null) throw falla!;
+    return metricasGuardia;
+  }
+
+  @override
+  Future<List<Usuario>> obtenerUsuarios() async => usuarios;
 
   @override
   Future<List<Usuario>> obtenerUsuariosBloqueados() async => [];
 
   @override
-  Future<void> desbloquearUsuario(String usuarioId) async {}
+  Future<void> desbloquearUsuario(String usuarioId) async => desbloqueados.add(usuarioId);
 }

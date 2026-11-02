@@ -28,8 +28,8 @@ class NubeAdminRepository implements AdminRepository {
   Future<Guardia> obtenerGuardia(String guardiaId) async => _guardia(await _service.get('/admin/guards/$guardiaId'));
 
   @override
-  Future<Guardia> crearGuardia({required String nombre, required String correo, required String telefono}) async =>
-      _guardia(await _service.post('/admin/guards', {'name': nombre, 'email': correo, 'phone': telefono}));
+  Future<Guardia> crearGuardia({required String nombre, required String correo, required String telefono, required String contrasena}) async =>
+      _guardia(await _service.post('/admin/guards', {'name': nombre, 'email': correo, 'phone': telefono, 'password': contrasena}));
 
   @override
   Future<Guardia> actualizarGuardia(String guardiaId, {String? nombre, String? correo, String? telefono}) async =>
@@ -51,12 +51,14 @@ class NubeAdminRepository implements AdminRepository {
     required String finTurno,
     required PuntoGeo centro,
     required int radioMetros,
+    required String zona,
   }) async =>
       _guardia(await _service.put('/admin/guards/$guardiaId/coverage', {
         'shiftStart': inicioTurno,
         'shiftEnd': finTurno,
         'center': PuntoGeoJson.aJson(centro),
         'radiusMeters': radioMetros,
+        'zone': zona,
       }),);
 
   @override
@@ -64,8 +66,8 @@ class NubeAdminRepository implements AdminRepository {
       _service.escuchar('admin/alerts/escalated').map((e) => AlertaJson.lista(RespuestaJson.datos(e)));
 
   @override
-  Future<Alerta> resolverAlerta(String alertaId, Resolucion resolucion) async {
-    final r = await _service.post('/admin/alerts/$alertaId/resolve', {'resolution': CodigosJson.resolucion[resolucion]});
+  Future<Alerta> resolverAlerta(String alertaId, Resolucion resolucion, {required String nota}) async {
+    final r = await _service.post('/admin/alerts/$alertaId/resolve', {'resolution': CodigosJson.resolucion[resolucion], 'adminNote': nota});
     return AlertaJson.desdeJson(RespuestaJson.datos(r)! as Json);
   }
 
@@ -83,6 +85,12 @@ class NubeAdminRepository implements AdminRepository {
   Future<MetricasGuardia> obtenerMetricasGuardia(String guardiaId, {DateTime? desde, DateTime? hasta}) async {
     final r = await _service.get('/admin/metrics/guards/$guardiaId', query: _periodo(desde, hasta));
     return MetricasGuardiaJson.desdeJson(RespuestaJson.datos(r)! as Json);
+  }
+
+  @override
+  Future<List<Usuario>> obtenerUsuarios() async {
+    final d = RespuestaJson.datos(await _service.get('/admin/users'));
+    return [for (final j in d! as List) UsuarioJson.desdeJson(j as Json)];
   }
 
   @override

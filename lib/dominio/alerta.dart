@@ -27,6 +27,7 @@ class Alerta {
     this.cerradaEn,
     this.razonEscalamiento,
     this.resolucion,
+    this.notaAdmin,
     this.etaSegundos,
   });
 
@@ -48,6 +49,9 @@ class Alerta {
   final DateTime? cerradaEn;
   final RazonEscalamiento? razonEscalamiento;
   final Resolucion? resolucion;
+
+  /// A-04: nota que escribe el admin al resolver una alerta escalada.
+  final String? notaAdmin;
   final int? etaSegundos;
 
   /// Agitación = urgente (sección 6.3).
@@ -64,6 +68,7 @@ class Alerta {
     DateTime? cerradaEn,
     RazonEscalamiento? razonEscalamiento,
     Resolucion? resolucion,
+    String? notaAdmin,
     PuntoGeo? ubicacion,
     int? etaSegundos,
   }) =>
@@ -86,6 +91,7 @@ class Alerta {
         cerradaEn: cerradaEn ?? this.cerradaEn,
         razonEscalamiento: razonEscalamiento ?? this.razonEscalamiento,
         resolucion: resolucion ?? this.resolucion,
+        notaAdmin: notaAdmin ?? this.notaAdmin,
         etaSegundos: etaSegundos ?? this.etaSegundos,
       );
 }

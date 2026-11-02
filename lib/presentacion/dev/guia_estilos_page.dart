@@ -252,6 +252,8 @@ class _ControlsState extends State<_Controls> {
                 AppSpacing.gapMd,
                 const SlTextField(label: 'Deshabilitado', enabled: false, hint: 'No editable'),
                 AppSpacing.gapMd,
+                const SlTextField(label: 'Nota administrativa', hint: 'Multilínea, para textos largos', maxLines: 4, minLines: 3, maxLength: 300),
+                AppSpacing.gapMd,
                 SlButton(label: 'Validar', variant: SlButtonVariant.secondary, onPressed: () => _formKey.currentState!.validate()),
               ],
             ),
@@ -350,7 +352,12 @@ class _Content extends StatelessWidget {
             onPressed: () => showModalBottomSheet<void>(
               context: context,
               isScrollControlled: true,
-              builder: (_) => AlertDetailSheet(alert: sample.copyWith(nombreGuardia: 'Carlos Hernández López')),
+              builder: (_) => AlertDetailSheet(
+                alert: sample.copyWith(
+                  nombreGuardia: 'Carlos Hernández López',
+                  notaAdmin: 'Se verificó con la usuaria; no hubo riesgo.',
+                ),
+              ),
             ),
           ),
         ]),

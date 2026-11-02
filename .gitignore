@@ -27,3 +27,6 @@ ios/Pods/
 ios/.symlinks/
 ios/Flutter/Generated.xcconfig
 ios/Runner/GoogleService-Info.plist
+
+# Opencode
+AGENTS.md
