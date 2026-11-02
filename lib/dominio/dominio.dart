@@ -13,6 +13,7 @@ export 'guardia.dart';
 export 'metricas.dart';
 export 'punto_geo.dart';
 export 'regla_alerta.dart';
+export 'regla_eta.dart';
 export 'regla_geocerca.dart';
 export 'regla_metricas.dart';
 export 'regla_prioridad.dart';

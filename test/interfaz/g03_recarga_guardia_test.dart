@@ -183,7 +183,7 @@ void main() {
 
     testWidgets('sin resultados por los filtros', (tester) async {
       final repo = RepoControlado(disponibles: [priorizada('a', MetodoDisparo.toque, 300)]);
-      await montar(tester, listado(repo, antes: (vm) => vm.cambiarMetodo(MetodoDisparo.agitacion)));
+      await montar(tester, listado(repo, antes: (vm) => vm.cambiarMetodo(MetodoDisparo.dobleClicVolumen)));
       expect(find.text('Sin alertas con estos filtros'), findsOneWidget);
       await recargarConUnSpinner(tester);
       expect(find.text('Sin alertas con estos filtros'), findsOneWidget, reason: 'recargar no borra los filtros');

@@ -137,7 +137,7 @@ Future<List<String>> escenario(Repos r) async {
     return r.usuario.confirmarAtencion(a!.id);
   });
   await paso('mi historial', () async => (await r.usuario.obtenerHistorial()).length);
-  await paso('agitación', () async => (await r.auth.actualizarAgitacion(activa: false)).agitacionActiva);
+  await paso('doble clic de volumen', () async => (await r.auth.actualizarDobleClicVolumen(activa: false)).dobleClicVolumenActivo);
 
   // El guardia dado de alta entra con la contraseña que eligió el admin.
   await paso('login guardia nuevo', () async => (await r.auth.iniciarSesion(correo: 'nuevo@safelink.mx', contrasena: 'Guardia123')).rol);

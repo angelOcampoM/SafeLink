@@ -111,7 +111,7 @@ void main() {
 
     AlertaPriorizada p(String id, MetodoDisparo m) =>
         AlertaPriorizada(Alerta(id: id, usuarioId: 'x', estado: EstadoAlerta.buscando, metodo: m, disparadaEn: ahoraPrueba), 100, 0, 0);
-    repo.controlador.add([p('a', MetodoDisparo.agitacion), p('b', MetodoDisparo.toque), p('c', MetodoDisparo.mantener)]);
+    repo.controlador.add([p('a', MetodoDisparo.dobleClicVolumen), p('b', MetodoDisparo.toque), p('c', MetodoDisparo.mantener)]);
     await Future<void>.delayed(Duration.zero);
 
     expect(vm.totalDisponibles, 3);

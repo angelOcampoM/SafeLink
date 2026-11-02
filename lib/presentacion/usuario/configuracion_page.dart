@@ -1,5 +1,5 @@
 // CAPA: PRESENTACIÓN — View
-// U-05 Configuración (activar/desactivar agitación) · U-02 Revisar permisos
+// U-05 Configuración (activar/desactivar el doble clic de volumen) · U-02 Revisar permisos
 // Pinta el perfil y el interruptor; le pasa las intenciones al ViewModel.
 
 import 'package:flutter/material.dart';
@@ -65,14 +65,14 @@ class _ConfiguracionPageState extends State<ConfiguracionPage> {
                     child: Column(
                       children: [
                         SwitchListTile(
-                          value: user.agitacionActiva,
-                          onChanged: vm.guardando ? null : vm.cambiarAgitacion,
+                          value: user.dobleClicVolumenActivo,
+                          onChanged: vm.guardando ? null : vm.cambiarDobleClicVolumen,
                           secondary: const _IconoOpcion(Icons.vibration_rounded),
-                          title: const Text('Alerta por agitación'),
+                          title: const Text('Alerta por doble clic de volumen'),
                           subtitle: Text(
-                            user.agitacionActiva ? 'Activada' : 'Desactivada',
+                            user.dobleClicVolumenActivo ? 'Activada' : 'Desactivada',
                             style: context.text.bodySmall?.copyWith(
-                              color: user.agitacionActiva ? AppColors.success : AppColors.textSecondary,
+                              color: user.dobleClicVolumenActivo ? AppColors.success : AppColors.textSecondary,
                             ),
                           ),
                         ),

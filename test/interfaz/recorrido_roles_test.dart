@@ -49,7 +49,7 @@ void main() {
     await abrir(tester, 'usuario@safelink.mx');
     await ir(tester, AppRoutes.userHome, 'Toca o mantén presionado');
     await ir(tester, AppRoutes.userAlert, 'Sin alertas activas');
-    await ir(tester, AppRoutes.userSettings, 'Alerta por agitación');
+    await ir(tester, AppRoutes.userSettings, 'Alerta por doble clic de volumen');
     await ir(tester, AppRoutes.userHistory, 'Mis alertas');
   });
 

@@ -1,5 +1,5 @@
 // CAPA: DATOS — implementación de hoy (sesión)
-// U-01 Registro · U-02 Inicio de sesión · G-01 · U-05 Agitación
+// U-01 Registro · U-02 Inicio de sesión · G-01 · U-05 Doble clic de volumen
 // Lee y escribe en MemoriaBaseDatos. Cumple el contrato; nadie arriba sabe que es un mapa.
 
 import '../dominio/dominio.dart';
@@ -71,9 +71,9 @@ class MemoriaAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<Usuario> actualizarAgitacion({required bool activa}) async {
+  Future<Usuario> actualizarDobleClicVolumen({required bool activa}) async {
     await _db.esperar();
-    final u = _db.yo.copyWith(agitacionActiva: activa);
+    final u = _db.yo.copyWith(dobleClicVolumenActivo: activa);
     _db.usuarios[u.id] = u;
     return u;
   }

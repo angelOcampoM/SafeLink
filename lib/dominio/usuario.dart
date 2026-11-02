@@ -1,5 +1,5 @@
 // CAPA: DOMINIO — persona que usa SafeLink (sección 4.1)
-// U-01 Registro · U-05 Agitación · A-08 Bloqueo
+// U-01 Registro · U-05 Doble clic de volumen · A-08 Bloqueo
 // Datos del usuario en cualquiera de los tres roles y consultas simples sobre él.
 // No hace: no valida formularios (ReglaRegistro) ni decide bloqueos (ReglaAlerta).
 
@@ -14,7 +14,7 @@ class Usuario {
     required this.rol,
     required this.creadoEn,
     this.activo = true,
-    this.agitacionActiva = false,
+    this.dobleClicVolumenActivo = false,
     this.falsasAlarmas = 0,
     this.bloqueadoHasta,
   });
@@ -25,7 +25,7 @@ class Usuario {
   final String telefono;
   final RolUsuario rol;
   final bool activo;
-  final bool agitacionActiva;
+  final bool dobleClicVolumenActivo;
   final int falsasAlarmas;
   final DateTime? bloqueadoHasta;
   final DateTime creadoEn;
@@ -48,7 +48,7 @@ class Usuario {
     String? correo,
     String? telefono,
     bool? activo,
-    bool? agitacionActiva,
+    bool? dobleClicVolumenActivo,
     int? falsasAlarmas,
     DateTime? bloqueadoHasta,
     bool quitarBloqueo = false,
@@ -61,7 +61,7 @@ class Usuario {
         rol: rol,
         creadoEn: creadoEn,
         activo: activo ?? this.activo,
-        agitacionActiva: agitacionActiva ?? this.agitacionActiva,
+        dobleClicVolumenActivo: dobleClicVolumenActivo ?? this.dobleClicVolumenActivo,
         falsasAlarmas: falsasAlarmas ?? this.falsasAlarmas,
         bloqueadoHasta: quitarBloqueo ? null : (bloqueadoHasta ?? this.bloqueadoHasta),
       );

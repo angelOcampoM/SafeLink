@@ -7,6 +7,7 @@
 import '../../../datos/admin_repository.dart';
 import '../../../datos/alerta_guardia_repository.dart';
 import '../../../datos/alerta_usuario_repository.dart';
+import '../../../datos/sensores.dart';
 import '../../../dominio/configuracion.dart';
 import '../../../dominio/punto_geo.dart';
 import '../../admin/cobertura_guardia_view_model.dart';
@@ -28,6 +29,7 @@ import '../../guardia/listado_alertas_view_model.dart';
 import '../../guardia/navegacion_view_model.dart';
 import '../../sesion/sesion_view_model.dart';
 import '../../usuario/configuracion_view_model.dart';
+import '../../usuario/disparo_rapido.dart';
 import '../../usuario/estado_alerta_view_model.dart';
 import '../../usuario/historial_usuario_view_model.dart';
 import '../../usuario/inicio_view_model.dart';
@@ -39,7 +41,10 @@ class FabricaViewModels {
     required this.alertasGuardia,
     required this.admin,
     required this.config,
-    required this.ubicacionDispositivo,
+    required this.disparoRapido,
+    required this.camara,
+    required this.ubicacion,
+    required this.brujula,
     required this.centroPorDefecto,
     this.cuentasDemo = const [],
     this.contrasenaDemo = '',
@@ -53,8 +58,14 @@ class FabricaViewModels {
   final Configuracion config;
   final DateTime Function() reloj;
 
-  /// TODO(U-06): sustituir por el GPS real del teléfono.
-  final PuntoGeo Function() ubicacionDispositivo;
+  /// U-05: el servicio que escucha el botón con la pantalla bloqueada.
+  final DisparoRapido disparoRapido;
+
+  /// U-06 · U-07: sensores del teléfono. Hoy los cumplen implementaciones
+  /// simuladas; `main.dart` decide cuáles se enchufan.
+  final Camara camara;
+  final Ubicacion ubicacion;
+  final Brujula brujula;
 
   /// Centro de cobertura para guardias que aún no tienen zona (A-03).
   final PuntoGeo centroPorDefecto;
@@ -72,10 +83,17 @@ class FabricaViewModels {
   RegistroViewModel registro() => RegistroViewModel(sesion);
 
   // ── Usuario protegido ──
-  InicioViewModel inicio() =>
-      InicioViewModel(alertasUsuario, sesion, config: config, ubicacionDispositivo: ubicacionDispositivo, reloj: reloj);
+  InicioViewModel inicio() => InicioViewModel(
+        alertasUsuario,
+        sesion,
+        config: config,
+        camara: camara,
+        ubicacion: ubicacion,
+        brujula: brujula,
+        reloj: reloj,
+      );
   EstadoAlertaViewModel estadoAlerta() => EstadoAlertaViewModel(alertasUsuario);
-  ConfiguracionViewModel configuracion() => ConfiguracionViewModel(sesion);
+  ConfiguracionViewModel configuracion() => ConfiguracionViewModel(sesion, disparoRapido);
   HistorialUsuarioViewModel historialUsuario() => HistorialUsuarioViewModel(alertasUsuario, reloj: reloj);
 
   // ── Guardia ──

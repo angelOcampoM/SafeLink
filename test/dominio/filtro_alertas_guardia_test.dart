@@ -23,7 +23,7 @@ void main() {
 
   // Orden de prioridad tal como lo entrega ReglaPrioridad.
   final lista = [
-    p('urgente', 2500, 1, m: MetodoDisparo.agitacion),
+    p('urgente', 2500, 1, m: MetodoDisparo.dobleClicVolumen),
     p('toque-cerca', 300, 5),
     p('mantener', 900, 10, m: MetodoDisparo.mantener, sinFoto: true),
     p('toque-lejos', 1800, 2),
@@ -38,7 +38,7 @@ void main() {
   });
 
   test('por tipo de disparo', () {
-    expect(ids(const FiltroAlertasDisponibles(metodo: MetodoDisparo.agitacion).aplicar(lista)), ['urgente']);
+    expect(ids(const FiltroAlertasDisponibles(metodo: MetodoDisparo.dobleClicVolumen).aplicar(lista)), ['urgente']);
     expect(ids(const FiltroAlertasDisponibles(metodo: MetodoDisparo.toque).aplicar(lista)), ['toque-cerca', 'toque-lejos']);
     expect(ids(const FiltroAlertasDisponibles(metodo: MetodoDisparo.mantener).aplicar(lista)), ['mantener']);
   });
@@ -57,7 +57,7 @@ void main() {
   test('filtros combinados', () {
     const f = FiltroAlertasDisponibles(metodo: MetodoDisparo.toque, distanciaMaxMetros: 3000, evidencia: FiltroEvidencia.conFoto);
     expect(ids(f.aplicar(lista)), ['toque-cerca', 'toque-lejos']);
-    expect(ids(const FiltroAlertasDisponibles(metodo: MetodoDisparo.agitacion, distanciaMaxMetros: 500).aplicar(lista)), isEmpty);
+    expect(ids(const FiltroAlertasDisponibles(metodo: MetodoDisparo.dobleClicVolumen, distanciaMaxMetros: 500).aplicar(lista)), isEmpty);
   });
 
   test('orden: más cercanas y más antiguas', () {

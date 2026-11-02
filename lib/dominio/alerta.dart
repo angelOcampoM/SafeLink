@@ -54,8 +54,8 @@ class Alerta {
   final String? notaAdmin;
   final int? etaSegundos;
 
-  /// Agitación = urgente (sección 6.3).
-  bool get esUrgente => metodo == MetodoDisparo.agitacion;
+  /// Doble clic de volumen = urgente: el usuario no pudo desbloquear (U-05).
+  bool get esUrgente => metodo == MetodoDisparo.dobleClicVolumen;
 
   Duration esperaA(DateTime ahora) => ahora.difference(disparadaEn);
 

@@ -54,6 +54,6 @@ class NubeAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<Usuario> actualizarAgitacion({required bool activa}) async =>
-      _guardar(await _service.patch('/users/me/settings', {'shakeEnabled': activa}));
+  Future<Usuario> actualizarDobleClicVolumen({required bool activa}) async =>
+      _guardar(await _service.patch('/users/me/settings', {'volumeDoubleClickEnabled': activa}));
 }

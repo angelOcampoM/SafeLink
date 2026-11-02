@@ -1,5 +1,5 @@
 // CAPA: PRESENTACIÓN — View
-// U-03 Toque simple · U-04 Mantener presionado · U-05 Agitación · U-06 Evidencia
+// U-03 Toque simple · U-04 Mantener presionado · U-05 Doble clic de volumen · U-06 Evidencia
 // Pinta el botón de emergencia y le pasa los gestos al ViewModel. Solo calcula
 // si el dedo está sobre "Descartar" y cuánto se arrastró el botón (geometría de pantalla).
 // No envía alertas, no valida y no sabe si hay memoria o nube.
@@ -87,11 +87,11 @@ class _InicioPageState extends State<InicioPage> {
                 child: Column(
                   children: [
                     _ChipEstado(vm: vm),
-                    if (vm.config.modoDemo && vm.agitacionActiva && !vm.manteniendo)
+                    if (vm.config.modoDemo && vm.dobleClicVolumenActivo && !vm.manteniendo)
                       TextButton.icon(
-                        onPressed: vm.botonHabilitado ? vm.agitar : null,
+                        onPressed: vm.botonHabilitado ? vm.simularDobleClic : null,
                         icon: const Icon(Icons.vibration_rounded),
-                        label: const Text('Simular agitación (demo)'),
+                        label: const Text('Simular doble clic (demo)'),
                       ),
                     const Spacer(),
                     Transform.translate(
@@ -183,8 +183,8 @@ class _ChipEstado extends StatelessWidget {
         const SlChip(label: 'Arrastrando para descartar', color: AppColors.warning, icon: Icons.south_rounded),
       InicioViewModel(manteniendo: true) =>
         const SlChip(label: 'Manteniendo presionado', color: AppColors.emergency, icon: Icons.touch_app_outlined),
-      InicioViewModel(agitacionActiva: true) =>
-        const SlChip(label: 'Detección por agitación activa', color: AppColors.success, icon: Icons.vibration_rounded),
+      InicioViewModel(dobleClicVolumenActivo: true) =>
+        const SlChip(label: 'Disparo por doble clic activo', color: AppColors.success, icon: Icons.vibration_rounded),
       _ => null,
     };
     // Altura fija: el botón no "salta" cuando el chip aparece o desaparece.

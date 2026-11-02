@@ -38,9 +38,9 @@ void main() {
     expect(find.text('Resuelta por administrador'), findsOneWidget);
   });
 
-  testWidgets('TriggerChip marca la agitación como urgente', (tester) async {
-    await tester.pumpWidget(wrap(const TriggerChip(MetodoDisparo.agitacion)));
-    expect(find.text('Urgente · Agitación'), findsOneWidget);
+  testWidgets('TriggerChip marca el doble clic de volumen como urgente', (tester) async {
+    await tester.pumpWidget(wrap(const TriggerChip(MetodoDisparo.dobleClicVolumen)));
+    expect(find.text('Urgente · Doble clic de volumen'), findsOneWidget);
   });
 
   testWidgets('SlTextField de contraseña permite mostrar/ocultar', (tester) async {

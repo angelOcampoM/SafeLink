@@ -42,7 +42,7 @@ abstract final class AppColors {
   static const emergency = Color(0xFFEF4444);
   static const emergencyDark = Color(0xFFB91C1C);
 
-  /// Urgente (alerta por agitación) / pendiente.
+  /// Urgente (doble clic de volumen) / pendiente.
   static const warning = Color(0xFFF59E0B);
 
   /// Confirmado / seguro / guardia en turno.

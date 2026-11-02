@@ -28,7 +28,7 @@ abstract final class CodigosJson {
   static const metodo = {
     MetodoDisparo.toque: 'tap',
     MetodoDisparo.mantener: 'hold',
-    MetodoDisparo.agitacion: 'shake',
+    MetodoDisparo.dobleClicVolumen: 'shake',
   };
   static const razon = {
     RazonEscalamiento.sinRespuesta: 'no_response',
@@ -63,7 +63,7 @@ abstract final class UsuarioJson {
         telefono: j['phone']! as String,
         rol: CodigosJson.desde(CodigosJson.rol, j['role']),
         activo: j['isActive'] as bool? ?? true,
-        agitacionActiva: j['shakeEnabled'] as bool? ?? false,
+        dobleClicVolumenActivo: j['volumeDoubleClickEnabled'] as bool? ?? false,
         falsasAlarmas: j['falseAlarmCount'] as int? ?? 0,
         bloqueadoHasta: _fecha(j['blockedUntil']),
         creadoEn: DateTime.parse(j['createdAt']! as String),
@@ -76,7 +76,7 @@ abstract final class UsuarioJson {
         'phone': u.telefono,
         'role': CodigosJson.rol[u.rol],
         'isActive': u.activo,
-        'shakeEnabled': u.agitacionActiva,
+        'volumeDoubleClickEnabled': u.dobleClicVolumenActivo,
         'falseAlarmCount': u.falsasAlarmas,
         'blockedUntil': _iso(u.bloqueadoHasta),
         'createdAt': _iso(u.creadoEn),

@@ -71,16 +71,32 @@ class AuthEspia implements AuthRepository {
   Future<Usuario?> restaurarSesion(String usuarioId) async => usuarioActual = usuarioPrueba();
 
   @override
-  Future<Usuario> actualizarAgitacion({required bool activa}) async =>
-      usuarioActual = usuarioActual!.copyWith(agitacionActiva: activa);
+  Future<Usuario> actualizarDobleClicVolumen({required bool activa}) async =>
+      usuarioActual = usuarioActual!.copyWith(dobleClicVolumenActivo: activa);
 }
+
+/// Lo que viajó en una llamada a `crearAlerta` (U-06: evidencia completa).
+typedef AlertaCreada = ({
+  MetodoDisparo metodo,
+  DateTime disparadaEn,
+  PuntoGeo? ubicacion,
+  int? rumbo,
+  String? rutaFoto,
+});
 
 class AlertaUsuarioEspia implements AlertaUsuarioRepository {
   final creadas = <MetodoDisparo>[];
 
+  /// U-06: la evidencia con la que se registró cada alerta.
+  final evidencias = <AlertaCreada>[];
+
+  /// U-07: posiciones enviadas mientras la alerta estaba activa.
+  final ubicacionesEnviadas = <PuntoGeo>[];
+
   @override
   Future<Alerta> crearAlerta({required MetodoDisparo metodo, required DateTime disparadaEn, PuntoGeo? ubicacion, int? rumbo, String? rutaFoto}) async {
     creadas.add(metodo);
+    evidencias.add((metodo: metodo, disparadaEn: disparadaEn, ubicacion: ubicacion, rumbo: rumbo, rutaFoto: rutaFoto));
     return alertaPrueba();
   }
 
@@ -88,7 +104,7 @@ class AlertaUsuarioEspia implements AlertaUsuarioRepository {
   Stream<Alerta?> escucharAlertaActiva() => Stream.value(null);
 
   @override
-  Future<void> enviarUbicacion(String alertaId, PuntoGeo ubicacion) async {}
+  Future<void> enviarUbicacion(String alertaId, PuntoGeo ubicacion) async => ubicacionesEnviadas.add(ubicacion);
 
   @override
   Future<Alerta> confirmarAtencion(String alertaId) async => alertaPrueba(estado: EstadoAlerta.cerrada);

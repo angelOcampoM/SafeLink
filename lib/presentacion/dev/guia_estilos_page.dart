@@ -128,7 +128,7 @@ class _Foundations extends StatelessWidget {
         ]),
         const _Section('Semánticos', note: 'emergency es EXCLUSIVO del botón de alerta y alertas activas.', [
           _Swatch('emergency', AppColors.emergency, 'Botón de alerta, alerta activa'),
-          _Swatch('warning', AppColors.warning, 'Urgente (agitación), pendiente'),
+          _Swatch('warning', AppColors.warning, 'Urgente (doble clic), pendiente'),
           _Swatch('success', AppColors.success, 'Confirmado, en turno, seguro'),
           _Swatch('info', AppColors.info, 'Acción principal, mapas, navegación'),
           _Swatch('danger', AppColors.danger, 'Errores de formulario, destructivo'),
@@ -266,7 +266,7 @@ class _ControlsState extends State<_Controls> {
               value: _switch,
               onChanged: (v) => setState(() => _switch = v),
               secondary: const Icon(Icons.vibration_rounded),
-              title: const Text('Alerta por agitación'),
+              title: const Text('Alerta por doble clic de volumen'),
               subtitle: const Text('SwitchListTile dentro de SlCard'),
             ),
           ),
@@ -303,7 +303,7 @@ class _Content extends StatelessWidget {
       usuarioId: 'u',
       nombreUsuario: 'Rosa María Díaz',
       estado: EstadoAlerta.buscando,
-      metodo: MetodoDisparo.agitacion,
+      metodo: MetodoDisparo.dobleClicVolumen,
       disparadaEn: now.subtract(const Duration(minutes: 3)),
       evidenciaIncompleta: true,
     );
