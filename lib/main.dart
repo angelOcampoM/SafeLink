@@ -27,6 +27,8 @@ import 'datos/nube_alerta_guardia_repository.dart';
 import 'datos/nube_alerta_usuario_repository.dart';
 import 'datos/nube_auth_repository.dart';
 import 'datos/safelink_service.dart';
+import 'datos/sensores.dart';
+import 'datos/sensores_simulados.dart';
 import 'datos/sesion_guardada.dart';
 import 'dominio/configuracion.dart';
 import 'presentacion/comun/rutas/app_router.dart';
@@ -60,8 +62,14 @@ class Dependencias {
     required this.admin,
     this.config = Configuracion.porDefecto,
     SesionGuardada? sesionGuardada,
+    Camara? camara,
+    Ubicacion? ubicacion,
+    Brujula? brujula,
     void Function()? iniciarSimulaciones,
   })  : sesionGuardada = sesionGuardada ?? MemoriaSesionGuardada(),
+        camara = camara ?? CamaraSimulada(),
+        ubicacion = ubicacion ?? UbicacionSimulada(inicial: DatosSemilla.ubicacionDispositivoUsuario),
+        brujula = brujula ?? BrujulaSimulada(),
         iniciarSimulaciones = iniciarSimulaciones ?? _nada {
     sesion = SesionViewModel(auth, this.sesionGuardada);
     fabrica = FabricaViewModels(
@@ -70,7 +78,9 @@ class Dependencias {
       alertasGuardia: alertasGuardia,
       admin: admin,
       config: config,
-      ubicacionDispositivo: () => DatosSemilla.ubicacionDispositivoUsuario, // TODO(U-06): GPS real
+      camara: this.camara,
+      ubicacion: this.ubicacion,
+      brujula: this.brujula,
       centroPorDefecto: DatosSemilla.centroEmilianoZapata,
       cuentasDemo: DatosSemilla.cuentasDemo,
       contrasenaDemo: DatosSemilla.contrasena,
@@ -115,6 +125,12 @@ class Dependencias {
   final AdminRepository admin;
   final Configuracion config;
   final SesionGuardada sesionGuardada;
+
+  /// U-06 · U-07: sensores. Hoy simulados; al enchufar los plugins reales
+  /// solo cambian estas tres líneas.
+  final Camara camara;
+  final Ubicacion ubicacion;
+  final Brujula brujula;
   final void Function() iniciarSimulaciones;
   late final SesionViewModel sesion;
   late final FabricaViewModels fabrica;

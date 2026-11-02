@@ -7,6 +7,7 @@
 import '../../../datos/admin_repository.dart';
 import '../../../datos/alerta_guardia_repository.dart';
 import '../../../datos/alerta_usuario_repository.dart';
+import '../../../datos/sensores.dart';
 import '../../../dominio/configuracion.dart';
 import '../../../dominio/punto_geo.dart';
 import '../../admin/cobertura_guardia_view_model.dart';
@@ -39,7 +40,9 @@ class FabricaViewModels {
     required this.alertasGuardia,
     required this.admin,
     required this.config,
-    required this.ubicacionDispositivo,
+    required this.camara,
+    required this.ubicacion,
+    required this.brujula,
     required this.centroPorDefecto,
     this.cuentasDemo = const [],
     this.contrasenaDemo = '',
@@ -53,8 +56,11 @@ class FabricaViewModels {
   final Configuracion config;
   final DateTime Function() reloj;
 
-  /// TODO(U-06): sustituir por el GPS real del teléfono.
-  final PuntoGeo Function() ubicacionDispositivo;
+  /// U-06 · U-07: sensores del teléfono. Hoy los cumplen implementaciones
+  /// simuladas; `main.dart` decide cuáles se enchufan.
+  final Camara camara;
+  final Ubicacion ubicacion;
+  final Brujula brujula;
 
   /// Centro de cobertura para guardias que aún no tienen zona (A-03).
   final PuntoGeo centroPorDefecto;
@@ -72,8 +78,15 @@ class FabricaViewModels {
   RegistroViewModel registro() => RegistroViewModel(sesion);
 
   // ── Usuario protegido ──
-  InicioViewModel inicio() =>
-      InicioViewModel(alertasUsuario, sesion, config: config, ubicacionDispositivo: ubicacionDispositivo, reloj: reloj);
+  InicioViewModel inicio() => InicioViewModel(
+        alertasUsuario,
+        sesion,
+        config: config,
+        camara: camara,
+        ubicacion: ubicacion,
+        brujula: brujula,
+        reloj: reloj,
+      );
   EstadoAlertaViewModel estadoAlerta() => EstadoAlertaViewModel(alertasUsuario);
   ConfiguracionViewModel configuracion() => ConfiguracionViewModel(sesion);
   HistorialUsuarioViewModel historialUsuario() => HistorialUsuarioViewModel(alertasUsuario, reloj: reloj);

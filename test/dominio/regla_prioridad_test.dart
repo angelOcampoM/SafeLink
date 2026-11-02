@@ -15,9 +15,9 @@ void main() {
         ubicacion: PuntoGeo(guardia.lat + dLat, guardia.lng),
       );
 
-  test('las de agitación van primero aunque estén más lejos', () {
+  test('las de doble clic de volumen van primero aunque estén más lejos', () {
     final r = ReglaPrioridad.ordenar(
-      alertas: [alerta('cerca', 0.001, 0), alerta('lejos-shake', 0.02, 0, m: MetodoDisparo.agitacion)],
+      alertas: [alerta('cerca', 0.001, 0), alerta('lejos-shake', 0.02, 0, m: MetodoDisparo.dobleClicVolumen)],
       ubicacionGuardia: guardia,
       ahora: ahora,
     );

@@ -71,8 +71,8 @@ class SesionViewModel extends ViewModel {
     return u;
   }
 
-  Future<void> cambiarAgitacion(bool activa) async {
-    await _auth.actualizarAgitacion(activa: activa);
+  Future<void> cambiarDobleClicVolumen(bool activa) async {
+    await _auth.actualizarDobleClicVolumen(activa: activa);
     notifyListeners();
   }
 

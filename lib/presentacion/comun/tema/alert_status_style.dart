@@ -37,8 +37,8 @@ extension TriggerMethodStyle on MetodoDisparo {
   StatusStyle get style => switch (this) {
         MetodoDisparo.toque => StatusStyle(AppColors.textSecondary, Icons.touch_app_rounded, etiqueta),
         MetodoDisparo.mantener => StatusStyle(AppColors.textSecondary, Icons.pan_tool_rounded, etiqueta),
-        // Agitación = urgente (sección 6.3): se destaca en ámbar.
-        MetodoDisparo.agitacion => StatusStyle(AppColors.warning, Icons.vibration_rounded, etiqueta),
+        // Doble clic de volumen = urgente (U-05): se destaca en ámbar.
+        MetodoDisparo.dobleClicVolumen => StatusStyle(AppColors.warning, Icons.vibration_rounded, etiqueta),
       };
 }
 

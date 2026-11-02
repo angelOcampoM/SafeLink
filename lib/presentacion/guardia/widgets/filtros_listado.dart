@@ -18,8 +18,8 @@ String etiquetaDistancia(int? metros) => switch (metros) {
       final m => '≤ ${Fmt.distance(m)}',
     };
 
-/// Etiqueta del chip de tipo de disparo (agitación se muestra como "Urgentes").
-String etiquetaMetodo(MetodoDisparo m) => m == MetodoDisparo.agitacion ? 'Urgentes' : m.etiqueta;
+/// Etiqueta del chip de tipo de disparo (el doble clic se muestra como "Urgentes").
+String etiquetaMetodo(MetodoDisparo m) => m == MetodoDisparo.dobleClicVolumen ? 'Urgentes' : m.etiqueta;
 
 class FiltrosListado extends StatelessWidget {
   const FiltrosListado({
@@ -85,7 +85,7 @@ class FiltrosListado extends StatelessWidget {
           child: Row(
             children: [
               ChoiceChip(label: const Text('Todas'), selected: filtro.metodo == null, onSelected: (_) => onMetodo(null)),
-              for (final m in const [MetodoDisparo.agitacion, MetodoDisparo.toque, MetodoDisparo.mantener]) ...[
+              for (final m in const [MetodoDisparo.dobleClicVolumen, MetodoDisparo.toque, MetodoDisparo.mantener]) ...[
                 AppSpacing.gapXs,
                 ChoiceChip(label: Text(etiquetaMetodo(m)), selected: filtro.metodo == m, onSelected: (_) => onMetodo(m)),
               ],

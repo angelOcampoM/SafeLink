@@ -226,7 +226,7 @@ class MemoriaBaseDatos {
         .toList();
     if (candidatos.isEmpty) return null;
     final u = candidatos[_azar.nextInt(candidatos.length)];
-    final metodo = _azar.nextInt(5) == 0 ? MetodoDisparo.agitacion : MetodoDisparo.values[_azar.nextInt(2)];
+    final metodo = _azar.nextInt(5) == 0 ? MetodoDisparo.dobleClicVolumen : MetodoDisparo.values[_azar.nextInt(2)];
     final sinFoto = _azar.nextInt(6) == 0;
     final alertaId = nuevoId('alt');
     final alerta = Alerta(

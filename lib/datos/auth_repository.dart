@@ -1,5 +1,5 @@
 // CAPA: DATOS — el contrato de sesión
-// U-01 Registro · U-02 Inicio de sesión · G-01 Login del guardia · U-05 Agitación
+// U-01 Registro · U-02 Inicio de sesión · G-01 Login del guardia · U-05 Doble clic de volumen
 // Habla en lenguaje del dominio: iniciar sesión, registrar, cerrar sesión.
 // No dice "HTTP", ni "token", ni "lista en memoria".
 // Implementaciones: MemoriaAuthRepository (hoy) y NubeAuthRepository (mañana).
@@ -31,5 +31,5 @@ abstract interface class AuthRepository {
   /// Mañana recibirá un token en vez del id.
   Future<Usuario?> restaurarSesion(String usuarioId);
 
-  Future<Usuario> actualizarAgitacion({required bool activa});
+  Future<Usuario> actualizarDobleClicVolumen({required bool activa});
 }

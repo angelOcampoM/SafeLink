@@ -110,8 +110,8 @@ class DatosSemilla {
     final creado = ahora.subtract(const Duration(days: 90));
     Usuario guardia(String id, String nombre, String correo, String tel, {bool activo = true}) =>
         Usuario(id: id, nombre: nombre, correo: correo, telefono: tel, rol: RolUsuario.guardia, activo: activo, creadoEn: creado);
-    Usuario protegido(String id, String nombre, String correo, String tel, {bool agitacion = false, int falsas = 0, DateTime? bloqueo}) =>
-        Usuario(id: id, nombre: nombre, correo: correo, telefono: tel, rol: RolUsuario.usuarioProtegido, agitacionActiva: agitacion, falsasAlarmas: falsas, bloqueadoHasta: bloqueo, creadoEn: creado);
+    Usuario protegido(String id, String nombre, String correo, String tel, {bool dobleClic = false, int falsas = 0, DateTime? bloqueo}) =>
+        Usuario(id: id, nombre: nombre, correo: correo, telefono: tel, rol: RolUsuario.usuarioProtegido, dobleClicVolumenActivo: dobleClic, falsasAlarmas: falsas, bloqueadoHasta: bloqueo, creadoEn: creado);
 
     usuarios.addAll([
       Usuario(id: 'adm-1', nombre: 'Mariana Ortega Ruiz', correo: 'admin@safelink.mx', telefono: '7771002030', rol: RolUsuario.admin, creadoEn: creado),
@@ -125,13 +125,13 @@ class DatosSemilla {
       guardia('grd-7', 'Andrés Figueroa Ávila', 'andres.figueroa@safelink.mx', '7778901276'),
       guardia('grd-8', 'Sofía Rendón Campos', 'sofia.rendon@safelink.mx', '7779012387'),
       // Usuarios protegidos
-      protegido('usr-1', 'Fernanda Morales Gil', 'usuario@safelink.mx', '7771234567', agitacion: true),
+      protegido('usr-1', 'Fernanda Morales Gil', 'usuario@safelink.mx', '7771234567', dobleClic: true),
       protegido('usr-2', 'Rosa María Díaz Toledo', 'rosa.diaz@mail.com', '7772233445', falsas: 2),
       protegido('usr-3', 'Héctor Jaimes Rosales', 'hector.jaimes@mail.com', '7773344556'),
       protegido('usr-4', 'Iván Castañeda Soto', 'bloqueado@safelink.mx', '7774455667', falsas: 3, bloqueo: ahora.add(const Duration(days: 5))),
       protegido('usr-5', 'Guadalupe Benítez Arce', 'lupita.benitez@mail.com', '7775566778'),
       protegido('usr-6', 'Miguel Ángel Tapia Ruiz', 'miguel.tapia@mail.com', '7776677889', falsas: 1),
-      protegido('usr-7', 'Valeria Campos Ocampo', 'valeria.campos@mail.com', '7777788990', agitacion: true),
+      protegido('usr-7', 'Valeria Campos Ocampo', 'valeria.campos@mail.com', '7777788990', dobleClic: true),
       protegido('usr-8', 'Ernesto Salazar Pliego', 'ernesto.salazar@mail.com', '7778899001'),
     ]);
     // Más usuarios protegidos para que cada alerta activa sea de una persona distinta
@@ -251,32 +251,32 @@ class DatosSemilla {
       // Buscando guardia. Cada guardia en turno tiene 4: un método de cada tipo, una sin foto
       // y distancias ≤ 500 m, ≤ 1 km, ≤ 3 km y más de 3 km.
       // grd-1 (guardia@safelink.mx) · Emiliano Zapata
-      buscando('alt-101', 'usr-3', MetodoDisparo.agitacion, 1, ubicacionGrd1, 850, 20),
+      buscando('alt-101', 'usr-3', MetodoDisparo.dobleClicVolumen, 1, ubicacionGrd1, 850, 20),
       buscando('alt-102', 'usr-2', MetodoDisparo.toque, 2, ubicacionGrd1, 3300, 60),
       buscando('alt-103', 'usr-5', MetodoDisparo.mantener, 4, ubicacionGrd1, 2200, 300, sinFoto: true),
       buscando('alt-104', 'usr-6', MetodoDisparo.toque, 0, ubicacionGrd1, 350, 110),
       // grd-2 (daniela.salgado) · Cuernavaca
-      buscando('alt-105', 'usr-7', MetodoDisparo.agitacion, 3, ubicacionGrd2, 450, 200),
+      buscando('alt-105', 'usr-7', MetodoDisparo.dobleClicVolumen, 3, ubicacionGrd2, 450, 200),
       buscando('alt-111', 'usr-11', MetodoDisparo.toque, 1, ubicacionGrd2, 900, 80),
       buscando('alt-112', 'usr-12', MetodoDisparo.mantener, 5, ubicacionGrd2, 2500, 250, sinFoto: true),
       buscando('alt-113', 'usr-13', MetodoDisparo.toque, 2, ubicacionGrd2, 3600, 315),
       // grd-3 (jorge.ocampo) · Yautepec
-      buscando('alt-114', 'usr-14', MetodoDisparo.agitacion, 2, ubicacionGrd3, 300, 150),
+      buscando('alt-114', 'usr-14', MetodoDisparo.dobleClicVolumen, 2, ubicacionGrd3, 300, 150),
       buscando('alt-115', 'usr-15', MetodoDisparo.toque, 0, ubicacionGrd3, 950, 300),
       buscando('alt-116', 'usr-16', MetodoDisparo.mantener, 6, ubicacionGrd3, 1800, 10, sinFoto: true),
       buscando('alt-117', 'usr-17', MetodoDisparo.toque, 3, ubicacionGrd3, 3300, 45),
       // grd-4 (guardia.noche, 22:00–06:00) · Cuautla
-      buscando('alt-118', 'usr-18', MetodoDisparo.agitacion, 1, ubicacionGrd4, 400, 270),
+      buscando('alt-118', 'usr-18', MetodoDisparo.dobleClicVolumen, 1, ubicacionGrd4, 400, 270),
       buscando('alt-119', 'usr-19', MetodoDisparo.mantener, 4, ubicacionGrd4, 900, 120, sinFoto: true),
       buscando('alt-120', 'usr-20', MetodoDisparo.toque, 2, ubicacionGrd4, 2600, 200),
       buscando('alt-121', 'usr-21', MetodoDisparo.toque, 7, ubicacionGrd4, 3400, 225),
       // grd-6 (paola.estrada) · Tepoztlán
-      buscando('alt-122', 'usr-22', MetodoDisparo.agitacion, 2, ubicacionGrd6, 250, 60),
+      buscando('alt-122', 'usr-22', MetodoDisparo.dobleClicVolumen, 2, ubicacionGrd6, 250, 60),
       buscando('alt-123', 'usr-23', MetodoDisparo.toque, 1, ubicacionGrd6, 700, 330),
       buscando('alt-124', 'usr-24', MetodoDisparo.mantener, 3, ubicacionGrd6, 2100, 100, sinFoto: true),
       buscando('alt-125', 'usr-25', MetodoDisparo.toque, 5, ubicacionGrd6, 3150, 0),
       // grd-7 (andres.figueroa, fuera de turno) · Xochitepec: las verá al entrar a su turno
-      buscando('alt-126', 'usr-26', MetodoDisparo.agitacion, 2, centroXochitepec, 700, 45),
+      buscando('alt-126', 'usr-26', MetodoDisparo.dobleClicVolumen, 2, centroXochitepec, 700, 45),
       buscando('alt-127', 'usr-27', MetodoDisparo.mantener, 6, centroXochitepec, 1500, 250, sinFoto: true),
       // Resto de estados activos (cada una en la zona del guardia que la atiende)
       alerta('alt-201', 'usr-8', EstadoAlerta.pendienteUbicacion, MetodoDisparo.toque, 1),
@@ -285,7 +285,7 @@ class DatosSemilla {
       alerta('alt-203', 'usr-10', EstadoAlerta.guardiaEnLugar, MetodoDisparo.toque, 14, guardiaId: 'grd-3', aceptada: hace(13), llegada: hace(3), ubicacion: aDistancia(ubicacionGrd3, 25, 90), rumbo: 15),
       alerta('alt-204', 'usr-5', EstadoAlerta.sinRespuesta, MetodoDisparo.toque, 6, ubicacion: aDistancia(centroYautepec, 2500, 300), rumbo: 220),
       // Escaladas (las dos razones) y una resuelta por admin
-      alerta('alt-301', 'usr-3', EstadoAlerta.escalada, MetodoDisparo.agitacion, 22, razon: RazonEscalamiento.sinRespuesta, ubicacion: aDistancia(centroEmilianoZapata, 2500, 40), rumbo: 75),
+      alerta('alt-301', 'usr-3', EstadoAlerta.escalada, MetodoDisparo.dobleClicVolumen, 22, razon: RazonEscalamiento.sinRespuesta, ubicacion: aDistancia(centroEmilianoZapata, 2500, 40), rumbo: 75),
       alerta('alt-302', 'usr-2', EstadoAlerta.escalada, MetodoDisparo.toque, 48, guardiaId: 'grd-1', aceptada: hace(47), llegada: hace(38), razon: RazonEscalamiento.sinConfirmacion, ubicacion: aDistancia(centroEmilianoZapata, 1100, 130), rumbo: 260),
       alerta('alt-303', 'usr-6', EstadoAlerta.escalada, MetodoDisparo.mantener, 75, guardiaId: 'grd-6', aceptada: hace(73), llegada: hace(60), razon: RazonEscalamiento.sinConfirmacion, ubicacion: aDistancia(centroTepoztlan, 1200, 250), rumbo: 330),
       alerta('alt-304', 'usr-4', EstadoAlerta.resueltaPorAdmin, MetodoDisparo.toque, 60 * 26, guardiaId: 'grd-1', aceptada: hace(60 * 26 - 1), llegada: hace(60 * 26 - 9), cerrada: hace(60 * 25), razon: RazonEscalamiento.sinConfirmacion, resolucion: Resolucion.falsaAlarma, ubicacion: aDistancia(centroEmilianoZapata, 400, 300), rumbo: 0),
@@ -297,19 +297,19 @@ class DatosSemilla {
   /// 0 = hoy · 1 = ayer · 2–7 · 8–30 · más de 30 días (estas con id `alt-v…`).
   static const _plantilla = <(int, _Resultado, MetodoDisparo, bool)>[
     (0, _Resultado.cerrada, MetodoDisparo.toque, true),
-    (0, _Resultado.cerrada, MetodoDisparo.agitacion, true),
+    (0, _Resultado.cerrada, MetodoDisparo.dobleClicVolumen, true),
     (1, _Resultado.cerrada, MetodoDisparo.mantener, false),
     (1, _Resultado.escalada, MetodoDisparo.toque, true),
-    (3, _Resultado.cerrada, MetodoDisparo.agitacion, true),
+    (3, _Resultado.cerrada, MetodoDisparo.dobleClicVolumen, true),
     (4, _Resultado.cerrada, MetodoDisparo.toque, false),
     (5, _Resultado.resueltaPorAdmin, MetodoDisparo.mantener, true),
     (6, _Resultado.cerrada, MetodoDisparo.mantener, true),
     (9, _Resultado.cerrada, MetodoDisparo.toque, true),
-    (13, _Resultado.cerrada, MetodoDisparo.agitacion, false),
+    (13, _Resultado.cerrada, MetodoDisparo.dobleClicVolumen, false),
     (18, _Resultado.resueltaPorAdmin, MetodoDisparo.toque, true),
     (22, _Resultado.cerrada, MetodoDisparo.mantener, true),
     (27, _Resultado.cerrada, MetodoDisparo.toque, true),
-    (45, _Resultado.cerrada, MetodoDisparo.agitacion, true),
+    (45, _Resultado.cerrada, MetodoDisparo.dobleClicVolumen, true),
     (70, _Resultado.resueltaPorAdmin, MetodoDisparo.mantener, false),
     (100, _Resultado.cerrada, MetodoDisparo.toque, true),
   ];

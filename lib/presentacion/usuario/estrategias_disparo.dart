@@ -1,5 +1,5 @@
 // CAPA: PRESENTACIÓN — patrón Strategy para los métodos de disparo
-// U-03 Toque con cuenta regresiva · U-04 Mantener con zona de descarte · U-05 Agitación
+// U-03 Toque con cuenta regresiva · U-04 Mantener con zona de descarte · U-05 Doble clic de volumen
 // Cada estrategia decide CUÁNDO se envía la alerta; el InicioViewModel solo
 // sabe "iniciar", "cancelar" y qué hacer al enviar o descartar.
 // No importa material.dart, no llama repositorios ni pinta nada.
@@ -107,10 +107,10 @@ class MantenerConDescarte extends EstrategiaDisparo {
   }
 }
 
-/// U-05: la agitación es urgente: se envía al instante, sin cuenta regresiva.
-class Agitacion extends EstrategiaDisparo {
+/// U-05: el doble clic es urgente: se envía al instante, sin cuenta regresiva.
+class DobleClicVolumen extends EstrategiaDisparo {
   @override
-  MetodoDisparo get metodo => MetodoDisparo.agitacion;
+  MetodoDisparo get metodo => MetodoDisparo.dobleClicVolumen;
 
   @override
   bool get activa => false;

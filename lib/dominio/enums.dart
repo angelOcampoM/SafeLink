@@ -38,7 +38,7 @@ enum EstadoAlerta {
 enum MetodoDisparo {
   toque('Toque'),
   mantener('Mantener presionado'),
-  agitacion('Agitación');
+  dobleClicVolumen('Doble clic de volumen');
 
   const MetodoDisparo(this.etiqueta);
   final String etiqueta;

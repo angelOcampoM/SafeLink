@@ -50,7 +50,7 @@ class StatusChip extends StatelessWidget {
   Widget build(BuildContext context) => SlChip.fromStyle(status.style);
 }
 
-/// Chip del método de disparo. Agitación sale en ámbar como "Urgente".
+/// Chip del método de disparo. El doble clic sale en ámbar como "Urgente".
 class TriggerChip extends StatelessWidget {
   const TriggerChip(this.method, {super.key});
   final MetodoDisparo method;
@@ -59,7 +59,7 @@ class TriggerChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = method.style;
     return SlChip(
-      label: method == MetodoDisparo.agitacion ? 'Urgente · ${s.label}' : s.label,
+      label: method == MetodoDisparo.dobleClicVolumen ? 'Urgente · ${s.label}' : s.label,
       color: s.color,
       icon: s.icon,
     );

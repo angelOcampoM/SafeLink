@@ -1,6 +1,6 @@
 // CAPA: DOMINIO — orden del listado del guardia
 // G-03 Listado por cercanía y prioridad (sección 6.3, provisional)
-// 1. Primero las de agitación (urgentes).
+// 1. Primero las de doble clic de volumen (urgentes).
 // 2. Después, menor `puntaje = distancia − minutosEspera × metrosPorMinuto`.
 // No hace: no filtra por cobertura ni por estado; ordena lo que recibe.
 

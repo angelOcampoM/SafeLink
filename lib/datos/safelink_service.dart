@@ -153,7 +153,7 @@ class SafeLinkService {
       _Ruta(
         'PATCH',
         '/users/me/settings',
-        (_, c, __) async => UsuarioJson.aJson(await _auth.actualizarAgitacion(activa: c['shakeEnabled']! as bool)),
+        (_, c, __) async => UsuarioJson.aJson(await _auth.actualizarDobleClicVolumen(activa: c['volumeDoubleClickEnabled']! as bool)),
       ),
 
       // Usuario protegido

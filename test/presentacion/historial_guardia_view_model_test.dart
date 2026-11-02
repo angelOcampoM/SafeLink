@@ -33,7 +33,7 @@ Alerta _a(String id, DateTime t, {EstadoAlerta e = EstadoAlerta.cerrada, MetodoD
 void main() {
   final historial = [
     _a('h1', DateTime(2026, 10, 25, 20), llegadaSeg: 200),
-    _a('h2', DateTime(2026, 10, 20, 9), e: EstadoAlerta.escalada, m: MetodoDisparo.agitacion, llegadaSeg: 600),
+    _a('h2', DateTime(2026, 10, 20, 9), e: EstadoAlerta.escalada, m: MetodoDisparo.dobleClicVolumen, llegadaSeg: 600),
     _a('h3', DateTime(2026, 10, 3, 14), m: MetodoDisparo.mantener, llegadaSeg: 400),
   ];
 
@@ -93,7 +93,7 @@ void main() {
   test('los filtros se conservan al recargar', () async {
     final vm = HistorialGuardiaViewModel(_HistorialEspia(historial), reloj: () => ahoraPrueba);
     await vm.cargar();
-    vm.cambiarMetodo(MetodoDisparo.agitacion);
+    vm.cambiarMetodo(MetodoDisparo.dobleClicVolumen);
     await vm.cargar();
     expect(vm.filtradas.map((a) => a.id), ['h2']);
   });

@@ -1,5 +1,5 @@
 // G-03 Filtros del listado de alertas del guardia en la app real (memoria, sin simulaciones).
-// guardia@safelink.mx ve 4 alertas: 1 agitación, 2 toque y 1 mantener (sin foto).
+// guardia@safelink.mx ve 4 alertas: 1 doble clic, 2 toque y 1 mantener (sin foto).
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';

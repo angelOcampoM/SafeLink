@@ -62,7 +62,7 @@ void main() {
     await emitir([_p('a', 300)]);
     vm.cambiarDistancia(500);
 
-    await emitir([_p('a', 300), _p('lejana', 2500, m: MetodoDisparo.agitacion)]);
+    await emitir([_p('a', 300), _p('lejana', 2500, m: MetodoDisparo.dobleClicVolumen)]);
     expect(vm.filtradas.map((p) => p.alerta.id), ['a']);
     expect(vm.entrante?.alerta.id, 'lejana');
   });
