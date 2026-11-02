@@ -146,7 +146,7 @@ Las secciones de guardia y administrador aún no se han verificado contra el có
 - [ ] La aplicación no ofrece registro para guardias; solo pueden ingresar con una cuenta creada por el administrador.
 - [ ] Con credenciales válidas, el guardia entra a su listado de alertas.
 - [ ] Un guardia dado de baja no puede iniciar sesión.
-- [ ] Al iniciar sesión por primera vez, la aplicación solicita los permisos de ubicación y notificaciones.
+- [x] ~~Al iniciar sesión por primera vez, la aplicación solicita los permisos de ubicación y notificaciones.~~ **Retirado el 01/11/2026 por decisión del equipo: el guardia no ve pantalla de permisos.** La explicación de permisos es solo del usuario protegido (U-02). Queda por corregir la fila correspondiente del plan de pruebas.
 
 ### G-02 · Recepción de alertas
 **Como** guardia de respuesta, **quiero** recibir una notificación cada vez que se genera una alerta en mi zona, **para** enterarme de inmediato aunque no esté usando la aplicación.

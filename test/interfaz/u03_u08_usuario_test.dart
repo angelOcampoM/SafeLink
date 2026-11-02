@@ -78,6 +78,31 @@ void main() {
     db.dispose();
   });
 
+  // ── U-06 · Aviso cuando no hay coordenadas válidas ──────────────────────
+
+  testWidgets('U-06: sin coordenadas válidas la pantalla avisa y la alerta no se publica', (tester) async {
+    final deps = await abrir(tester);
+    // Sin GPS la alerta viaja sin ubicación: queda pendiente de publicarse.
+    final a = await deps.alertasUsuario.crearAlerta(
+      metodo: MetodoDisparo.toque,
+      disparadaEn: DateTime.now().toUtc(),
+      rumbo: 35,
+      rutaFoto: 'demo.jpg',
+    );
+    expect(a.estado, EstadoAlerta.pendienteUbicacion);
+
+    GoRouter.of(tester.element(find.byType(Scaffold).first)).go(AppRoutes.userAlert);
+    await bombear(tester);
+
+    expect(find.text('Esperando ubicación'), findsOneWidget);
+    expect(find.textContaining('Activa el GPS'), findsOneWidget);
+    expect(find.text('Ubicación pendiente'), findsOneWidget);
+    expect(find.text('Buscando guardia'), findsNothing, reason: 'todavía no se publica');
+
+    await tester.pumpWidget(const SizedBox());
+    db.dispose();
+  });
+
   // ── U-04 · Mantener presionado ──────────────────────────────────────────
 
   /// La zona vive siempre en el árbol y aparece con la opacidad: se mide ahí.
