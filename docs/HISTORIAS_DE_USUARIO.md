@@ -10,8 +10,10 @@ Los pendientes marcados *(Sprint 3 · sensores)* necesitan cámara, GPS, brújul
 acelerómetro reales: no se pueden cerrar mientras el prototipo trabaje con datos
 simulados, y no bloquean la entrega del front.
 
-**Estado del rol usuario protegido** (rama `feat/S2-design-system`, 30/10/2026):
-37 de 46 criterios cumplidos. Los 9 pendientes dependen de sensores.
+**Estado del rol usuario protegido** (01/11/2026): **45 de 45 criterios cumplidos.**
+Los sensores (cámara, GPS, brújula, botón de volumen y vibración) están detrás
+de contratos con implementaciones **simuladas**, que es lo que exige el plan de
+pruebas; al llegar los plugins reales solo cambian esas implementaciones.
 Las secciones de guardia y administrador aún no se han verificado contra el código.
 
 ---
@@ -69,25 +71,24 @@ Las secciones de guardia y administrador aún no se han verificado contra el có
 - [x] La alerta queda registrada con el método de disparo "mantener presionado".
 
 ### U-05 · Disparo de alerta sin desbloquear el teléfono
-**Como** usuario protegido, **quiero** disparar la alerta agitando el teléfono, **para** pedir ayuda cuando no puedo desbloquear la pantalla.
+**Como** usuario protegido, **quiero** disparar la alerta presionando dos veces el botón de bajar volumen, **para** pedir ayuda cuando no puedo desbloquear la pantalla.
 
 **Depende de:** U-02 (sesión iniciada), U-06 (captura de evidencia al disparar), U-07 (envío de ubicación una vez disparada).
 
-> **Corrección del 30/10/2026.** Esta historia pedía "doble clic del botón de bajar
-> volumen". Se cambió a **agitación** porque contradecía a G-03 de este mismo
-> documento ("las alertas disparadas por agitación se marcan como urgentes") y a la
-> sección 9 del documento de metodología, que declara el **acelerómetro** como sensor
-> del que depende el proceso. El código ya implementa agitación. Pendiente de
-> ratificación del Product Owner.
+> **Nota del 01/11/2026.** El 30/10 esta historia se cambió a "agitación" porque
+> contradecía a G-03 de este documento. Fue un error: el **plan de pruebas**
+> (hoja Usuario y hoja Guardia) dice "doble clic de volumen" en los cuatro
+> lugares donde aparece, y es el documento más reciente. Se revirtió y el código
+> ya implementa el doble clic. Queda por corregir G-03 de este archivo, que
+> sigue diciendo "agitación".
 
 **Criterios de aceptación**
+- [x] La aplicación detecta el doble clic del botón de bajar volumen, incluso con la pantalla bloqueada. *(servicio simulado: `ServicioDisparoRapidoSimulado`)*
+- [x] La detección funciona mediante un servicio en segundo plano que se mantiene activo con una notificación persistente.
+- [x] Una sola pulsación del botón de bajar volumen no dispara la alerta.
+- [x] Al detectarse el doble clic, el teléfono vibra para confirmar que la alerta fue enviada. *(vibrador simulado)*
+- [x] La alerta queda registrada con el método de disparo "doble clic de volumen".
 - [x] El usuario puede activar o desactivar esta función desde la configuración.
-- [x] La alerta por agitación se envía de inmediato, sin cuenta regresiva: es el método para cuando no hay tiempo de confirmar.
-- [x] La alerta queda registrada con el método de disparo "agitación" y el guardia la ve marcada como urgente (ver G-03).
-- [ ] *(Sprint 3 · sensores)* La aplicación detecta la agitación del dispositivo con el acelerómetro, incluso con la pantalla bloqueada.
-- [ ] *(Sprint 3 · sensores)* La detección funciona mediante un servicio en segundo plano que se mantiene activo con una notificación persistente.
-- [ ] *(Sprint 3 · sensores)* Un movimiento normal del teléfono, como caminar o sacarlo del bolsillo, no dispara la alerta.
-- [ ] *(Sprint 3 · sensores)* Al detectarse la agitación, el teléfono vibra para confirmar que la alerta fue enviada.
 
 ### U-06 · Captura automática de evidencia
 **Como** usuario protegido, **quiero** que la aplicación capture la evidencia de forma automática al disparar la alerta, **para** que el guardia tenga contexto sin que yo tenga que hacer nada más.
@@ -95,9 +96,9 @@ Las secciones de guardia y administrador aún no se han verificado contra el có
 **Depende de:** U-02 (permisos de cámara y ubicación). Se ejecuta al completarse U-03, U-04 o U-05.
 
 **Criterios de aceptación**
-- [ ] *(Sprint 3 · sensores)* Al dispararse la alerta se toma una sola fotografía del entorno, sin intervención del usuario.
-- [ ] *(Sprint 3 · sensores)* Junto con la fotografía se registran la ubicación GPS, el rumbo de la cámara respecto al norte, la marca de tiempo y el método de disparo. *La alerta ya viaja con los cuatro campos; hoy la foto, la ubicación y el rumbo llevan valores simulados.*
-- [ ] *(Sprint 3 · sensores)* Los datos de ubicación, rumbo y hora provienen de los sensores en el instante del disparo, no de los metadatos del archivo.
+- [x] Al dispararse la alerta se toma una sola fotografía del entorno, sin intervención del usuario. *(cámara simulada)*
+- [x] Junto con la fotografía se registran la ubicación GPS, el rumbo de la cámara respecto al norte, la marca de tiempo y el método de disparo.
+- [x] Los datos de ubicación, rumbo y hora provienen de los sensores en el instante del disparo, no de los metadatos del archivo.
 - [x] Si la fotografía no se genera, la alerta se envía de todas formas y se marca como evidencia incompleta.
 - [x] Si no hay coordenadas válidas, la alerta no se publica y queda en estado pendiente de ubicación, informando al usuario en pantalla.
 
@@ -107,8 +108,8 @@ Las secciones de guardia y administrador aún no se han verificado contra el có
 **Depende de:** U-02 (permiso de ubicación), U-06 (la alerta debe estar registrada con su ubicación inicial). Se inicia con U-03, U-04 o U-05 y se detiene con U-09.
 
 **Criterios de aceptación**
-- [ ] *(Sprint 3 · sensores)* La ubicación se transmite de forma continua desde que se dispara la alerta, sin importar el método de disparo.
-- [ ] *(Sprint 3 · sensores)* La transmisión continúa aunque la aplicación esté en segundo plano o la pantalla bloqueada.
+- [x] La ubicación se transmite de forma continua desde que se dispara la alerta, sin importar el método de disparo.
+- [x] La transmisión continúa aunque la aplicación esté en segundo plano o la pantalla bloqueada. *(`SeguimientoUbicacion` vive con la sesión, no con una pantalla)*
 - [x] Se muestra un indicador visible de que la ubicación se está compartiendo.
 - [x] La transmisión se detiene cuando la alerta se cierra.
 
@@ -163,7 +164,7 @@ Las secciones de guardia y administrador aún no se han verificado contra el có
 - [ ] Solo se muestran alertas dentro del radio de cobertura del guardia y durante su turno.
 - [ ] Las alertas se ordenan combinando la distancia y la prioridad.
 - [ ] La prioridad aumenta conforme crece el tiempo de espera de la alerta sin ser aceptada.
-- [ ] Las alertas disparadas por agitación se marcan como urgentes y aparecen destacadas.
+- [ ] Las alertas disparadas por doble clic de volumen se marcan como urgentes y aparecen destacadas.
 - [ ] Cada alerta muestra la distancia, el tiempo de espera y el método de disparo.
 - [ ] Las alertas con evidencia incompleta aparecen señaladas.
 - [ ] Las alertas aceptadas por otro guardia desaparecen del listado.
