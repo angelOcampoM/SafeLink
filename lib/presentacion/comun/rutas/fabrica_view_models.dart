@@ -20,6 +20,7 @@ import '../../auth/registro_view_model.dart';
 import '../../guardia/alerta_entrante_view_model.dart';
 import '../../guardia/detalle_alerta_view_model.dart';
 import '../../guardia/historial_guardia_view_model.dart';
+import '../../guardia/inicio_guardia_view_model.dart';
 import '../../guardia/listado_alertas_view_model.dart';
 import '../../guardia/navegacion_view_model.dart';
 import '../../sesion/sesion_view_model.dart';
@@ -75,6 +76,7 @@ class FabricaViewModels {
   HistorialUsuarioViewModel historialUsuario() => HistorialUsuarioViewModel(alertasUsuario, reloj: reloj);
 
   // ── Guardia ──
+  InicioGuardiaViewModel inicioGuardia() => InicioGuardiaViewModel(alertasGuardia, sesion, reloj: reloj);
   ListadoAlertasViewModel listadoAlertas() => ListadoAlertasViewModel(alertasGuardia, sesion, reloj: reloj);
   AlertaEntranteViewModel alertaEntrante(String id) => AlertaEntranteViewModel(alertasGuardia, id, reloj: reloj);
   DetalleAlertaViewModel detalleAlerta(String id) => DetalleAlertaViewModel(alertasGuardia, id, reloj: reloj);

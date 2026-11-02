@@ -1,18 +1,47 @@
 // CAPA: DATOS — datos ficticios de Morelos (sección 9)
-// Usuarios, guardias y ~80 alertas de historial en Emiliano Zapata y Cuernavaca.
-// Los turnos "en turno" se calculan relativos a [ahora] para que la demo siempre
-// tenga guardias disponibles. Siempre genera lo mismo para el mismo [ahora].
+// Usuarios, guardias, alertas activas e historial, como si fueran respuestas de la API:
+// cada alerta es UN registro que la base en memoria hace avanzar por sus estados.
+// Los turnos "en turno" y todas las fechas se calculan relativos a [ahora] (nunca hay
+// fechas fijas ni en el futuro). Siempre genera lo mismo para el mismo [ahora].
 // No hace: no guarda nada; MemoriaBaseDatos copia estas listas.
 //
 // Cuentas de prueba (contraseña de todas: `SafeLink1`):
-// | Correo                     | Rol                 | Notas                           |
-// |----------------------------|---------------------|---------------------------------|
-// | usuario@safelink.mx        | Usuario protegido   | Sin alerta activa, con historial|
-// | rosa.diaz@mail.com         | Usuario protegido   | 2 falsas alarmas (1 más bloquea)|
-// | bloqueado@safelink.mx      | Usuario protegido   | Bloqueado 5 días más            |
-// | guardia@safelink.mx        | Guardia             | En turno, con alertas cerca     |
-// | guardia.noche@safelink.mx  | Guardia             | Turno 22:00 → 06:00             |
-// | admin@safelink.mx          | Administrador       |                                 |
+// | Correo                       | Rol               | Notas                            |
+// |------------------------------|-------------------|----------------------------------|
+// | usuario@safelink.mx          | Usuario protegido | Sin alerta activa, con historial |
+// | rosa.diaz@mail.com           | Usuario protegido | 2 falsas alarmas (1 más bloquea) |
+// | bloqueado@safelink.mx        | Usuario protegido | Bloqueado 5 días más             |
+// | guardia@safelink.mx          | Guardia (grd-1)   | En turno, con alertas cerca      |
+// | daniela.salgado@safelink.mx  | Guardia (grd-2)   | En turno                         |
+// | jorge.ocampo@safelink.mx     | Guardia (grd-3)   | En turno, ya en el lugar de una  |
+// | guardia.noche@safelink.mx    | Guardia (grd-4)   | Turno 22:00 → 06:00              |
+// | paola.estrada@safelink.mx    | Guardia (grd-6)   | En turno                         |
+// | andres.figueroa@safelink.mx  | Guardia (grd-7)   | Fuera de turno                   |
+// | sofia.rendon@safelink.mx     | Guardia (grd-8)   | Sin zona, sin historial          |
+// | admin@safelink.mx            | Administrador     |                                  |
+//
+// Zonas de cobertura: círculos sin traslape (el borde más cercano entre dos zonas
+// queda a 1.4 km: grd-1 ↔ grd-2), así dos guardias nunca ven ni se quitan una alerta.
+// Qué trae cada guardia (historial por cubeta: hoy · ayer · 2–7 d · 8–30 d · 31–120 d):
+// | Guardia | Zona (centro · radio)        | Disponibles     | Historial                          |
+// |---------|------------------------------|-----------------|------------------------------------|
+// | grd-1   | Emiliano Zapata · 4 km       | alt-101…104     | 2 · 2 · 4 · 5 · 3 (+ alt-302, -304) |
+// | grd-2   | Cuernavaca · 5 km            | alt-105, 111…113| 2 · 2 · 4 · 5 · 3                  |
+// | grd-3   | Yautepec · 4 km              | alt-114…117     | 2 · 2 · 4 · 5 · 3                  |
+// | grd-4   | Cuautla · 4 km (nocturno)    | alt-118…121     | 2 · 2 · 4 · 5 · 3                  |
+// | grd-5   | Jojutla · 2 km (dado de baja)| —               | 0 · 0 · 0 · 0 · 3                  |
+// | grd-6   | Tepoztlán · 3.5 km           | alt-122…125     | 2 · 2 · 4 · 5 · 3 (+ alt-303)      |
+// | grd-7   | Xochitepec · 2.5 km (fuera)  | alt-126, 127    | 2 · 2 · 4 · 5 · 3                  |
+// | grd-8   | sin zona                     | —               | vacío (para probar el estado vacío)|
+// - Disponibles de cada guardia en turno: un método de cada tipo, una sin foto y distancias
+//   ≤ 500 m, ≤ 1 km, ≤ 3 km y más de 3 km desde su última ubicación.
+// - Historial: mayoría `cerrada`, una `escalada` sin confirmación (sigue en la bandeja del
+//   admin) y varias `resueltaPorAdmin`; los tres métodos, con y sin foto. Ids `alt-h…`
+//   (≤ 30 días, ≥ 80) y `alt-v…` (más antiguas). Si faltan menos de 30 min desde la
+//   medianoche, las 2 de "hoy" pasan a "ayer" (no cabe una atención completa).
+// - Las "sin respuesta" no tienen guardia: solo las ve el admin.
+// - Cada alerta activa es de un usuario distinto; `usr-28…35` quedan libres para que la
+//   simulación de alertas nuevas tenga a quién elegir.
 
 import 'dart:math';
 
@@ -27,6 +56,28 @@ class DatosSemilla {
   static const contrasena = 'SafeLink1';
   static const centroEmilianoZapata = PuntoGeo(18.8400, -99.1800);
   static const centroCuernavaca = PuntoGeo(18.9186, -99.2342);
+  static const centroYautepec = PuntoGeo(18.8833, -99.0667);
+  static const centroCuautla = PuntoGeo(18.8122, -98.9548);
+  static const centroTepoztlan = PuntoGeo(18.9850, -99.0990);
+  static const centroXochitepec = PuntoGeo(18.7800, -99.2300);
+  static const centroJojutla = PuntoGeo(18.6150, -99.1800);
+
+  /// Punto a [metros] de [desde] con rumbo [grados] (0 = norte, 90 = este).
+  /// Aproximación plana: a escala de ciudad el error es menor al 1 %.
+  static PuntoGeo aDistancia(PuntoGeo desde, double metros, int grados) {
+    final r = grados * pi / 180;
+    return PuntoGeo(
+      desde.lat + metros * cos(r) / 111320,
+      desde.lng + metros * sin(r) / (111320 * cos(desde.lat * pi / 180)),
+    );
+  }
+
+  /// Última ubicación conocida de los guardias en turno (de ahí se miden las distancias).
+  static const ubicacionGrd1 = PuntoGeo(18.8385, -99.1835);
+  static const ubicacionGrd2 = PuntoGeo(18.9150, -99.2300);
+  static final ubicacionGrd3 = aDistancia(centroYautepec, 600, 225);
+  static final ubicacionGrd4 = aDistancia(centroCuautla, 500, 45);
+  static final ubicacionGrd6 = aDistancia(centroTepoztlan, 300, 180);
 
   /// Ubicación simulada del teléfono del usuario protegido.
   static const ubicacionDispositivoUsuario = PuntoGeo(18.8452, -99.1771);
@@ -83,7 +134,42 @@ class DatosSemilla {
       protegido('usr-7', 'Valeria Campos Ocampo', 'valeria.campos@mail.com', '7777788990', agitacion: true),
       protegido('usr-8', 'Ernesto Salazar Pliego', 'ernesto.salazar@mail.com', '7778899001'),
     ]);
+    // Más usuarios protegidos para que cada alerta activa sea de una persona distinta
+    // (nadie tiene dos a la vez) y la simulación de alertas nuevas tenga a quién elegir.
+    for (final (i, (nombre, correo)) in _masProtegidos.indexed) {
+      usuarios.add(protegido('usr-${i + 9}', nombre, correo, '77730${(i + 9).toString().padLeft(5, '0')}'));
+    }
   }
+
+  static const _masProtegidos = [
+    ('Alejandra Rojas Medina', 'alejandra.rojas@mail.com'),
+    ('Bruno Galindo Ortiz', 'bruno.galindo@mail.com'),
+    ('Claudia Pineda Luna', 'claudia.pineda@mail.com'),
+    ('Diego Sámano Reyes', 'diego.samano@mail.com'),
+    ('Elena Bustamante Cruz', 'elena.bustamante@mail.com'),
+    ('Fabián Olivares Mora', 'fabian.olivares@mail.com'),
+    ('Gabriela Quintero Salas', 'gabriela.quintero@mail.com'),
+    ('Hugo Montiel Vega', 'hugo.montiel@mail.com'),
+    ('Irene Zúñiga Barrera', 'irene.zuniga@mail.com'),
+    ('Javier Peralta Núñez', 'javier.peralta@mail.com'),
+    ('Karla Bahena Flores', 'karla.bahena@mail.com'),
+    ('Leonardo Avilés Ríos', 'leonardo.aviles@mail.com'),
+    ('Mónica Trujillo Sosa', 'monica.trujillo@mail.com'),
+    ('Norberto Cázares León', 'norberto.cazares@mail.com'),
+    ('Olivia Mendoza Garduño', 'olivia.mendoza@mail.com'),
+    ('Pablo Ayala Jiménez', 'pablo.ayala@mail.com'),
+    ('Regina Carrillo Paz', 'regina.carrillo@mail.com'),
+    ('Samuel Lira Arriaga', 'samuel.lira@mail.com'),
+    ('Teresa Uribe Domínguez', 'teresa.uribe@mail.com'),
+    ('Ulises Navarrete Gil', 'ulises.navarrete@mail.com'),
+    ('Verónica Saldaña Ruiz', 'veronica.saldana@mail.com'),
+    ('Wenceslao Ortega Díaz', 'wenceslao.ortega@mail.com'),
+    ('Ximena Arellano Toledo', 'ximena.arellano@mail.com'),
+    ('Yolanda Ferrer Campos', 'yolanda.ferrer@mail.com'),
+    ('Zacarías Lozano Brito', 'zacarias.lozano@mail.com'),
+    ('Adriana Villegas Soto', 'adriana.villegas@mail.com'),
+    ('Bernardo Cuevas Nava', 'bernardo.cuevas@mail.com'),
+  ];
 
   // ── Guardias ──────────────────────────────────────────────────────
   void _guardias() {
@@ -94,15 +180,16 @@ class DatosSemilla {
     final fueraInicio = hhmm(ahora.add(const Duration(hours: 3)));
     final fueraFin = hhmm(ahora.add(const Duration(hours: 11)));
 
+    // Cada guardia con zona tiene la suya, sin traslapes (≥ 500 m entre bordes; ver cabecera).
     perfiles.addAll([
-      PerfilGuardia(usuarioId: 'grd-1', inicioTurno: enInicio, finTurno: enFin, centroCobertura: centroEmilianoZapata, radioCoberturaMetros: 4000, ultimaUbicacion: const PuntoGeo(18.8385, -99.1835), ultimaUbicacionEn: ahora),
-      PerfilGuardia(usuarioId: 'grd-2', inicioTurno: enInicio, finTurno: enFin, centroCobertura: centroCuernavaca, radioCoberturaMetros: 5000, ultimaUbicacion: const PuntoGeo(18.9150, -99.2300), ultimaUbicacionEn: ahora),
-      PerfilGuardia(usuarioId: 'grd-3', inicioTurno: enInicio, finTurno: enFin, centroCobertura: const PuntoGeo(18.8600, -99.1950), radioCoberturaMetros: 3000, ultimaUbicacion: const PuntoGeo(18.8590, -99.1940), ultimaUbicacionEn: ahora),
+      PerfilGuardia(usuarioId: 'grd-1', inicioTurno: enInicio, finTurno: enFin, centroCobertura: centroEmilianoZapata, radioCoberturaMetros: 4000, ultimaUbicacion: ubicacionGrd1, ultimaUbicacionEn: ahora),
+      PerfilGuardia(usuarioId: 'grd-2', inicioTurno: enInicio, finTurno: enFin, centroCobertura: centroCuernavaca, radioCoberturaMetros: 5000, ultimaUbicacion: ubicacionGrd2, ultimaUbicacionEn: ahora),
+      PerfilGuardia(usuarioId: 'grd-3', inicioTurno: enInicio, finTurno: enFin, centroCobertura: centroYautepec, radioCoberturaMetros: 4000, ultimaUbicacion: ubicacionGrd3, ultimaUbicacionEn: ahora),
       // Turno nocturno que cruza medianoche.
-      const PerfilGuardia(usuarioId: 'grd-4', inicioTurno: '22:00', finTurno: '06:00', centroCobertura: centroEmilianoZapata, radioCoberturaMetros: 4000, ultimaUbicacion: PuntoGeo(18.8420, -99.1790)),
-      PerfilGuardia(usuarioId: 'grd-5', inicioTurno: fueraInicio, finTurno: fueraFin, centroCobertura: centroEmilianoZapata, radioCoberturaMetros: 2000),
-      PerfilGuardia(usuarioId: 'grd-6', inicioTurno: enInicio, finTurno: enFin, centroCobertura: const PuntoGeo(18.9220, -99.2380), radioCoberturaMetros: 3500, ultimaUbicacion: const PuntoGeo(18.9230, -99.2370), ultimaUbicacionEn: ahora),
-      PerfilGuardia(usuarioId: 'grd-7', inicioTurno: fueraInicio, finTurno: fueraFin, centroCobertura: const PuntoGeo(18.8300, -99.1700), radioCoberturaMetros: 2500),
+      PerfilGuardia(usuarioId: 'grd-4', inicioTurno: '22:00', finTurno: '06:00', centroCobertura: centroCuautla, radioCoberturaMetros: 4000, ultimaUbicacion: ubicacionGrd4),
+      PerfilGuardia(usuarioId: 'grd-5', inicioTurno: fueraInicio, finTurno: fueraFin, centroCobertura: centroJojutla, radioCoberturaMetros: 2000),
+      PerfilGuardia(usuarioId: 'grd-6', inicioTurno: enInicio, finTurno: enFin, centroCobertura: centroTepoztlan, radioCoberturaMetros: 3500, ultimaUbicacion: ubicacionGrd6, ultimaUbicacionEn: ahora),
+      PerfilGuardia(usuarioId: 'grd-7', inicioTurno: fueraInicio, finTurno: fueraFin, centroCobertura: centroXochitepec, radioCoberturaMetros: 2500),
       // Recién dado de alta: aún sin radio de cobertura (no recibe alertas).
       const PerfilGuardia(usuarioId: 'grd-8', inicioTurno: '08:00', finTurno: '16:00', centroCobertura: null, radioCoberturaMetros: null),
     ]);
@@ -110,11 +197,8 @@ class DatosSemilla {
 
   // ── Alertas activas (todos los estados) ──────────────────────────
   void _alertasActivas() {
-    PuntoGeo cerca(PuntoGeo c, double dLat, double dLng) => PuntoGeo(c.lat + dLat, c.lng + dLng);
     DateTime hace(int minutos) => ahora.subtract(Duration(minutes: minutos));
     String foto(String semilla) => 'https://picsum.photos/seed/$semilla/640/420';
-    const ez = centroEmilianoZapata;
-    const cva = centroCuernavaca;
 
     Alerta alerta(
       String id,
@@ -157,73 +241,171 @@ class DatosSemilla {
       );
     }
 
+    // Disponible para un solo guardia: [metros] y [grados] se miden desde su última ubicación.
+    Alerta buscando(String id, String usuarioId, MetodoDisparo metodo, int minutos, PuntoGeo base, double metros, int grados, {bool sinFoto = false}) =>
+        alerta(id, usuarioId, EstadoAlerta.buscando, metodo, minutos, ubicacion: aDistancia(base, metros, grados), rumbo: (grados * 7) % 360, sinFoto: sinFoto);
+
     alertas.addAll([
-      // Buscando guardia: visibles para guardia@safelink.mx (grd-1)
-      alerta('alt-101', 'usr-3', EstadoAlerta.buscando, MetodoDisparo.agitacion, 1, ubicacion: cerca(ez, 0.0110, 0.0060), rumbo: 40),
-      alerta('alt-102', 'usr-2', EstadoAlerta.buscando, MetodoDisparo.toque, 2, ubicacion: cerca(ez, -0.0020, 0.0015), rumbo: 185),
-      alerta('alt-103', 'usr-5', EstadoAlerta.buscando, MetodoDisparo.mantener, 4, ubicacion: cerca(ez, 0.0140, -0.0120), rumbo: 300, sinFoto: true),
-      alerta('alt-104', 'usr-6', EstadoAlerta.buscando, MetodoDisparo.toque, 0, ubicacion: cerca(ez, 0.0050, 0.0040), rumbo: 90),
-      // Buscando en Cuernavaca (grd-2, grd-6)
-      alerta('alt-105', 'usr-7', EstadoAlerta.buscando, MetodoDisparo.agitacion, 3, ubicacion: cerca(cva, 0.0040, -0.0030), rumbo: 210),
-      // Resto de estados activos
+      // Buscando guardia. Cada guardia en turno tiene 4: un método de cada tipo, una sin foto
+      // y distancias ≤ 500 m, ≤ 1 km, ≤ 3 km y más de 3 km.
+      // grd-1 (guardia@safelink.mx) · Emiliano Zapata
+      buscando('alt-101', 'usr-3', MetodoDisparo.agitacion, 1, ubicacionGrd1, 850, 20),
+      buscando('alt-102', 'usr-2', MetodoDisparo.toque, 2, ubicacionGrd1, 3300, 60),
+      buscando('alt-103', 'usr-5', MetodoDisparo.mantener, 4, ubicacionGrd1, 2200, 300, sinFoto: true),
+      buscando('alt-104', 'usr-6', MetodoDisparo.toque, 0, ubicacionGrd1, 350, 110),
+      // grd-2 (daniela.salgado) · Cuernavaca
+      buscando('alt-105', 'usr-7', MetodoDisparo.agitacion, 3, ubicacionGrd2, 450, 200),
+      buscando('alt-111', 'usr-11', MetodoDisparo.toque, 1, ubicacionGrd2, 900, 80),
+      buscando('alt-112', 'usr-12', MetodoDisparo.mantener, 5, ubicacionGrd2, 2500, 250, sinFoto: true),
+      buscando('alt-113', 'usr-13', MetodoDisparo.toque, 2, ubicacionGrd2, 3600, 315),
+      // grd-3 (jorge.ocampo) · Yautepec
+      buscando('alt-114', 'usr-14', MetodoDisparo.agitacion, 2, ubicacionGrd3, 300, 150),
+      buscando('alt-115', 'usr-15', MetodoDisparo.toque, 0, ubicacionGrd3, 950, 300),
+      buscando('alt-116', 'usr-16', MetodoDisparo.mantener, 6, ubicacionGrd3, 1800, 10, sinFoto: true),
+      buscando('alt-117', 'usr-17', MetodoDisparo.toque, 3, ubicacionGrd3, 3300, 45),
+      // grd-4 (guardia.noche, 22:00–06:00) · Cuautla
+      buscando('alt-118', 'usr-18', MetodoDisparo.agitacion, 1, ubicacionGrd4, 400, 270),
+      buscando('alt-119', 'usr-19', MetodoDisparo.mantener, 4, ubicacionGrd4, 900, 120, sinFoto: true),
+      buscando('alt-120', 'usr-20', MetodoDisparo.toque, 2, ubicacionGrd4, 2600, 200),
+      buscando('alt-121', 'usr-21', MetodoDisparo.toque, 7, ubicacionGrd4, 3400, 225),
+      // grd-6 (paola.estrada) · Tepoztlán
+      buscando('alt-122', 'usr-22', MetodoDisparo.agitacion, 2, ubicacionGrd6, 250, 60),
+      buscando('alt-123', 'usr-23', MetodoDisparo.toque, 1, ubicacionGrd6, 700, 330),
+      buscando('alt-124', 'usr-24', MetodoDisparo.mantener, 3, ubicacionGrd6, 2100, 100, sinFoto: true),
+      buscando('alt-125', 'usr-25', MetodoDisparo.toque, 5, ubicacionGrd6, 3150, 0),
+      // grd-7 (andres.figueroa, fuera de turno) · Xochitepec: las verá al entrar a su turno
+      buscando('alt-126', 'usr-26', MetodoDisparo.agitacion, 2, centroXochitepec, 700, 45),
+      buscando('alt-127', 'usr-27', MetodoDisparo.mantener, 6, centroXochitepec, 1500, 250, sinFoto: true),
+      // Resto de estados activos (cada una en la zona del guardia que la atiende)
       alerta('alt-201', 'usr-8', EstadoAlerta.pendienteUbicacion, MetodoDisparo.toque, 1),
-      alerta('alt-202', 'usr-7', EstadoAlerta.enAtencion, MetodoDisparo.mantener, 9, guardiaId: 'grd-2', aceptada: hace(8), ubicacion: cerca(cva, 0.0100, -0.0080), rumbo: 120, eta: 240),
-      alerta('alt-203', 'usr-3', EstadoAlerta.guardiaEnLugar, MetodoDisparo.toque, 14, guardiaId: 'grd-3', aceptada: hace(13), llegada: hace(3), ubicacion: cerca(ez, 0.0190, -0.0140), rumbo: 15),
-      alerta('alt-204', 'usr-5', EstadoAlerta.sinRespuesta, MetodoDisparo.toque, 6, ubicacion: cerca(ez, 0.0900, 0.0400), rumbo: 220),
+      alerta('alt-202', 'usr-9', EstadoAlerta.enAtencion, MetodoDisparo.mantener, 9, guardiaId: 'grd-2', aceptada: hace(8), ubicacion: aDistancia(ubicacionGrd2, 1600, 320), rumbo: 120, eta: 240),
+      // grd-3 ya está en el lugar: su última ubicación queda dentro de la geocerca.
+      alerta('alt-203', 'usr-10', EstadoAlerta.guardiaEnLugar, MetodoDisparo.toque, 14, guardiaId: 'grd-3', aceptada: hace(13), llegada: hace(3), ubicacion: aDistancia(ubicacionGrd3, 25, 90), rumbo: 15),
+      alerta('alt-204', 'usr-5', EstadoAlerta.sinRespuesta, MetodoDisparo.toque, 6, ubicacion: aDistancia(centroYautepec, 2500, 300), rumbo: 220),
       // Escaladas (las dos razones) y una resuelta por admin
-      alerta('alt-301', 'usr-3', EstadoAlerta.escalada, MetodoDisparo.agitacion, 22, razon: RazonEscalamiento.sinRespuesta, ubicacion: cerca(ez, 0.0300, 0.0250), rumbo: 75),
-      alerta('alt-302', 'usr-2', EstadoAlerta.escalada, MetodoDisparo.toque, 48, guardiaId: 'grd-1', aceptada: hace(47), llegada: hace(38), razon: RazonEscalamiento.sinConfirmacion, ubicacion: cerca(ez, -0.0060, 0.0080), rumbo: 260),
-      alerta('alt-303', 'usr-6', EstadoAlerta.escalada, MetodoDisparo.mantener, 75, guardiaId: 'grd-6', aceptada: hace(73), llegada: hace(60), razon: RazonEscalamiento.sinConfirmacion, ubicacion: cerca(cva, 0.0020, 0.0050), rumbo: 330),
-      alerta('alt-304', 'usr-4', EstadoAlerta.resueltaPorAdmin, MetodoDisparo.toque, 60 * 26, guardiaId: 'grd-1', aceptada: hace(60 * 26 - 1), llegada: hace(60 * 26 - 9), cerrada: hace(60 * 25), razon: RazonEscalamiento.sinConfirmacion, resolucion: Resolucion.falsaAlarma, ubicacion: cerca(ez, 0.0020, -0.0030), rumbo: 0),
+      alerta('alt-301', 'usr-3', EstadoAlerta.escalada, MetodoDisparo.agitacion, 22, razon: RazonEscalamiento.sinRespuesta, ubicacion: aDistancia(centroEmilianoZapata, 2500, 40), rumbo: 75),
+      alerta('alt-302', 'usr-2', EstadoAlerta.escalada, MetodoDisparo.toque, 48, guardiaId: 'grd-1', aceptada: hace(47), llegada: hace(38), razon: RazonEscalamiento.sinConfirmacion, ubicacion: aDistancia(centroEmilianoZapata, 1100, 130), rumbo: 260),
+      alerta('alt-303', 'usr-6', EstadoAlerta.escalada, MetodoDisparo.mantener, 75, guardiaId: 'grd-6', aceptada: hace(73), llegada: hace(60), razon: RazonEscalamiento.sinConfirmacion, ubicacion: aDistancia(centroTepoztlan, 1200, 250), rumbo: 330),
+      alerta('alt-304', 'usr-4', EstadoAlerta.resueltaPorAdmin, MetodoDisparo.toque, 60 * 26, guardiaId: 'grd-1', aceptada: hace(60 * 26 - 1), llegada: hace(60 * 26 - 9), cerrada: hace(60 * 25), razon: RazonEscalamiento.sinConfirmacion, resolucion: Resolucion.falsaAlarma, ubicacion: aDistancia(centroEmilianoZapata, 400, 300), rumbo: 0),
     ]);
   }
 
-  // ── Historial: 80 alertas en los últimos 30 días ─────────────────
-  void _historial() {
-    const guardias = ['grd-1', 'grd-2', 'grd-3', 'grd-1', 'grd-6', 'grd-7', 'grd-4', 'grd-5'];
-    const protegidos = ['usr-1', 'usr-2', 'usr-3', 'usr-5', 'usr-6', 'usr-7', 'usr-8', 'usr-1'];
-    // Más alertas en la noche para que la gráfica por hora tenga forma.
-    const horas = [0, 1, 2, 7, 8, 12, 14, 17, 18, 19, 20, 20, 21, 21, 22, 22, 23, 23];
-    const resoluciones = Resolucion.values;
+  // ── Historial por guardia ─────────────────────────────────────────
+  /// Lo que atendió cada guardia: (días atrás, resultado, método, con foto).
+  /// 0 = hoy · 1 = ayer · 2–7 · 8–30 · más de 30 días (estas con id `alt-v…`).
+  static const _plantilla = <(int, _Resultado, MetodoDisparo, bool)>[
+    (0, _Resultado.cerrada, MetodoDisparo.toque, true),
+    (0, _Resultado.cerrada, MetodoDisparo.agitacion, true),
+    (1, _Resultado.cerrada, MetodoDisparo.mantener, false),
+    (1, _Resultado.escalada, MetodoDisparo.toque, true),
+    (3, _Resultado.cerrada, MetodoDisparo.agitacion, true),
+    (4, _Resultado.cerrada, MetodoDisparo.toque, false),
+    (5, _Resultado.resueltaPorAdmin, MetodoDisparo.mantener, true),
+    (6, _Resultado.cerrada, MetodoDisparo.mantener, true),
+    (9, _Resultado.cerrada, MetodoDisparo.toque, true),
+    (13, _Resultado.cerrada, MetodoDisparo.agitacion, false),
+    (18, _Resultado.resueltaPorAdmin, MetodoDisparo.toque, true),
+    (22, _Resultado.cerrada, MetodoDisparo.mantener, true),
+    (27, _Resultado.cerrada, MetodoDisparo.toque, true),
+    (45, _Resultado.cerrada, MetodoDisparo.agitacion, true),
+    (70, _Resultado.resueltaPorAdmin, MetodoDisparo.mantener, false),
+    (100, _Resultado.cerrada, MetodoDisparo.toque, true),
+  ];
 
-    for (var i = 0; i < 80; i++) {
-      final gid = guardias[i % guardias.length];
-      final perfil = perfiles.firstWhere((p) => p.usuarioId == gid);
-      final centro = perfil.centroCobertura ?? centroEmilianoZapata;
-      final u = _u(protegidos[_azar.nextInt(protegidos.length)]);
-      final dia = ahora.subtract(Duration(days: 1 + _azar.nextInt(29)));
-      final t = DateTime(dia.year, dia.month, dia.day, horas[i % horas.length], _azar.nextInt(60));
-      final aceptar = 20 + _azar.nextInt(160); // segundos
-      final llegar = 240 + _azar.nextInt(600); // segundos
-      final sinFoto = i % 7 == 0;
-      final tipo = i % 10; // 0–7 cerrada · 8 sin confirmación · 9 sin respuesta
-      final sinRespuesta = tipo == 9;
-      final g = sinRespuesta ? null : _u(gid);
+  /// Días de las alertas que nadie aceptó (sin guardia: solo las ve el admin).
+  static const _diasSinRespuesta = [2, 5, 9, 12, 16, 20, 24, 28];
+
+  /// Más alertas en la noche para que la gráfica por hora tenga forma.
+  static const _horas = [0, 1, 2, 7, 8, 12, 14, 17, 18, 19, 20, 20, 21, 21, 22, 22, 23, 23];
+
+  void _historial() {
+    const historicos = ['usr-1', 'usr-2', 'usr-3', 'usr-5', 'usr-6', 'usr-7', 'usr-8', 'usr-1'];
+    final todos = [for (final u in usuarios) if (u.rol == RolUsuario.usuarioProtegido) u.id];
+    var h = 0;
+    var v = 0;
+    var k = 0;
+
+    void agregar(String? guardiaId, PerfilGuardia zona, int dias, _Resultado? resultado, MetodoDisparo metodo, bool conFoto) {
+      final i = k++;
+      final id = dias > 30 ? 'alt-v${(v++).toString().padLeft(2, '0')}' : 'alt-h${(h++).toString().padLeft(2, '0')}';
+      // La mitad con los usuarios de siempre (usr-1 aparece seguido en su historial).
+      final u = _u(i.isEven ? historicos[_azar.nextInt(historicos.length)] : todos[_azar.nextInt(todos.length)]);
+      final g = guardiaId == null ? null : _u(guardiaId);
+      final aceptar = Duration(seconds: 20 + _azar.nextInt(160));
+      final llegar = Duration(seconds: 240 + _azar.nextInt(600));
+      final cierre = switch (resultado) {
+        _Resultado.cerrada => Duration(seconds: 60 + _azar.nextInt(240)),
+        _Resultado.resueltaPorAdmin => Duration(seconds: 1800 + _azar.nextInt(1200)),
+        _Resultado.escalada => null, // sigue en la bandeja del admin
+        null => Duration(seconds: 1800 + _azar.nextInt(1800)), // sin respuesta: la cierra el admin
+      };
+      final duracion = (g == null ? Duration.zero : aceptar + llegar) + (cierre ?? Duration.zero);
+      final t = _momento(dias, i, duracion);
+      final llegada = g == null ? null : t.add(aceptar + llegar);
+      final centro = zona.centroCobertura!;
 
       alertas.add(Alerta(
-        id: 'alt-h${i.toString().padLeft(2, '0')}',
+        id: id,
         usuarioId: u.id,
         nombreUsuario: u.nombre,
         telefonoUsuario: u.telefono,
         guardiaId: g?.id,
         nombreGuardia: g?.nombre,
-        estado: tipo < 8 ? EstadoAlerta.cerrada : EstadoAlerta.resueltaPorAdmin,
-        metodo: MetodoDisparo.values[i % 3],
-        disparadaEn: t,
-        aceptadaEn: sinRespuesta ? null : t.add(Duration(seconds: aceptar)),
-        llegadaEn: sinRespuesta ? null : t.add(Duration(seconds: aceptar + llegar)),
-        cerradaEn: t.add(Duration(seconds: aceptar + llegar + 180 + (tipo < 8 ? 0 : 1800))),
-        razonEscalamiento: switch (tipo) {
-          8 => RazonEscalamiento.sinConfirmacion,
-          9 => RazonEscalamiento.sinRespuesta,
-          _ => null,
+        estado: switch (resultado) {
+          _Resultado.cerrada => EstadoAlerta.cerrada,
+          _Resultado.escalada => EstadoAlerta.escalada,
+          _ => EstadoAlerta.resueltaPorAdmin,
         },
-        resolucion: tipo < 8 ? null : resoluciones[(i ~/ 10) % resoluciones.length],
-        ubicacion: PuntoGeo(centro.lat + (_azar.nextDouble() - 0.5) * 0.05, centro.lng + (_azar.nextDouble() - 0.5) * 0.05),
+        metodo: metodo,
+        disparadaEn: t,
+        aceptadaEn: g == null ? null : t.add(aceptar),
+        llegadaEn: llegada,
+        cerradaEn: cierre == null ? null : t.add(duracion),
+        razonEscalamiento: switch (resultado) {
+          _Resultado.cerrada => null,
+          null => RazonEscalamiento.sinRespuesta,
+          _ => RazonEscalamiento.sinConfirmacion,
+        },
+        resolucion: resultado == _Resultado.resueltaPorAdmin || resultado == null ? Resolucion.values[i % Resolucion.values.length] : null,
+        ubicacion: aDistancia(centro, zona.radioCoberturaMetros! * 0.85 * sqrt(_azar.nextDouble()), _azar.nextInt(360)),
         rumbo: _azar.nextInt(360),
-        fotoUrl: sinFoto ? null : 'https://picsum.photos/seed/slh$i/640/420',
-        evidenciaIncompleta: sinFoto,
+        fotoUrl: conFoto ? 'https://picsum.photos/seed/sl$id/640/420' : null,
+        evidenciaIncompleta: !conFoto,
       ),);
     }
+
+    PerfilGuardia perfil(String id) => perfiles.firstWhere((p) => p.usuarioId == id);
+    const conHistorial = ['grd-1', 'grd-2', 'grd-3', 'grd-4', 'grd-6', 'grd-7'];
+    for (final (n, gid) in conHistorial.indexed) {
+      for (final (dias, resultado, metodo, conFoto) in _plantilla) {
+        // Cada guardia corre sus fechas un día (sin salir de la cubeta) para que no coincidan.
+        agregar(gid, perfil(gid), dias < 2 ? dias : dias + n % 2, resultado, metodo, conFoto);
+      }
+    }
+    // grd-5 (dado de baja) solo trae alertas antiguas; grd-8 no trae ninguna.
+    for (final (dias, resultado, metodo, conFoto) in _plantilla.where((p) => p.$1 > 30)) {
+      agregar('grd-5', perfil('grd-5'), dias, resultado, metodo, conFoto);
+    }
+    for (final (n, dias) in _diasSinRespuesta.indexed) {
+      agregar(null, perfil(conHistorial[n % conHistorial.length]), dias, null, MetodoDisparo.values[n % 3], n % 3 != 0);
+    }
+  }
+
+  /// Cuándo se disparó una alerta de hace [dias] días que tardó [duracion] en cerrarse.
+  /// Nunca queda en el futuro. Las de hoy caen entre medianoche y `ahora − duración`;
+  /// si faltan menos de 30 min desde medianoche no caben y pasan a ayer.
+  DateTime _momento(int dias, int i, Duration duracion) {
+    final medianoche = DateTime(ahora.year, ahora.month, ahora.day);
+    final margen = duracion + const Duration(minutes: 1);
+    if (dias == 0 && ahora.difference(medianoche) >= const Duration(minutes: 30)) {
+      final hueco = ahora.difference(medianoche) - margen;
+      return medianoche.add(hueco * _azar.nextDouble());
+    }
+    final dia = dias == 0 ? 1 : dias;
+    final t = DateTime(ahora.year, ahora.month, ahora.day - dia, _horas[i % _horas.length], _azar.nextInt(60));
+    return t.add(margen).isAfter(ahora) ? ahora.subtract(margen) : t;
   }
 }
+
+/// Resultado de una alerta del historial (`null` en [DatosSemilla._historial] = sin respuesta).
+enum _Resultado { cerrada, escalada, resueltaPorAdmin }

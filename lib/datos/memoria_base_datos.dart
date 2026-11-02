@@ -101,7 +101,23 @@ class MemoriaBaseDatos {
   /// En qué momento observamos cada alerta en su estado actual (A-04).
   final _desde = <String, DateTime>{};
 
-  /// U-08: un guardia acepta, se acerca (baja la ETA) y llega.
+  /// El primer guardia disponible cuya zona contiene [punto] (las zonas no se traslapan).
+  Guardia? guardiaQueCubre(PuntoGeo? punto, DateTime ahora) {
+    if (punto == null) return null;
+    for (final id in perfiles.keys) {
+      final g = guardiaPorId(id);
+      if (g.disponibleA(ahora) && ReglaGeocerca.dentroDeCobertura(g.perfil.centroCobertura!, g.perfil.radioCoberturaMetros!, punto)) {
+        return g;
+      }
+    }
+    return null;
+  }
+
+  /// El usuario tiene una alerta que sigue en curso (nadie tiene dos a la vez).
+  bool tieneAlertaActiva(String usuarioId) => alertas.any((a) => a.usuarioId == usuarioId && a.estado.activa);
+
+  /// U-08: el guardia que cubre la zona acepta, se acerca (baja la ETA) y llega.
+  /// Si ningún guardia disponible la cubre, sigue buscando y A-04 la escala.
   void simularRespuestaGuardia(String alertaId) {
     _timers[alertaId]?.cancel();
     var ticks = 0;
@@ -109,8 +125,8 @@ class MemoriaBaseDatos {
       ticks++;
       final a = alertas.where((x) => x.id == alertaId).firstOrNull;
       if (a == null) return t.cancel();
-      if (a.estado == EstadoAlerta.buscando && ticks >= 2) {
-        final g = guardiaPorId('grd-1');
+      final g = a.estado == EstadoAlerta.buscando && ticks >= 2 ? guardiaQueCubre(a.ubicacion, reloj()) : null;
+      if (g != null) {
         reemplazarAlerta(a.copyWith(
           estado: EstadoAlerta.enAtencion,
           guardiaId: g.usuario.id,
@@ -184,7 +200,7 @@ class MemoriaBaseDatos {
   }
 
   /// G-02: aparece una alerta `buscando` cerca del guardia en sesión.
-  /// Devuelve la alerta creada, o `null` si no hay un guardia disponible.
+  /// Devuelve la alerta creada, o `null` si no hay un guardia disponible o nadie libre para dispararla.
   Alerta? simularNuevaAlerta() {
     final id = usuarioActualId;
     final yoUsuario = id == null ? null : usuarios[id];
@@ -203,9 +219,12 @@ class MemoriaBaseDatos {
     if (!ReglaGeocerca.dentroDeCobertura(g.perfil.centroCobertura!, g.perfil.radioCoberturaMetros!, punto)) {
       return null;
     }
+    // Solo usuarios que podrían disparar: no bloqueados y sin otra alerta en curso.
+    // usr-1 (la cuenta demo del usuario) queda fuera para no cambiarle su pantalla.
     final candidatos = usuarios.values
-        .where((u) => u.rol == RolUsuario.usuarioProtegido && u.id != 'usr-1' && !u.bloqueadoEn(ahora))
+        .where((u) => u.rol == RolUsuario.usuarioProtegido && u.id != 'usr-1' && !u.bloqueadoEn(ahora) && !tieneAlertaActiva(u.id))
         .toList();
+    if (candidatos.isEmpty) return null;
     final u = candidatos[_azar.nextInt(candidatos.length)];
     final metodo = _azar.nextInt(5) == 0 ? MetodoDisparo.agitacion : MetodoDisparo.values[_azar.nextInt(2)];
     final sinFoto = _azar.nextInt(6) == 0;

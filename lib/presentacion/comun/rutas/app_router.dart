@@ -18,7 +18,9 @@ import '../../auth/registro_page.dart';
 import '../../dev/guia_estilos_page.dart';
 import '../../guardia/alerta_entrante_page.dart';
 import '../../guardia/detalle_alerta_page.dart';
+import '../../guardia/guardia_shell.dart';
 import '../../guardia/historial_guardia_page.dart';
+import '../../guardia/inicio_guardia_page.dart';
 import '../../guardia/listado_alertas_page.dart';
 import '../../guardia/navegacion_page.dart';
 import '../../sesion/sesion_view_model.dart';
@@ -88,25 +90,27 @@ GoRouter crearRouter(SesionViewModel sesion, FabricaViewModels f) {
         ],
       ),
 
-      // ── Guardia ──
+      // ── Guardia (barra inferior) ──
+      StatefulShellRoute.indexedStack(
+        builder: (_, __, shell) => GuardiaShell(navigationShell: shell),
+        branches: [
+          StatefulShellBranch(routes: [GoRoute(path: AppRoutes.guardHome, builder: (_, __) => InicioGuardiaPage(viewModel: f.inicioGuardia()))]),
+          StatefulShellBranch(routes: [GoRoute(path: AppRoutes.guardAlerts, builder: (_, __) => ListadoAlertasPage(viewModel: f.listadoAlertas()))]),
+          StatefulShellBranch(routes: [GoRoute(path: AppRoutes.guardHistory, builder: (_, __) => HistorialGuardiaPage(viewModel: f.historialGuardia()))]),
+        ],
+      ),
+      // Flujo de atención del guardia: hermanas del shell, a pantalla completa sin la barra.
       GoRoute(
-        path: AppRoutes.guardHome,
-        builder: (_, __) => ListadoAlertasPage(viewModel: f.listadoAlertas()),
+        path: '/guard/incoming/:id',
+        builder: (_, s) => AlertaEntrantePage(viewModel: f.alertaEntrante(s.pathParameters['id']!)),
+      ),
+      GoRoute(
+        path: '/guard/alerts/:id',
+        builder: (_, s) => DetalleAlertaPage(viewModel: f.detalleAlerta(s.pathParameters['id']!)),
         routes: [
-          GoRoute(path: 'history', builder: (_, __) => HistorialGuardiaPage(viewModel: f.historialGuardia())),
           GoRoute(
-            path: 'incoming/:id',
-            builder: (_, s) => AlertaEntrantePage(viewModel: f.alertaEntrante(s.pathParameters['id']!)),
-          ),
-          GoRoute(
-            path: 'alerts/:id',
-            builder: (_, s) => DetalleAlertaPage(viewModel: f.detalleAlerta(s.pathParameters['id']!)),
-            routes: [
-              GoRoute(
-                path: 'navigate',
-                builder: (_, s) => NavegacionPage(viewModel: f.navegacion(s.pathParameters['id']!)),
-              ),
-            ],
+            path: 'navigate',
+            builder: (_, s) => NavegacionPage(viewModel: f.navegacion(s.pathParameters['id']!)),
           ),
         ],
       ),
