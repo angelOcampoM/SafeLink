@@ -28,6 +28,21 @@ void main() {
     vm.dispose();
   });
 
+  test('A-02: la búsqueda ignora mayúsculas y acentos', () async {
+    final vm = GuardiasViewModel(MemoriaAdminRepository(db), reloj: () => ahoraPrueba);
+    await vm.cargar();
+
+    // "Carlos Hernández López": se encuentra escriba como escriba el admin.
+    for (final consulta in ['hernandez', 'HERNÁNDEZ', 'Hernandez', 'lopez']) {
+      await vm.buscar(consulta);
+      expect(vm.estado.datos!.map((g) => g.usuario.id), contains('grd-1'), reason: 'con "$consulta"');
+    }
+
+    await vm.buscar('rodriguez-que-no-existe');
+    expect(vm.estado, isA<Vacio<List<Guardia>>>(), reason: 'sin coincidencias queda el estado vacío');
+    vm.dispose();
+  });
+
   test('el chip dice si está en turno, fuera de turno o dado de baja', () async {
     final vm = GuardiasViewModel(MemoriaAdminRepository(db), reloj: () => ahoraPrueba);
     await vm.cargar();

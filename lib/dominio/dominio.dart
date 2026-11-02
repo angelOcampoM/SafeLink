@@ -20,4 +20,5 @@ export 'regla_prioridad.dart';
 export 'regla_registro.dart';
 export 'regla_tiempo_turno.dart';
 export 'regla_turno.dart';
+export 'texto_busqueda.dart';
 export 'usuario.dart';
