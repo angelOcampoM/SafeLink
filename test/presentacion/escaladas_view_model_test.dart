@@ -18,8 +18,16 @@ void main() {
     await Future<void>.delayed(Duration.zero);
 
     final lista = vm.estado.datos!;
-    expect(lista.map((a) => a.id), ['alt-303', 'alt-302', 'alt-301']);
+    // Se afirma la propiedad, no una lista fija de ids: la semilla crece y la
+    // bandeja debe seguir cumpliendo lo mismo (solo escaladas, más antiguas primero).
+    expect(lista, isNotEmpty);
     expect(lista.every((a) => a.estado == EstadoAlerta.escalada), isTrue);
+    expect(
+      lista.map((a) => a.disparadaEn).toList(),
+      orderedEquals([...lista.map((a) => a.disparadaEn)]..sort()),
+      reason: 'las más antiguas primero',
+    );
+    expect(lista.map((a) => a.id), containsAll(['alt-301', 'alt-302', 'alt-303']));
 
     vm.dispose();
     db.dispose();

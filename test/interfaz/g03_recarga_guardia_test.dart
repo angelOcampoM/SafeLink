@@ -2,6 +2,7 @@
 // hay UN solo RefreshIndicator, y al arrastrar se ve un solo spinner que desaparece al terminar.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:safelink/datos/memoria_sesion_guardada.dart';
 import 'package:safelink/datos/alerta_guardia_repository.dart';
 import 'package:safelink/dominio/dominio.dart';
 import 'package:safelink/presentacion/comun/tema/theme.dart';
@@ -91,7 +92,7 @@ Alerta atendida(String id) => Alerta(
 void main() {
   setUpAll(AppTypography.useSystemFontForTests);
 
-  final sesion = SesionViewModel(AuthEspia());
+  final sesion = SesionViewModel(AuthEspia(), MemoriaSesionGuardada());
 
   Future<void> montar(WidgetTester tester, Widget pagina, {bool esperarCarga = true}) async {
     tester.view.physicalSize = const Size(1800, 3600);
