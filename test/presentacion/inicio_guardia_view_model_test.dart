@@ -2,6 +2,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:safelink/datos/memoria_sesion_guardada.dart';
 import 'package:safelink/dominio/dominio.dart';
 import 'package:safelink/presentacion/comun/estado_vista.dart';
 import 'package:safelink/presentacion/guardia/inicio_guardia_view_model.dart';
@@ -48,7 +49,7 @@ void main() {
   ];
 
   InicioGuardiaViewModel crear(_InicioEspia repo, {DateTime? ahora}) =>
-      InicioGuardiaViewModel(repo, SesionViewModel(AuthEspia()), reloj: () => ahora ?? ahoraPrueba);
+      InicioGuardiaViewModel(repo, SesionViewModel(AuthEspia(), MemoriaSesionGuardada()), reloj: () => ahora ?? ahoraPrueba);
 
   test('en turno: tiempo restante, última alerta y métricas de Hoy', () async {
     final repo = _InicioEspia(historial: historial);

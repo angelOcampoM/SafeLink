@@ -2,6 +2,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:safelink/datos/memoria_sesion_guardada.dart';
 import 'package:safelink/dominio/dominio.dart';
 import 'package:safelink/presentacion/guardia/listado_alertas_view_model.dart';
 import 'package:safelink/presentacion/sesion/sesion_view_model.dart';
@@ -30,7 +31,7 @@ void main() {
 
   setUp(() async {
     repo = _GuardiaConStream();
-    vm = ListadoAlertasViewModel(repo, SesionViewModel(AuthEspia()), reloj: () => ahoraPrueba);
+    vm = ListadoAlertasViewModel(repo, SesionViewModel(AuthEspia(), MemoriaSesionGuardada()), reloj: () => ahoraPrueba);
     await vm.iniciar();
   });
 

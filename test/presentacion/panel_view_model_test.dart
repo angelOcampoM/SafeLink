@@ -2,6 +2,7 @@
 // distribución por zona y desbloqueo. Memoria para el cálculo real; espía para
 // las llamadas al repositorio y sus errores.
 import 'package:flutter_test/flutter_test.dart';
+import 'package:safelink/datos/memoria_sesion_guardada.dart';
 import 'package:safelink/datos/memoria_admin_repository.dart';
 import 'package:safelink/datos/memoria_base_datos.dart';
 import 'package:safelink/dominio/dominio.dart';
@@ -14,7 +15,7 @@ import 'espias.dart';
 void main() {
   test('la distribución por zona agrupa por el guardia que atendió', () async {
     final db = MemoriaBaseDatos(reloj: () => ahoraPrueba, latencia: Duration.zero);
-    final vm = PanelViewModel(MemoriaAdminRepository(db), SesionViewModel(AuthEspia()), reloj: () => ahoraPrueba);
+    final vm = PanelViewModel(MemoriaAdminRepository(db), SesionViewModel(AuthEspia(), MemoriaSesionGuardada()), reloj: () => ahoraPrueba);
 
     await vm.cargar();
 
@@ -30,7 +31,7 @@ void main() {
 
   test('el periodo por defecto son 30 días y cada cambio se pasa al repositorio', () async {
     final espia = AdminEspia(guardia: guardiaPrueba());
-    final vm = PanelViewModel(espia, SesionViewModel(AuthEspia()), reloj: () => ahoraPrueba);
+    final vm = PanelViewModel(espia, SesionViewModel(AuthEspia(), MemoriaSesionGuardada()), reloj: () => ahoraPrueba);
 
     await vm.cargar();
     expect(vm.periodo, PeriodoPanel.dias30);
@@ -47,7 +48,7 @@ void main() {
 
   test('el rango personalizado fija desde/hasta y sale de los chips', () async {
     final espia = AdminEspia(guardia: guardiaPrueba());
-    final vm = PanelViewModel(espia, SesionViewModel(AuthEspia()), reloj: () => ahoraPrueba);
+    final vm = PanelViewModel(espia, SesionViewModel(AuthEspia(), MemoriaSesionGuardada()), reloj: () => ahoraPrueba);
     await vm.cargar();
 
     await vm.cambiarRango(DateTime(2026, 10, 1), DateTime(2026, 10, 15));
@@ -66,7 +67,7 @@ void main() {
   });
 
   test('con cero alertas en el periodo queda Vacio', () async {
-    final vm = PanelViewModel(AdminEspia(guardia: guardiaPrueba()), SesionViewModel(AuthEspia()), reloj: () => ahoraPrueba);
+    final vm = PanelViewModel(AdminEspia(guardia: guardiaPrueba()), SesionViewModel(AuthEspia(), MemoriaSesionGuardada()), reloj: () => ahoraPrueba);
 
     await vm.cargar();
 
@@ -76,7 +77,7 @@ void main() {
 
   test('la falla al cargar métricas se vuelve ErrorVista', () async {
     final espia = AdminEspia(guardia: guardiaPrueba(), falla: const ServicioNoDisponibleError());
-    final vm = PanelViewModel(espia, SesionViewModel(AuthEspia()), reloj: () => ahoraPrueba);
+    final vm = PanelViewModel(espia, SesionViewModel(AuthEspia(), MemoriaSesionGuardada()), reloj: () => ahoraPrueba);
 
     await vm.cargar();
 
@@ -86,7 +87,7 @@ void main() {
 
   test('desbloquear retira el bloqueo y deja mensaje', () async {
     final espia = AdminEspia(guardia: guardiaPrueba());
-    final vm = PanelViewModel(espia, SesionViewModel(AuthEspia()), reloj: () => ahoraPrueba);
+    final vm = PanelViewModel(espia, SesionViewModel(AuthEspia(), MemoriaSesionGuardada()), reloj: () => ahoraPrueba);
     await vm.cargar();
     final u = usuarioPrueba(bloqueadoHasta: ahoraPrueba.add(const Duration(days: 1)));
 
