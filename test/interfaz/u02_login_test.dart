@@ -58,4 +58,32 @@ void main() {
     expect(find.text('Toca o mantén presionado'), findsOneWidget);
     expect(find.text('Permisos para protegerte'), findsNothing);
   });
+
+  // ── G-01 · La pantalla de inicio de sesión y el rechazo de accesos ──────
+
+  testWidgets('G-01: el login no ofrece registrarse como guardia ni elegir rol', (tester) async {
+    await tester.pumpWidget(app());
+    await tester.pumpAndSettle();
+
+    // Lo único que se puede crear desde aquí es una cuenta de usuario protegido.
+    expect(find.text('Crear cuenta'), findsOneWidget);
+    expect(find.textContaining('Solo los usuarios protegidos'), findsOneWidget);
+    expect(find.textContaining('guardia', findRichText: true), findsNothing, reason: 'no hay alta de guardias');
+    expect(find.byType(DropdownButton<String>), findsNothing, reason: 'no hay selector de rol');
+    expect(find.text('Rol'), findsNothing);
+  });
+
+  testWidgets('G-01: un guardia dado de baja recibe un error y no entra', (tester) async {
+    await tester.pumpWidget(app());
+    await tester.pumpAndSettle();
+
+    // luis.nava@safelink.mx existe en la semilla pero está dado de baja.
+    await tester.enterText(find.byType(TextFormField).at(0), 'luis.nava@safelink.mx');
+    await tester.enterText(find.byType(TextFormField).at(1), 'SafeLink1');
+    await tester.tap(find.text('Iniciar sesión'));
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(find.text('Correo o contraseña incorrectos'), findsOneWidget);
+    expect(find.text('Bienvenido de nuevo'), findsOneWidget, reason: 'sigue en el login');
+  });
 }
