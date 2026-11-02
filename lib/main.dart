@@ -39,6 +39,7 @@ import 'presentacion/comun/tema/theme.dart';
 import 'presentacion/sesion/sesion_view_model.dart';
 import 'presentacion/usuario/captura_evidencia.dart';
 import 'presentacion/usuario/disparo_rapido.dart';
+import 'presentacion/usuario/seguimiento_ubicacion.dart';
 
 const usarNube = false; // cámbialo a true y haz hot restart.
 
@@ -86,6 +87,9 @@ class Dependencias {
       alertas: alertasUsuario,
       evidencia: CapturaEvidencia(camara: this.camara, ubicacion: this.ubicacion, brujula: this.brujula),
     );
+    // U-07: la ubicación viaja mientras la alerta esté activa, sin depender
+    // de qué pantalla tenga el usuario abierta.
+    seguimiento = SeguimientoUbicacion(alertas: alertasUsuario, ubicacion: this.ubicacion, sesion: sesion);
     fabrica = FabricaViewModels(
       sesion: sesion,
       alertasUsuario: alertasUsuario,
@@ -151,6 +155,9 @@ class Dependencias {
   final ServicioDisparoRapido servicioDisparoRapido;
   final Vibrador vibrador;
   late final DisparoRapido disparoRapido;
+
+  /// U-07: transmisión de la ubicación mientras dura la alerta.
+  late final SeguimientoUbicacion seguimiento;
   final void Function() iniciarSimulaciones;
   late final SesionViewModel sesion;
   late final FabricaViewModels fabrica;
@@ -175,6 +182,7 @@ class _SafeLinkAppState extends State<SafeLinkApp> {
   @override
   void initState() {
     super.initState();
+    widget.dependencias.seguimiento.iniciar(); // U-07
     if (widget.simular) widget.dependencias.iniciarSimulaciones();
   }
 
