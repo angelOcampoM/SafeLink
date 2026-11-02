@@ -64,7 +64,7 @@ void main() {
     );
 
     await ir(tester, AppRoutes.guardAlertDetail(sinFoto.id));
-    expect(find.text('Evidencia incompleta: sin foto'), findsOneWidget);
+    expect(find.text('Fotografía no disponible'), findsOneWidget);
     expect(deps.sesion.haySesion, isTrue);
   });
 

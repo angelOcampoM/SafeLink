@@ -3,14 +3,13 @@
 Cada caso del esquema de pruebas del equipo, con la prueba automatizada que lo
 cubre. **83 casos: 29 de Usuario, 27 de Guardia y 27 de Administrador.**
 
-Estado al 01/11/2026 · rama `feat/pruebas-tres-roles` · **307 pruebas pasan**,
+Estado al 02/11/2026 · rama `feat/pruebas-tres-roles` · **309 pruebas pasan**,
 `flutter analyze` sin incidencias.
 
 | | Significado |
 |---|---|
 | ✅ | Cubierto por una prueba automatizada que corre en `flutter test` |
 | 📱 | Solo verificable en dispositivo físico: **no automatizable hoy** |
-| ⚠️ | El caso del plan ya no aplica por una decisión del equipo |
 
 ---
 
@@ -50,11 +49,11 @@ Estado al 01/11/2026 · rama `feat/pruebas-tres-roles` · **307 pruebas pasan**,
 
 ---
 
-## Guardia de respuesta — 27 casos · 22 cubiertos · 4 📱 · 1 ⚠️
+## Guardia de respuesta — 27 casos · 23 cubiertos · 4 📱
 
 | Historia | Qué comprueba | Tipo | | Prueba |
 |---|---|---|---|---|
-| G-01 | Solicitud de permisos en el primer inicio | Interfaz | ⚠️ | **No aplica.** El equipo decidió que el guardia no ve pantalla de permisos |
+| G-01 | Pantalla de inicio de sesión y rechazo de accesos | Interfaz | ✅ | `u02_login_test` |
 | G-01 | Redirección según el rol | Unitaria | ✅ | `redireccion_rol_test` |
 | G-01 | Acceso solo con cuentas creadas por el administrador | Integración | ✅ | `editar_guardia_view_model_test`, `contrato_repositorios_test` |
 | G-02 | Filtro de guardias que reciben la notificación | Unitaria | ✅ | `alertas_por_guardia_test` |
@@ -129,8 +128,14 @@ dispositivo*, ejecutarlos una vez cuando haya build instalable y adjuntar la
 captura como evidencia. Si se dejan como pruebas automatizadas, van a quedar
 en rojo para siempre sin que eso signifique nada.
 
-## El caso que ya no aplica
+## Historial de decisiones
 
-G-01 pedía una pantalla de permisos para el guardia. **El equipo decidió el
-01/11/2026 que el guardia no la ve**: la explicación de permisos es solo del
-usuario protegido. Hay que retirar esa fila del esquema.
+- **01/11/2026 · G-01.** El equipo decidió que el guardia no ve pantalla de
+  permisos. La fila del esquema se reemplazó por "La pantalla de inicio de
+  sesión y el rechazo de accesos", que sí describe lo que la app hace.
+- **02/11/2026 · G-04.** El esquema pide los avisos literales "Fotografía no
+  disponible" y "Rumbo no disponible". La app decía "Evidencia incompleta: sin
+  foto" y omitía la fila del rumbo; se alineó el código al esquema.
+- **02/11/2026 · A-06.** El esquema pide que un periodo sin alertas muestre las
+  métricas en cero. El panel mostraba solo un aviso; ahora pinta las tarjetas
+  en cero además del aviso.

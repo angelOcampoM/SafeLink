@@ -31,7 +31,7 @@ class FotoEvidencia extends StatelessWidget {
         children: [
           const Icon(Icons.no_photography_outlined, color: AppColors.textMuted, size: AppSizes.iconLg),
           AppSpacing.gapXs,
-          Text(url == null ? 'Evidencia incompleta: sin foto' : 'No se pudo cargar la foto', style: context.text.bodyMedium),
+          Text(url == null ? 'Fotografía no disponible' : 'No se pudo cargar la foto', style: context.text.bodyMedium),
         ],
       ),
     );
@@ -52,7 +52,8 @@ class FotoEvidencia extends StatelessWidget {
   }
 }
 
-/// Mapa simulado con el guardia y el usuario (con el cono de rumbo de la cámara).
+/// Mapa simulado con el guardia y el usuario. Si la alerta no trae rumbo no se
+/// dibuja el cono: no hay hacia dónde apuntarlo (G-04).
 class MapaDetalleAlerta extends StatelessWidget {
   const MapaDetalleAlerta({super.key, this.rumbo});
   final int? rumbo;
@@ -85,8 +86,13 @@ class TarjetaDatosAlerta extends StatelessWidget {
           InfoRow(icon: Icons.schedule_rounded, label: 'Hora', value: '${Fmt.time(a.disparadaEn)} · ${Fmt.ago(a.disparadaEn, ahora)}'),
           if (distancia != null)
             InfoRow(icon: Icons.near_me_outlined, label: 'Distancia', value: Fmt.distance(distancia!), valueColor: AppColors.info),
-          if (a.rumbo != null)
-            InfoRow(icon: Icons.explore_outlined, label: 'Rumbo de la cámara', value: '${a.rumbo}° ${ReglaGeocerca.puntoCardinal(a.rumbo!)}'),
+          InfoRow(
+            icon: Icons.explore_outlined,
+            label: 'Rumbo de la cámara',
+            // G-04: sin magnetómetro el guardia debe saberlo, no ver una fila menos.
+            value: a.rumbo == null ? 'Rumbo no disponible' : '${a.rumbo}° ${ReglaGeocerca.puntoCardinal(a.rumbo!)}',
+            valueColor: a.rumbo == null ? AppColors.textMuted : null,
+          ),
           InfoRow(icon: a.metodo.style.icon, label: 'Método', value: a.metodo.etiqueta),
         ],
       ),

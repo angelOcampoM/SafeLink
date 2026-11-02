@@ -112,7 +112,16 @@ class _Metricas extends StatelessWidget {
   Widget build(BuildContext context) {
     return switch (vm.metricas) {
       Cargando() => const SizedBox(height: 240, child: LoadingView()),
-      Vacio() => const SlBanner(message: 'No hubo alertas en este periodo.'),
+      // A-06: un periodo sin alertas muestra las métricas en cero, no un hueco.
+      // El aviso acompaña a las tarjetas para que se note que sí cargó.
+      Vacio() => const Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SlBanner(message: 'No hubo alertas en este periodo.'),
+            AppSpacing.gapMd,
+            _Tarjetas(m: MetricasGenerales.vacias),
+          ],
+        ),
       ErrorVista(:final mensaje) => SlBanner(
           type: SlBannerType.danger,
           message: mensaje,
@@ -121,22 +130,7 @@ class _Metricas extends StatelessWidget {
       Listo(datos: final m) => Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: AppSpacing.sm,
-              crossAxisSpacing: AppSpacing.sm,
-              childAspectRatio: 1.25,
-              children: [
-                MetricTile(label: 'Alertas totales', value: '${m.totalAlertas}', icon: Icons.notifications_rounded),
-                MetricTile(label: 'Aceptación promedio', value: Fmt.duration(m.promedioAceptacionSeg), icon: Icons.timer_outlined),
-                MetricTile(label: 'Llegada promedio', value: Fmt.duration(m.promedioLlegadaSeg), icon: Icons.directions_run_rounded, color: AppColors.success),
-                MetricTile(label: 'Sin respuesta', value: Fmt.percent(m.tasaSinRespuesta), icon: Icons.timer_off_outlined, color: AppColors.warning),
-              ],
-            ),
-            AppSpacing.gapSm,
-            MetricTile(label: 'Cerradas con confirmación', value: Fmt.percent(m.tasaCierreConfirmado), icon: Icons.verified_rounded, color: AppColors.success),
+            _Tarjetas(m: m),
             AppSpacing.gapLg,
             const SectionHeader('Alertas por hora'),
             SlCard(child: _GraficaHoras(valores: m.alertasPorHora)),
@@ -189,6 +183,37 @@ class _Bloqueados extends StatelessWidget {
           ],
         ),
     };
+  }
+}
+
+/// Las cinco tarjetas de A-06. Se pintan igual con datos y en cero.
+class _Tarjetas extends StatelessWidget {
+  const _Tarjetas({required this.m});
+  final MetricasGenerales m;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: AppSpacing.sm,
+          crossAxisSpacing: AppSpacing.sm,
+          childAspectRatio: 1.25,
+          children: [
+            MetricTile(label: 'Alertas totales', value: '${m.totalAlertas}', icon: Icons.notifications_rounded),
+            MetricTile(label: 'Aceptación promedio', value: Fmt.duration(m.promedioAceptacionSeg), icon: Icons.timer_outlined),
+            MetricTile(label: 'Llegada promedio', value: Fmt.duration(m.promedioLlegadaSeg), icon: Icons.directions_run_rounded, color: AppColors.success),
+            MetricTile(label: 'Sin respuesta', value: Fmt.percent(m.tasaSinRespuesta), icon: Icons.timer_off_outlined, color: AppColors.warning),
+          ],
+        ),
+        AppSpacing.gapSm,
+        MetricTile(label: 'Cerradas con confirmación', value: Fmt.percent(m.tasaCierreConfirmado), icon: Icons.verified_rounded, color: AppColors.success),
+      ],
+    );
   }
 }
 

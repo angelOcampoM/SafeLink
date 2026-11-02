@@ -10,7 +10,11 @@ import 'package:safelink/datos/memoria_alerta_usuario_repository.dart';
 import 'package:safelink/datos/memoria_auth_repository.dart';
 import 'package:safelink/datos/memoria_base_datos.dart';
 import 'package:safelink/main.dart';
+import 'package:safelink/datos/memoria_sesion_guardada.dart';
+import 'package:safelink/presentacion/admin/panel_page.dart';
+import 'package:safelink/presentacion/admin/panel_view_model.dart';
 import 'package:safelink/presentacion/comun/rutas/app_routes.dart';
+import 'package:safelink/presentacion/sesion/sesion_view_model.dart';
 import 'package:safelink/presentacion/comun/tema/theme.dart';
 import 'package:safelink/presentacion/comun/widgets/widgets.dart';
 
@@ -58,16 +62,31 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('A-06: un periodo sin alertas muestra el aviso, no un error', (tester) async {
-    final deps = await abrirComoAdmin(tester);
+  testWidgets('A-06: un periodo sin alertas muestra las métricas en cero', (tester) async {
+    tester.view.physicalSize = const Size(1800, 3200);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
 
-    // Un rango en el futuro no tiene ninguna alerta registrada.
-    final futuro = DateTime.now().add(const Duration(days: 400));
-    await deps.fabrica.panel().cambiarRango(futuro, futuro.add(const Duration(days: 1)));
+    final db = MemoriaBaseDatos(latencia: Duration.zero);
+    addTearDown(db.dispose);
+    final sesion = SesionViewModel(MemoriaAuthRepository(db), MemoriaSesionGuardada());
+    await sesion.iniciarSesion('admin@safelink.mx', 'SafeLink1');
+
+    // Un reloj un año adelante deja el periodo sin ninguna alerta registrada.
+    final vm = PanelViewModel(
+      MemoriaAdminRepository(db),
+      sesion,
+      reloj: () => DateTime.now().add(const Duration(days: 365)),
+    );
+    // PanelPage se encarga de desecharlo al desmontarse.
+
+    await tester.pumpWidget(MaterialApp(theme: AppTheme.dark(), home: PanelPage(viewModel: vm)));
     await bombear(tester);
 
-    await ir(tester, AppRoutes.adminDashboard);
-    expect(tester.takeException(), isNull, reason: 'sin datos no debe reventar');
+    expect(find.text('Alertas totales'), findsOneWidget);
+    expect(find.text('0'), findsWidgets, reason: 'las tarjetas se muestran en cero');
+    expect(find.text('Cerradas con confirmación'), findsOneWidget);
+    expect(tester.takeException(), isNull, reason: 'sin datos no debe haber errores en pantalla');
   });
 
   // ── A-01 · Alta de guardias ─────────────────────────────────────────────
