@@ -8,10 +8,13 @@ import 'package:go_router/go_router.dart';
 import '../../../dominio/enums.dart';
 import '../../admin/admin_shell.dart';
 import '../../admin/cobertura_guardia_page.dart';
+import '../../admin/detalle_alerta_admin_page.dart';
+import '../../admin/detalle_escalada_page.dart';
 import '../../admin/editar_guardia_page.dart';
 import '../../admin/escaladas_page.dart';
 import '../../admin/guardias_page.dart';
 import '../../admin/historial_page.dart';
+import '../../admin/metricas_guardia_page.dart';
 import '../../admin/panel_page.dart';
 import '../../auth/login_page.dart';
 import '../../auth/registro_page.dart';
@@ -131,6 +134,10 @@ GoRouter crearRouter(SesionViewModel sesion, FabricaViewModels f) {
                     path: ':id/coverage',
                     builder: (_, s) => CoberturaGuardiaPage(viewModel: f.coberturaGuardia(s.pathParameters['id']!)),
                   ),
+                  GoRoute(
+                    path: ':id/metrics',
+                    builder: (_, s) => MetricasGuardiaPage(viewModel: f.metricasGuardia(s.pathParameters['id']!)),
+                  ),
                 ],
               ),
             ],
@@ -138,6 +145,20 @@ GoRouter crearRouter(SesionViewModel sesion, FabricaViewModels f) {
           StatefulShellBranch(routes: [GoRoute(path: AppRoutes.adminEscalated, builder: (_, __) => EscaladasPage(viewModel: f.escaladas()))]),
           StatefulShellBranch(routes: [GoRoute(path: AppRoutes.adminHistory, builder: (_, __) => HistorialPage(viewModel: f.historial()))]),
         ],
+      ),
+
+      // Detalle de una alerta del historial del admin: pantalla completa, sin
+      // barra inferior, fuera del shell (se abre con push desde las listas).
+      GoRoute(
+        path: '/admin/alerts/:id',
+        builder: (_, s) => DetalleAlertaAdminPage(viewModel: f.detalleAlertaAdmin(s.pathParameters['id']!)),
+      ),
+
+      // Detalle de una alerta escalada (A-04): pantalla completa con nota y
+      // confirmación de revisión antes de resolver.
+      GoRoute(
+        path: '/admin/escalated/:id',
+        builder: (_, s) => DetalleEscaladaPage(viewModel: f.detalleEscalada(s.pathParameters['id']!)),
       ),
     ],
   );

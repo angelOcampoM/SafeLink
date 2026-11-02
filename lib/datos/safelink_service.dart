@@ -210,6 +210,7 @@ class SafeLinkService {
             nombre: c['name']! as String,
             correo: c['email']! as String,
             telefono: c['phone']! as String,
+            contrasena: c['password']! as String,
           ),
         ),
       ),
@@ -240,6 +241,7 @@ class SafeLinkService {
             finTurno: c['shiftEnd']! as String,
             centro: punto(c['center'])!,
             radioMetros: c['radiusMeters']! as int,
+            zona: (c['zone'] as String?) ?? '',
           ),
         ),
       ),
@@ -247,7 +249,11 @@ class SafeLinkService {
         'POST',
         '/admin/alerts/:id/resolve',
         (p, c, _) async => AlertaJson.aJson(
-          await _admin.resolverAlerta(p['id']!, CodigosJson.desde(CodigosJson.resolucion, c['resolution'])),
+          await _admin.resolverAlerta(
+            p['id']!,
+            CodigosJson.desde(CodigosJson.resolucion, c['resolution']),
+            nota: (c['adminNote'] as String?) ?? '',
+          ),
         ),
       ),
       _Ruta(
@@ -269,6 +275,11 @@ class SafeLinkService {
         (p, _, q) async => MetricasGuardiaJson.aJson(
           await _admin.obtenerMetricasGuardia(p['id']!, desde: fecha(q['from']), hasta: fecha(q['to'])),
         ),
+      ),
+      _Ruta(
+        'GET',
+        '/admin/users',
+        (_, __, ___) async => [for (final u in await _admin.obtenerUsuarios()) UsuarioJson.aJson(u)],
       ),
       _Ruta(
         'GET',

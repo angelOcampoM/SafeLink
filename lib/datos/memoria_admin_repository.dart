@@ -35,9 +35,11 @@ class MemoriaAdminRepository implements AdminRepository {
   }
 
   @override
-  Future<Guardia> crearGuardia({required String nombre, required String correo, required String telefono}) async {
+  Future<Guardia> crearGuardia({required String nombre, required String correo, required String telefono, required String contrasena}) async {
     await _db.esperar();
     if (_correoOcupado(correo)) throw const CorreoRegistradoError();
+    final motivo = ReglaRegistro.contrasena(contrasena);
+    if (motivo != null) throw EstadoInvalidoError(motivo);
     final id = _db.nuevoId('grd');
     _db.usuarios[id] = Usuario(
       id: id,
@@ -47,7 +49,7 @@ class MemoriaAdminRepository implements AdminRepository {
       rol: RolUsuario.guardia,
       creadoEn: _db.reloj(),
     );
-    _db.contrasenas[id] = 'SafeLink1';
+    _db.contrasenas[id] = contrasena;
     _db.perfiles[id] = PerfilGuardia(
       usuarioId: id,
       inicioTurno: '08:00',
@@ -83,6 +85,7 @@ class MemoriaAdminRepository implements AdminRepository {
     required String finTurno,
     required PuntoGeo centro,
     required int radioMetros,
+    required String zona,
   }) async {
     await _db.esperar();
     final motivo = ReglaTurno.validar(inicioTurno, finTurno) ??
@@ -90,13 +93,15 @@ class MemoriaAdminRepository implements AdminRepository {
           radioMetros,
           minimo: _db.config.radioCoberturaMinMetros,
           maximo: _db.config.radioCoberturaMaxMetros,
-        );
+        ) ??
+        ReglaGeocerca.validarZona(zona);
     if (motivo != null) throw EstadoInvalidoError(motivo);
     _db.perfiles[guardiaId] = _db.guardiaPorId(guardiaId).perfil.copyWith(
           inicioTurno: inicioTurno,
           finTurno: finTurno,
           centroCobertura: centro,
           radioCoberturaMetros: radioMetros,
+          zona: zona.trim(),
         );
     _db.avisar();
     return _db.guardiaPorId(guardiaId);
@@ -109,13 +114,13 @@ class MemoriaAdminRepository implements AdminRepository {
       );
 
   @override
-  Future<Alerta> resolverAlerta(String alertaId, Resolucion resolucion) async {
+  Future<Alerta> resolverAlerta(String alertaId, Resolucion resolucion, {required String nota}) async {
     await _db.esperar();
     final a = _db.alertaPorId(alertaId);
-    final motivo = ReglaAlerta.validarResolucion(a);
+    final motivo = ReglaAlerta.validarResolucion(a) ?? ReglaAlerta.nota(nota);
     if (motivo != null) throw EstadoInvalidoError(motivo);
     final ahora = _db.reloj();
-    final resuelta = a.copyWith(estado: EstadoAlerta.resueltaPorAdmin, resolucion: resolucion, cerradaEn: ahora);
+    final resuelta = a.copyWith(estado: EstadoAlerta.resueltaPorAdmin, resolucion: resolucion, notaAdmin: nota.trim(), cerradaEn: ahora);
     if (resolucion == Resolucion.falsaAlarma) {
       _db.usuarios[a.usuarioId] = ReglaAlerta.aplicarFalsaAlarma(
         _db.usuarios[a.usuarioId]!,
@@ -137,13 +142,26 @@ class MemoriaAdminRepository implements AdminRepository {
   @override
   Future<MetricasGenerales> obtenerMetricas({DateTime? desde, DateTime? hasta}) async {
     final lista = await obtenerHistorial(FiltroHistorial(desde: desde, hasta: hasta));
-    return ReglaMetricas.generales(lista);
+    return ReglaMetricas.generales(lista, zonasPorGuardia: _zonas());
   }
+
+  /// Zona de cobertura actual de cada guardia (A-06).
+  Map<String, String> _zonas() => {
+        for (final e in _db.perfiles.entries)
+          if (e.value.zona != null && e.value.zona!.trim().isNotEmpty) e.key: e.value.zona!.trim(),
+      };
 
   @override
   Future<MetricasGuardia> obtenerMetricasGuardia(String guardiaId, {DateTime? desde, DateTime? hasta}) async {
     final lista = await obtenerHistorial(FiltroHistorial(desde: desde, hasta: hasta, guardiaId: guardiaId));
     return ReglaMetricas.deGuardia(guardiaId, lista);
+  }
+
+  @override
+  Future<List<Usuario>> obtenerUsuarios() async {
+    await _db.esperar();
+    return _db.usuarios.values.where((u) => u.rol == RolUsuario.usuarioProtegido).toList()
+      ..sort((a, b) => a.nombre.compareTo(b.nombre));
   }
 
   @override

@@ -10,10 +10,13 @@ import '../../../datos/alerta_usuario_repository.dart';
 import '../../../dominio/configuracion.dart';
 import '../../../dominio/punto_geo.dart';
 import '../../admin/cobertura_guardia_view_model.dart';
+import '../../admin/detalle_alerta_admin_view_model.dart';
+import '../../admin/detalle_escalada_view_model.dart';
 import '../../admin/editar_guardia_view_model.dart';
 import '../../admin/escaladas_view_model.dart';
 import '../../admin/guardias_view_model.dart';
 import '../../admin/historial_view_model.dart';
+import '../../admin/metricas_guardia_view_model.dart';
 import '../../admin/panel_view_model.dart';
 import '../../auth/login_view_model.dart';
 import '../../auth/registro_view_model.dart';
@@ -87,6 +90,9 @@ class FabricaViewModels {
   EditarGuardiaViewModel editarGuardia({String? id}) => EditarGuardiaViewModel(admin, guardiaId: id);
   CoberturaGuardiaViewModel coberturaGuardia(String id) =>
       CoberturaGuardiaViewModel(admin, id, config: config, centroPorDefecto: centroPorDefecto);
+  MetricasGuardiaViewModel metricasGuardia(String id) => MetricasGuardiaViewModel(admin, id, reloj: reloj);
   EscaladasViewModel escaladas() => EscaladasViewModel(admin, reloj: reloj);
+  DetalleEscaladaViewModel detalleEscalada(String id) => DetalleEscaladaViewModel(admin, id);
   HistorialViewModel historial() => HistorialViewModel(admin, reloj: reloj);
+  DetalleAlertaAdminViewModel detalleAlertaAdmin(String id) => DetalleAlertaAdminViewModel(admin, id, reloj: reloj);
 }

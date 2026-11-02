@@ -90,6 +90,7 @@ abstract final class PerfilGuardiaJson {
         finTurno: j['shiftEnd']! as String,
         centroCobertura: PuntoGeoJson.opcional(j['coverageCenter']),
         radioCoberturaMetros: j['coverageRadiusMeters'] as int?,
+        zona: j['zone'] as String?,
         ultimaUbicacion: PuntoGeoJson.opcional(j['lastLocation']),
         ultimaUbicacionEn: _fecha(j['lastLocationAt']),
       );
@@ -100,6 +101,7 @@ abstract final class PerfilGuardiaJson {
         'shiftEnd': p.finTurno,
         'coverageCenter': p.centroCobertura == null ? null : PuntoGeoJson.aJson(p.centroCobertura!),
         'coverageRadiusMeters': p.radioCoberturaMetros,
+        'zone': p.zona,
         'lastLocation': p.ultimaUbicacion == null ? null : PuntoGeoJson.aJson(p.ultimaUbicacion!),
         'lastLocationAt': _iso(p.ultimaUbicacionEn),
       };
@@ -132,6 +134,7 @@ abstract final class AlertaJson {
         cerradaEn: _fecha(j['closedAt']),
         razonEscalamiento: CodigosJson.desdeOpcional(CodigosJson.razon, j['escalationReason']),
         resolucion: CodigosJson.desdeOpcional(CodigosJson.resolucion, j['resolution']),
+        notaAdmin: j['adminNote'] as String?,
         etaSegundos: j['etaSeconds'] as int?,
       );
 
@@ -154,6 +157,7 @@ abstract final class AlertaJson {
         'closedAt': _iso(a.cerradaEn),
         'escalationReason': CodigosJson.razon[a.razonEscalamiento],
         'resolution': CodigosJson.resolucion[a.resolucion],
+        'adminNote': a.notaAdmin,
         'etaSeconds': a.etaSegundos,
       };
 
@@ -184,6 +188,9 @@ abstract final class MetricasGeneralesJson {
         tasaSinRespuesta: (j['noResponseRate']! as num).toDouble(),
         tasaCierreConfirmado: (j['confirmedCloseRate']! as num).toDouble(),
         alertasPorHora: [for (final n in j['alertsByHour']! as List) n as int],
+        alertasPorZona: [
+          for (final z in j['alertsByZone']! as List) (zona: (z as Json)['zone']! as String, total: z['count']! as int),
+        ],
       );
 
   static Json aJson(MetricasGenerales m) => {
@@ -193,6 +200,7 @@ abstract final class MetricasGeneralesJson {
         'noResponseRate': m.tasaSinRespuesta,
         'confirmedCloseRate': m.tasaCierreConfirmado,
         'alertsByHour': m.alertasPorHora,
+        'alertsByZone': [for (final z in m.alertasPorZona) {'zone': z.zona, 'count': z.total}],
       };
 }
 

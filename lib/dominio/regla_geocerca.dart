@@ -45,6 +45,12 @@ abstract final class ReglaGeocerca {
     return null;
   }
 
+  /// A-06: devuelve el motivo del rechazo, o `null` si la zona es válida.
+  static String? validarZona(String? zona) {
+    if (zona == null || zona.trim().isEmpty) return 'Escribe la zona de cobertura';
+    return null;
+  }
+
   /// Punto a una fracción (0–1) del camino entre [desde] y [hasta].
   static PuntoGeo avanzar(PuntoGeo desde, PuntoGeo hasta, double fraccion) =>
       PuntoGeo(desde.lat + (hasta.lat - desde.lat) * fraccion, desde.lng + (hasta.lng - desde.lng) * fraccion);

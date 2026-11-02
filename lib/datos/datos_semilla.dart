@@ -95,14 +95,14 @@ class DatosSemilla {
     final fueraFin = hhmm(ahora.add(const Duration(hours: 11)));
 
     perfiles.addAll([
-      PerfilGuardia(usuarioId: 'grd-1', inicioTurno: enInicio, finTurno: enFin, centroCobertura: centroEmilianoZapata, radioCoberturaMetros: 4000, ultimaUbicacion: const PuntoGeo(18.8385, -99.1835), ultimaUbicacionEn: ahora),
-      PerfilGuardia(usuarioId: 'grd-2', inicioTurno: enInicio, finTurno: enFin, centroCobertura: centroCuernavaca, radioCoberturaMetros: 5000, ultimaUbicacion: const PuntoGeo(18.9150, -99.2300), ultimaUbicacionEn: ahora),
-      PerfilGuardia(usuarioId: 'grd-3', inicioTurno: enInicio, finTurno: enFin, centroCobertura: const PuntoGeo(18.8600, -99.1950), radioCoberturaMetros: 3000, ultimaUbicacion: const PuntoGeo(18.8590, -99.1940), ultimaUbicacionEn: ahora),
+      PerfilGuardia(usuarioId: 'grd-1', inicioTurno: enInicio, finTurno: enFin, centroCobertura: centroEmilianoZapata, radioCoberturaMetros: 4000, zona: 'Emiliano Zapata', ultimaUbicacion: const PuntoGeo(18.8385, -99.1835), ultimaUbicacionEn: ahora),
+      PerfilGuardia(usuarioId: 'grd-2', inicioTurno: enInicio, finTurno: enFin, centroCobertura: centroCuernavaca, radioCoberturaMetros: 5000, zona: 'Cuernavaca', ultimaUbicacion: const PuntoGeo(18.9150, -99.2300), ultimaUbicacionEn: ahora),
+      PerfilGuardia(usuarioId: 'grd-3', inicioTurno: enInicio, finTurno: enFin, centroCobertura: const PuntoGeo(18.8600, -99.1950), radioCoberturaMetros: 3000, zona: 'Jiutepec', ultimaUbicacion: const PuntoGeo(18.8590, -99.1940), ultimaUbicacionEn: ahora),
       // Turno nocturno que cruza medianoche.
-      const PerfilGuardia(usuarioId: 'grd-4', inicioTurno: '22:00', finTurno: '06:00', centroCobertura: centroEmilianoZapata, radioCoberturaMetros: 4000, ultimaUbicacion: PuntoGeo(18.8420, -99.1790)),
-      PerfilGuardia(usuarioId: 'grd-5', inicioTurno: fueraInicio, finTurno: fueraFin, centroCobertura: centroEmilianoZapata, radioCoberturaMetros: 2000),
-      PerfilGuardia(usuarioId: 'grd-6', inicioTurno: enInicio, finTurno: enFin, centroCobertura: const PuntoGeo(18.9220, -99.2380), radioCoberturaMetros: 3500, ultimaUbicacion: const PuntoGeo(18.9230, -99.2370), ultimaUbicacionEn: ahora),
-      PerfilGuardia(usuarioId: 'grd-7', inicioTurno: fueraInicio, finTurno: fueraFin, centroCobertura: const PuntoGeo(18.8300, -99.1700), radioCoberturaMetros: 2500),
+      const PerfilGuardia(usuarioId: 'grd-4', inicioTurno: '22:00', finTurno: '06:00', centroCobertura: centroEmilianoZapata, radioCoberturaMetros: 4000, zona: 'Emiliano Zapata', ultimaUbicacion: PuntoGeo(18.8420, -99.1790)),
+      PerfilGuardia(usuarioId: 'grd-5', inicioTurno: fueraInicio, finTurno: fueraFin, centroCobertura: centroEmilianoZapata, radioCoberturaMetros: 2000, zona: 'Emiliano Zapata'),
+      PerfilGuardia(usuarioId: 'grd-6', inicioTurno: enInicio, finTurno: enFin, centroCobertura: const PuntoGeo(18.9220, -99.2380), radioCoberturaMetros: 3500, zona: 'Cuernavaca', ultimaUbicacion: const PuntoGeo(18.9230, -99.2370), ultimaUbicacionEn: ahora),
+      PerfilGuardia(usuarioId: 'grd-7', inicioTurno: fueraInicio, finTurno: fueraFin, centroCobertura: const PuntoGeo(18.8300, -99.1700), radioCoberturaMetros: 2500, zona: 'Emiliano Zapata'),
       // Recién dado de alta: aún sin radio de cobertura (no recibe alertas).
       const PerfilGuardia(usuarioId: 'grd-8', inicioTurno: '08:00', finTurno: '16:00', centroCobertura: null, radioCoberturaMetros: null),
     ]);
@@ -130,6 +130,7 @@ class DatosSemilla {
       DateTime? cerrada,
       RazonEscalamiento? razon,
       Resolucion? resolucion,
+      String? nota,
       bool sinFoto = false,
       int? eta,
     }) {
@@ -149,6 +150,7 @@ class DatosSemilla {
         cerradaEn: cerrada,
         razonEscalamiento: razon,
         resolucion: resolucion,
+        notaAdmin: nota,
         ubicacion: ubicacion,
         rumbo: rumbo,
         fotoUrl: sinFoto ? null : foto('sl$id'),
@@ -174,7 +176,7 @@ class DatosSemilla {
       alerta('alt-301', 'usr-3', EstadoAlerta.escalada, MetodoDisparo.agitacion, 22, razon: RazonEscalamiento.sinRespuesta, ubicacion: cerca(ez, 0.0300, 0.0250), rumbo: 75),
       alerta('alt-302', 'usr-2', EstadoAlerta.escalada, MetodoDisparo.toque, 48, guardiaId: 'grd-1', aceptada: hace(47), llegada: hace(38), razon: RazonEscalamiento.sinConfirmacion, ubicacion: cerca(ez, -0.0060, 0.0080), rumbo: 260),
       alerta('alt-303', 'usr-6', EstadoAlerta.escalada, MetodoDisparo.mantener, 75, guardiaId: 'grd-6', aceptada: hace(73), llegada: hace(60), razon: RazonEscalamiento.sinConfirmacion, ubicacion: cerca(cva, 0.0020, 0.0050), rumbo: 330),
-      alerta('alt-304', 'usr-4', EstadoAlerta.resueltaPorAdmin, MetodoDisparo.toque, 60 * 26, guardiaId: 'grd-1', aceptada: hace(60 * 26 - 1), llegada: hace(60 * 26 - 9), cerrada: hace(60 * 25), razon: RazonEscalamiento.sinConfirmacion, resolucion: Resolucion.falsaAlarma, ubicacion: cerca(ez, 0.0020, -0.0030), rumbo: 0),
+      alerta('alt-304', 'usr-4', EstadoAlerta.resueltaPorAdmin, MetodoDisparo.toque, 60 * 26, guardiaId: 'grd-1', aceptada: hace(60 * 26 - 1), llegada: hace(60 * 26 - 9), cerrada: hace(60 * 25), razon: RazonEscalamiento.sinConfirmacion, resolucion: Resolucion.falsaAlarma, nota: 'Se verificó con la usuaria; no hubo riesgo.', ubicacion: cerca(ez, 0.0020, -0.0030), rumbo: 0),
     ]);
   }
 
