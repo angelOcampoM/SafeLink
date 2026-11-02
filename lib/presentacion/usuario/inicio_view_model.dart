@@ -14,6 +14,7 @@
 import '../../datos/alerta_usuario_repository.dart';
 import '../../datos/sensores.dart';
 import '../../dominio/dominio.dart';
+import 'captura_evidencia.dart';
 import '../comun/view_model.dart';
 import '../sesion/sesion_view_model.dart';
 import 'estrategias_disparo.dart';
@@ -28,18 +29,14 @@ class InicioViewModel extends ViewModel implements ControlDisparo {
     required Brujula brujula,
     DateTime Function()? reloj,
     Duration intervaloCuenta = const Duration(seconds: 1),
-  })  : _camara = camara,
-        _ubicacion = ubicacion,
-        _brujula = brujula,
+  })  : _evidencia = CapturaEvidencia(camara: camara, ubicacion: ubicacion, brujula: brujula),
         _reloj = reloj ?? DateTime.now,
         toque = ToqueConCuentaRegresiva(segundos: config.segundosCuentaRegresiva, intervalo: intervaloCuenta);
 
   final AlertaUsuarioRepository _alertas;
   final SesionViewModel _sesion;
   final Configuracion config;
-  final Camara _camara;
-  final Ubicacion _ubicacion;
-  final Brujula _brujula;
+  final CapturaEvidencia _evidencia;
   final DateTime Function() _reloj;
 
   // Estrategias intercambiables (Strategy).
@@ -112,21 +109,15 @@ class InicioViewModel extends ViewModel implements ControlDisparo {
     enviando = true;
     notifyListeners();
     try {
-      // U-06: una sola foto automática, con la coordenada y el rumbo del
-      // mismo instante. Los tres sensores se leen a la vez; si alguno falla
-      // devuelve null y la alerta viaja igual, marcada por el repositorio.
+      // U-06: la evidencia se captura sola en el instante del disparo.
       final disparadaEn = _reloj().toUtc();
-      final evidencia = await Future.wait([
-        _camara.tomarFoto(),
-        _ubicacion.posicionActual(),
-        _brujula.rumbo(),
-      ]);
+      final e = await _evidencia.capturar();
       await _alertas.crearAlerta(
         metodo: metodo,
         disparadaEn: disparadaEn,
-        rutaFoto: evidencia[0] as String?,
-        ubicacion: evidencia[1] as PuntoGeo?,
-        rumbo: evidencia[2] as int?,
+        rutaFoto: e.foto,
+        ubicacion: e.ubicacion,
+        rumbo: e.rumbo,
       );
       irAMiAlerta = true;
     } catch (e) {

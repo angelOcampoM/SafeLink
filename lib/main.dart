@@ -29,12 +29,16 @@ import 'datos/nube_auth_repository.dart';
 import 'datos/safelink_service.dart';
 import 'datos/sensores.dart';
 import 'datos/sensores_simulados.dart';
+import 'datos/servicio_disparo_rapido.dart';
+import 'datos/servicio_disparo_rapido_simulado.dart';
 import 'datos/sesion_guardada.dart';
 import 'dominio/configuracion.dart';
 import 'presentacion/comun/rutas/app_router.dart';
 import 'presentacion/comun/rutas/fabrica_view_models.dart';
 import 'presentacion/comun/tema/theme.dart';
 import 'presentacion/sesion/sesion_view_model.dart';
+import 'presentacion/usuario/captura_evidencia.dart';
+import 'presentacion/usuario/disparo_rapido.dart';
 
 const usarNube = false; // cámbialo a true y haz hot restart.
 
@@ -65,19 +69,30 @@ class Dependencias {
     Camara? camara,
     Ubicacion? ubicacion,
     Brujula? brujula,
+    ServicioDisparoRapido? servicioDisparoRapido,
+    Vibrador? vibrador,
     void Function()? iniciarSimulaciones,
   })  : sesionGuardada = sesionGuardada ?? MemoriaSesionGuardada(),
         camara = camara ?? CamaraSimulada(),
         ubicacion = ubicacion ?? UbicacionSimulada(inicial: DatosSemilla.ubicacionDispositivoUsuario),
         brujula = brujula ?? BrujulaSimulada(),
+        servicioDisparoRapido = servicioDisparoRapido ?? ServicioDisparoRapidoSimulado(),
+        vibrador = vibrador ?? VibradorSimulado(),
         iniciarSimulaciones = iniciarSimulaciones ?? _nada {
     sesion = SesionViewModel(auth, this.sesionGuardada);
+    disparoRapido = DisparoRapido(
+      servicio: this.servicioDisparoRapido,
+      vibrador: this.vibrador,
+      alertas: alertasUsuario,
+      evidencia: CapturaEvidencia(camara: this.camara, ubicacion: this.ubicacion, brujula: this.brujula),
+    );
     fabrica = FabricaViewModels(
       sesion: sesion,
       alertasUsuario: alertasUsuario,
       alertasGuardia: alertasGuardia,
       admin: admin,
       config: config,
+      disparoRapido: disparoRapido,
       camara: this.camara,
       ubicacion: this.ubicacion,
       brujula: this.brujula,
@@ -131,6 +146,11 @@ class Dependencias {
   final Camara camara;
   final Ubicacion ubicacion;
   final Brujula brujula;
+
+  /// U-05: servicio en segundo plano y vibración, hoy simulados.
+  final ServicioDisparoRapido servicioDisparoRapido;
+  final Vibrador vibrador;
+  late final DisparoRapido disparoRapido;
   final void Function() iniciarSimulaciones;
   late final SesionViewModel sesion;
   late final FabricaViewModels fabrica;
