@@ -45,100 +45,100 @@ class _LoginPageState extends State<LoginPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: ListenableBuilder(
-                listenable: vm,
-                builder: (context, _) => Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const _Logo(),
-                    AppSpacing.gapXl,
-                    Text('Inicia sesión', style: context.text.headlineMedium),
-                    AppSpacing.gapXs,
-                    Text('Ayuda cerca de ti, cuando la necesitas.', style: context.text.bodyMedium),
-                    AppSpacing.gapLg,
-                    if (vm.error != null) ...[
-                      SlBanner(message: vm.error!, type: SlBannerType.danger),
-                      AppSpacing.gapMd,
-                    ],
-                    SlTextField(
-                      label: 'Correo electrónico',
-                      controller: _correo,
-                      icon: Icons.mail_outline_rounded,
-                      keyboardType: TextInputType.emailAddress,
-                      textInputAction: TextInputAction.next,
-                      autofillHints: const [AutofillHints.email],
-                      errorText: vm.errorCorreo,
-                    ),
-                    AppSpacing.gapMd,
-                    SlTextField(
-                      label: 'Contraseña',
-                      controller: _contrasena,
-                      icon: Icons.lock_outline_rounded,
-                      obscure: true,
-                      textInputAction: TextInputAction.done,
-                      onSubmitted: (_) => _alEntrar(),
-                      errorText: vm.errorContrasena,
-                    ),
-                    AppSpacing.gapLg,
-                    SlButton(label: 'Entrar', icon: Icons.login_rounded, loading: vm.cargando, onPressed: _alEntrar),
-                    AppSpacing.gapSm,
-                    SlButton(
-                      label: 'Crear cuenta',
-                      variant: SlButtonVariant.secondary,
-                      onPressed: () => context.go(AppRoutes.register),
-                    ),
-                    if (vm.modoDemo) ...[
-                      AppSpacing.gapXl,
-                      const SectionHeader('Cuentas de prueba (demo)'),
-                      Wrap(
-                        spacing: AppSpacing.xs,
-                        runSpacing: AppSpacing.xs,
-                        children: [
-                          for (final (etiqueta, correo) in vm.cuentasDemo)
-                            ActionChip(label: Text(etiqueta), onPressed: () => _rellenar(correo)),
-                        ],
+        child: CenteredContent(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: ListenableBuilder(
+            listenable: vm,
+            builder: (context, _) => Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const BrandMark(tagline: 'Tu protección, siempre a tu alcance'),
+                AppSpacing.gapXl,
+                SlCard(
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text('Bienvenido de nuevo', style: context.text.headlineSmall),
+                      AppSpacing.gapXxs,
+                      Text('Ingresa tus datos para continuar.', style: context.text.bodyMedium),
+                      AppSpacing.gapLg,
+                      if (vm.error != null) ...[
+                        SlBanner(message: vm.error!, type: SlBannerType.danger),
+                        AppSpacing.gapMd,
+                      ],
+                      SlTextField(
+                        label: 'Correo electrónico',
+                        controller: _correo,
+                        icon: Icons.mail_outline_rounded,
+                        keyboardType: TextInputType.emailAddress,
+                        textInputAction: TextInputAction.next,
+                        autofillHints: const [AutofillHints.email],
+                        errorText: vm.errorCorreo,
                       ),
-                    ],
-                    if (kDebugMode) ...[
                       AppSpacing.gapMd,
+                      SlTextField(
+                        label: 'Contraseña',
+                        controller: _contrasena,
+                        icon: Icons.lock_outline_rounded,
+                        obscure: true,
+                        textInputAction: TextInputAction.done,
+                        onSubmitted: (_) => _alEntrar(),
+                        errorText: vm.errorContrasena,
+                      ),
+                      AppSpacing.gapLg,
+                      SlButton(label: 'Iniciar sesión', loading: vm.cargando, onPressed: _alEntrar),
+                      AppSpacing.gapXs,
                       SlButton(
-                        label: 'Ver guía de estilos',
-                        icon: Icons.palette_outlined,
+                        label: 'Crear cuenta',
                         variant: SlButtonVariant.ghost,
-                        onPressed: () => context.push(AppRoutes.styleGuide),
+                        onPressed: () => context.go(AppRoutes.register),
                       ),
                     ],
+                  ),
+                ),
+                AppSpacing.gapLg,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.info_outline_rounded, size: AppSizes.iconSm, color: AppColors.textSecondary),
+                    AppSpacing.gapXs,
+                    Flexible(
+                      child: Text(
+                        'Solo los usuarios protegidos pueden registrarse por sí mismos.',
+                        style: context.text.bodySmall,
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
                   ],
                 ),
-              ),
+                if (vm.modoDemo) ...[
+                  AppSpacing.gapXl,
+                  const SectionHeader('Cuentas de prueba (demo)'),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: AppSpacing.xs,
+                    runSpacing: AppSpacing.xs,
+                    children: [
+                      for (final (etiqueta, correo) in vm.cuentasDemo)
+                        ActionChip(label: Text(etiqueta), onPressed: () => _rellenar(correo)),
+                    ],
+                  ),
+                ],
+                if (kDebugMode) ...[
+                  AppSpacing.gapMd,
+                  SlButton(
+                    label: 'Ver guía de estilos',
+                    icon: Icons.palette_outlined,
+                    variant: SlButtonVariant.ghost,
+                    onPressed: () => context.push(AppRoutes.styleGuide),
+                  ),
+                ],
+              ],
             ),
           ),
         ),
       ),
-    );
-  }
-}
-
-class _Logo extends StatelessWidget {
-  const _Logo();
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(AppSpacing.sm),
-          decoration: BoxDecoration(color: AppColors.tint(AppColors.info), borderRadius: AppRadius.brMd),
-          child: const Icon(Icons.shield_rounded, color: AppColors.info, size: AppSizes.iconLg),
-        ),
-        AppSpacing.gapSm,
-        Text('SafeLink', style: context.text.headlineMedium),
-      ],
     );
   }
 }

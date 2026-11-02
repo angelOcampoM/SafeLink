@@ -18,6 +18,7 @@ class EmergencyButton extends StatefulWidget {
     this.onLongPressMoveUpdate,
     this.onLongPressEnd,
     this.label = 'ALERTA',
+    this.sublabel,
     this.caption = 'Toca o mantén presionado',
     this.enabled = true,
     this.pressed = false,
@@ -28,6 +29,9 @@ class EmergencyButton extends StatefulWidget {
   final GestureLongPressMoveUpdateCallback? onLongPressMoveUpdate;
   final GestureLongPressEndCallback? onLongPressEnd;
   final String label;
+
+  /// Texto pequeño bajo la etiqueta ("ENVIAR AYUDA").
+  final String? sublabel;
   final String caption;
   final bool enabled;
 
@@ -91,10 +95,14 @@ class _EmergencyButtonState extends State<EmergencyButton> with SingleTickerProv
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: RadialGradient(
-                      colors: widget.enabled ? [AppColors.emergency, AppColors.emergencyDark] : [color, color],
+                      colors: !widget.enabled
+                          ? [color, color]
+                          : widget.pressed
+                              ? [AppColors.emergencyDark, AppColors.emergencyDark]
+                              : [AppColors.emergency, AppColors.emergencyDark],
                     ),
                     boxShadow: widget.enabled
-                        ? [BoxShadow(color: AppColors.emergency.withValues(alpha: 0.5), blurRadius: 40, spreadRadius: 4)]
+                        ? [BoxShadow(color: AppColors.emergency.withValues(alpha: 0.5), blurRadius: widget.pressed ? 64 : 40, spreadRadius: widget.pressed ? 12 : 4)]
                         : null,
                   ),
                   child: Column(
@@ -106,6 +114,11 @@ class _EmergencyButtonState extends State<EmergencyButton> with SingleTickerProv
                         widget.label,
                         style: context.text.headlineMedium?.copyWith(color: AppColors.onAccent, letterSpacing: 2),
                       ),
+                      if (widget.sublabel != null)
+                        Text(
+                          widget.sublabel!,
+                          style: context.text.labelSmall?.copyWith(color: AppColors.onAccent, letterSpacing: 1.2),
+                        ),
                     ],
                   ),
                 ),

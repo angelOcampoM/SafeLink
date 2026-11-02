@@ -13,8 +13,8 @@ void main() {
     await tester.pumpWidget(app());
     await tester.pumpAndSettle();
 
-    expect(find.text('Inicia sesión'), findsOneWidget);
-    await tester.tap(find.text('Entrar'));
+    expect(find.text('Bienvenido de nuevo'), findsOneWidget);
+    await tester.tap(find.text('Iniciar sesión'));
     await tester.pump();
 
     expect(find.text('Escribe tu correo'), findsOneWidget);
@@ -27,22 +27,35 @@ void main() {
 
     await tester.enterText(find.byType(TextFormField).at(0), 'usuario@safelink.mx');
     await tester.enterText(find.byType(TextFormField).at(1), 'incorrecta');
-    await tester.tap(find.text('Entrar'));
+    await tester.tap(find.text('Iniciar sesión'));
     await tester.pump(const Duration(seconds: 1));
 
     expect(find.text('Correo o contraseña incorrectos'), findsOneWidget);
   });
 
-  testWidgets('con credenciales correctas el router lleva al inicio del usuario', (tester) async {
+  testWidgets('el primer inicio de sesión pide permisos y después lleva al botón de alerta', (tester) async {
+    tester.view.physicalSize = const Size(1800, 3000);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+
     await tester.pumpWidget(app());
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextFormField).at(0), 'usuario@safelink.mx');
     await tester.enterText(find.byType(TextFormField).at(1), 'SafeLink1');
-    await tester.tap(find.text('Entrar'));
+    await tester.tap(find.text('Iniciar sesión'));
     await tester.pump(const Duration(seconds: 1));
     await tester.pump();
 
-    expect(find.text('Hola, Fernanda'), findsOneWidget);
+    expect(find.text('Permisos para protegerte'), findsOneWidget);
+
+    await tester.tap(find.text('Continuar'));
+    // El inicio late en bucle (EmergencyButton): pumpAndSettle nunca terminaría.
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+
+    expect(find.text('Toca o mantén presionado'), findsOneWidget);
+    expect(find.text('Permisos para protegerte'), findsNothing);
   });
 }

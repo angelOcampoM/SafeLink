@@ -32,7 +32,9 @@ class SlChip extends StatelessWidget {
             Icon(icon, size: 14, color: color),
             const SizedBox(width: AppSpacing.xxs),
           ],
-          Text(label, style: context.text.labelMedium?.copyWith(color: color)),
+          Flexible(
+            child: Text(label, overflow: TextOverflow.ellipsis, style: context.text.labelMedium?.copyWith(color: color)),
+          ),
         ],
       ),
     );

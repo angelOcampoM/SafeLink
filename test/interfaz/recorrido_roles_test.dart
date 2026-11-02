@@ -29,6 +29,7 @@ void main() {
       admin: MemoriaAdminRepository(db),
     );
     await deps.sesion.iniciarSesion(correo, 'SafeLink1');
+    deps.sesion.permisosVistos(); // U-02: el recorrido no se detiene en los permisos.
     await tester.pumpWidget(SafeLinkApp(dependencias: deps, simular: false));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
@@ -46,7 +47,7 @@ void main() {
 
   testWidgets('usuario protegido', (tester) async {
     await abrir(tester, 'usuario@safelink.mx');
-    await ir(tester, AppRoutes.userHome, 'Hola, Fernanda');
+    await ir(tester, AppRoutes.userHome, 'Toca o mantén presionado');
     await ir(tester, AppRoutes.userAlert, 'Sin alertas activas');
     await ir(tester, AppRoutes.userSettings, 'Alerta por agitación');
     await ir(tester, AppRoutes.userHistory, 'Mis alertas');
