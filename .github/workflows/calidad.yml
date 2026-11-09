@@ -1,0 +1,36 @@
+# Control de calidad del repositorio (metodología §11).
+# Corre en cada Pull Request hacia develop y en cada empujón a develop y main.
+# Si el análisis estático o las pruebas fallan, el PR sale en rojo y no debe
+# mergearse: así no se repite un develop roto.
+#
+# No se incluye `dart format` como compuerta todavía: hoy reformatearía 62
+# archivos y ese commit chocaría con el trabajo en curso de todo el equipo.
+# Conviene agregarlo cuando no haya ramas abiertas.
+name: Calidad
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+
+jobs:
+  analisis-y-pruebas:
+    name: Análisis estático y pruebas
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Instalar dependencias
+        run: flutter pub get
+
+      - name: Análisis estático
+        run: flutter analyze
+
+      - name: Pruebas
+        run: flutter test --reporter=expanded
