@@ -30,3 +30,8 @@ ios/Runner/GoogleService-Info.plist
 
 # Opencode
 AGENTS.md
+
+# Variables de entorno (secretos)
+.env
+.env.*
+!.env.example
