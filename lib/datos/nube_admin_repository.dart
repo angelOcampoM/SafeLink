@@ -4,12 +4,12 @@
 
 import '../dominio/dominio.dart';
 import 'admin_repository.dart';
+import 'cliente_api.dart';
 import 'nube_mapeadores.dart';
-import 'safelink_service.dart';
 
 class NubeAdminRepository implements AdminRepository {
   NubeAdminRepository(this._service);
-  final SafeLinkService _service;
+  final ClienteApi _service;
 
   Guardia _guardia(Json r) => GuardiaJson.desdeJson(RespuestaJson.datos(r)! as Json);
 
@@ -25,7 +25,7 @@ class NubeAdminRepository implements AdminRepository {
   }
 
   @override
-  Future<Guardia> obtenerGuardia(String guardiaId) async => _guardia(await _service.get('/admin/guards/$guardiaId'));
+  Future<Guardia> obtenerGuardia(String guardiaId) async => _guardia(await _service.get('/admin/guards/${Uri.encodeComponent(guardiaId)}'));
 
   @override
   Future<Guardia> crearGuardia({required String nombre, required String correo, required String telefono, required String contrasena}) async =>
@@ -33,7 +33,7 @@ class NubeAdminRepository implements AdminRepository {
 
   @override
   Future<Guardia> actualizarGuardia(String guardiaId, {String? nombre, String? correo, String? telefono}) async =>
-      _guardia(await _service.patch('/admin/guards/$guardiaId', {
+      _guardia(await _service.patch('/admin/guards/${Uri.encodeComponent(guardiaId)}', {
         if (nombre != null) 'name': nombre,
         if (correo != null) 'email': correo,
         if (telefono != null) 'phone': telefono,
@@ -41,7 +41,7 @@ class NubeAdminRepository implements AdminRepository {
 
   @override
   Future<void> darDeBajaGuardia(String guardiaId) async {
-    RespuestaJson.datos(await _service.delete('/admin/guards/$guardiaId'));
+    RespuestaJson.datos(await _service.delete('/admin/guards/${Uri.encodeComponent(guardiaId)}'));
   }
 
   @override
@@ -53,7 +53,7 @@ class NubeAdminRepository implements AdminRepository {
     required int radioMetros,
     required String zona,
   }) async =>
-      _guardia(await _service.put('/admin/guards/$guardiaId/coverage', {
+      _guardia(await _service.put('/admin/guards/${Uri.encodeComponent(guardiaId)}/coverage', {
         'shiftStart': inicioTurno,
         'shiftEnd': finTurno,
         'center': PuntoGeoJson.aJson(centro),
@@ -67,7 +67,7 @@ class NubeAdminRepository implements AdminRepository {
 
   @override
   Future<Alerta> resolverAlerta(String alertaId, Resolucion resolucion, {required String nota}) async {
-    final r = await _service.post('/admin/alerts/$alertaId/resolve', {'resolution': CodigosJson.resolucion[resolucion], 'adminNote': nota});
+    final r = await _service.post('/admin/alerts/${Uri.encodeComponent(alertaId)}/resolve', {'resolution': CodigosJson.resolucion[resolucion], 'adminNote': nota});
     return AlertaJson.desdeJson(RespuestaJson.datos(r)! as Json);
   }
 
@@ -83,7 +83,7 @@ class NubeAdminRepository implements AdminRepository {
 
   @override
   Future<MetricasGuardia> obtenerMetricasGuardia(String guardiaId, {DateTime? desde, DateTime? hasta}) async {
-    final r = await _service.get('/admin/metrics/guards/$guardiaId', query: _periodo(desde, hasta));
+    final r = await _service.get('/admin/metrics/guards/${Uri.encodeComponent(guardiaId)}', query: _periodo(desde, hasta));
     return MetricasGuardiaJson.desdeJson(RespuestaJson.datos(r)! as Json);
   }
 
@@ -101,6 +101,6 @@ class NubeAdminRepository implements AdminRepository {
 
   @override
   Future<void> desbloquearUsuario(String usuarioId) async {
-    RespuestaJson.datos(await _service.delete('/admin/users/$usuarioId/block'));
+    RespuestaJson.datos(await _service.delete('/admin/users/${Uri.encodeComponent(usuarioId)}/block'));
   }
 }

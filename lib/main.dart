@@ -6,6 +6,7 @@
 //
 // Regla de dependencias: presentacion → datos → dominio (dominio no depende de nadie).
 
+import 'package:flutter/foundation.dart' show debugPrint, kProfileMode, kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
@@ -13,8 +14,11 @@ import 'package:go_router/go_router.dart';
 import 'datos/admin_repository.dart';
 import 'datos/alerta_guardia_repository.dart';
 import 'datos/alerta_usuario_repository.dart';
+import 'datos/almacen_tokens.dart';
 import 'datos/auth_repository.dart';
+import 'datos/cliente_api.dart';
 import 'datos/datos_semilla.dart';
+import 'datos/http_safelink_service.dart';
 import 'datos/memoria_admin_repository.dart';
 import 'datos/memoria_alerta_guardia_repository.dart';
 import 'datos/memoria_alerta_usuario_repository.dart';
@@ -32,6 +36,7 @@ import 'datos/sensores_simulados.dart';
 import 'datos/servicio_disparo_rapido.dart';
 import 'datos/servicio_disparo_rapido_simulado.dart';
 import 'datos/sesion_guardada.dart';
+import 'datos/url_api.dart';
 import 'dominio/configuracion.dart';
 import 'presentacion/comun/rutas/app_router.dart';
 import 'presentacion/comun/rutas/fabrica_view_models.dart';
@@ -41,17 +46,31 @@ import 'presentacion/usuario/captura_evidencia.dart';
 import 'presentacion/usuario/disparo_rapido.dart';
 import 'presentacion/usuario/seguimiento_ubicacion.dart';
 
-const usarNube = false; // cámbialo a true y haz hot restart.
+/// URL base de la API real, p. ej. `--dart-define=API_URL=http://127.0.0.1:3000/api/v1`.
+/// Vacía (por defecto) = sin backend real.
+const urlApi = String.fromEnvironment('API_URL');
+
+/// Por defecto la app corre en memoria. Con `--dart-define=API_URL=...` usa el
+/// backend real (HttpSafeLinkService); con `--dart-define=USAR_NUBE=true` (o
+/// cambiando esta línea a true) usa el servicio simulado de la nube.
+const usarNube = bool.fromEnvironment('USAR_NUBE') || urlApi != '';
 
 /// Solo con `usarNube = true`: probabilidad de que falle cada petición (0.0–1.0).
 const tasaFallo = 0.0;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // En release/profile solo se acepta https://; si no, se queda en modo memoria.
+  final urlSegura = urlApiPermitida(urlApi, esRelease: kReleaseMode || kProfileMode);
+  if (urlApi.isNotEmpty && !urlSegura) {
+    debugPrint('API_URL ignorada: en release/profile debe empezar con https://. Se usa el modo simulado.');
+  }
   final dependencias = Dependencias.crear(
-    usarNube: usarNube,
+    usarNube: urlApi.isNotEmpty ? urlSegura : usarNube,
     tasaFallo: tasaFallo,
+    urlApi: urlSegura ? urlApi : '',
     sesionGuardada: DispositivoSesionGuardada(),
+    almacenTokens: DispositivoAlmacenTokens(),
   );
   // U-02: si quedó una sesión abierta, se entra directo sin pasar por el login.
   await dependencias.sesion.restaurar();
@@ -113,9 +132,15 @@ class Dependencias {
     double tasaFallo = 0.0,
     Configuracion config = Configuracion.porDefecto,
     SesionGuardada? sesionGuardada,
+    String urlApi = '',
+    AlmacenTokens? almacenTokens,
   }) {
     if (usarNube) {
-      final servicio = SafeLinkService(servidor: MemoriaBaseDatos(config: config, latencia: Duration.zero), tasaFallo: tasaFallo);
+      // Con URL de API: cliente HTTP real; sin ella: servicio simulado en memoria.
+      final SafeLinkService? simulado = urlApi.isEmpty
+          ? SafeLinkService(servidor: MemoriaBaseDatos(config: config, latencia: Duration.zero), tasaFallo: tasaFallo)
+          : null;
+      final ClienteApi servicio = simulado ?? HttpSafeLinkService(urlBase: urlApi, almacen: almacenTokens);
       return Dependencias(
         auth: NubeAuthRepository(servicio),
         alertasUsuario: NubeAlertaUsuarioRepository(servicio),
@@ -123,7 +148,7 @@ class Dependencias {
         admin: NubeAdminRepository(servicio),
         config: config,
         sesionGuardada: sesionGuardada,
-        iniciarSimulaciones: servicio.iniciarSimulaciones,
+        iniciarSimulaciones: simulado?.iniciarSimulaciones,
       );
     }
     final db = MemoriaBaseDatos(config: config);

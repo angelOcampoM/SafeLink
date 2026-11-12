@@ -10,6 +10,7 @@ import 'dart:async';
 import 'dart:math';
 
 import '../dominio/dominio.dart';
+import 'cliente_api.dart';
 import 'memoria_admin_repository.dart';
 import 'memoria_alerta_guardia_repository.dart';
 import 'memoria_alerta_usuario_repository.dart';
@@ -35,7 +36,7 @@ class _Ruta {
   }
 }
 
-class SafeLinkService {
+class SafeLinkService extends ClienteApi {
   SafeLinkService({
     MemoriaBaseDatos? servidor,
     this.tasaFallo = 0.0,
@@ -66,13 +67,12 @@ class SafeLinkService {
   late final List<_Ruta> _rutas;
 
   // ── API pública (lo que vería un cliente HTTP) ────────────────────
-  Future<Json> get(String ruta, {Map<String, String> query = const {}}) => _peticion('GET', ruta, const {}, query);
-  Future<Json> post(String ruta, [Json cuerpo = const {}]) => _peticion('POST', ruta, cuerpo, const {});
-  Future<Json> put(String ruta, [Json cuerpo = const {}]) => _peticion('PUT', ruta, cuerpo, const {});
-  Future<Json> patch(String ruta, [Json cuerpo = const {}]) => _peticion('PATCH', ruta, cuerpo, const {});
-  Future<Json> delete(String ruta) => _peticion('DELETE', ruta, const {}, const {});
+  @override
+  Future<Json> enviar(String metodo, String ruta, {Json? cuerpo, Map<String, String>? query}) =>
+      _peticion(metodo, ruta, cuerpo ?? const {}, query ?? const {});
 
   /// Canal en tiempo real (como un WebSocket). Cada evento es `{ "data": ... }`.
+  @override
   Stream<Json> escuchar(String canal) {
     final Stream<Object?> origen;
     final alerta = RegExp(r'^guard/alerts/([^/]+)$').firstMatch(canal);

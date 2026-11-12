@@ -5,12 +5,12 @@
 
 import '../dominio/usuario.dart';
 import 'auth_repository.dart';
+import 'cliente_api.dart';
 import 'nube_mapeadores.dart';
-import 'safelink_service.dart';
 
 class NubeAuthRepository implements AuthRepository {
   NubeAuthRepository(this._service);
-  final SafeLinkService _service;
+  final ClienteApi _service;
 
   Usuario? _actual;
 
@@ -39,8 +39,11 @@ class NubeAuthRepository implements AuthRepository {
 
   @override
   Future<void> cerrarSesion() async {
-    RespuestaJson.datos(await _service.post('/auth/logout'));
-    _actual = null;
+    try {
+      RespuestaJson.datos(await _service.post('/auth/logout'));
+    } finally {
+      _actual = null; // la sesión local se cierra aunque el servidor falle
+    }
   }
 
   @override
@@ -48,6 +51,12 @@ class NubeAuthRepository implements AuthRepository {
 
   @override
   Future<Usuario?> restaurarSesion(String usuarioId) async {
+    // API real: primero se canjea el refresh token guardado (sin sesión → null).
+    final previo = await _service.restaurarSesionGuardada();
+    if (previo != null) {
+      RespuestaJson.datos(previo); // lanza si fue un fallo de red
+      return null;
+    }
     final respuesta = await _service.post('/auth/session', {'userId': usuarioId});
     final datos = RespuestaJson.datos(respuesta);
     return datos == null ? null : _guardar(respuesta);

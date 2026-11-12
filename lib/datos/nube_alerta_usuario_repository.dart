@@ -4,12 +4,12 @@
 
 import '../dominio/dominio.dart';
 import 'alerta_usuario_repository.dart';
+import 'cliente_api.dart';
 import 'nube_mapeadores.dart';
-import 'safelink_service.dart';
 
 class NubeAlertaUsuarioRepository implements AlertaUsuarioRepository {
   NubeAlertaUsuarioRepository(this._service);
-  final SafeLinkService _service;
+  final ClienteApi _service;
 
   @override
   Future<Alerta> crearAlerta({
@@ -37,12 +37,12 @@ class NubeAlertaUsuarioRepository implements AlertaUsuarioRepository {
 
   @override
   Future<void> enviarUbicacion(String alertaId, PuntoGeo ubicacion) async {
-    RespuestaJson.datos(await _service.post('/alerts/$alertaId/locations', {'location': PuntoGeoJson.aJson(ubicacion)}));
+    RespuestaJson.datos(await _service.post('/alerts/${Uri.encodeComponent(alertaId)}/locations', {'location': PuntoGeoJson.aJson(ubicacion)}));
   }
 
   @override
   Future<Alerta> confirmarAtencion(String alertaId) async =>
-      AlertaJson.desdeJson(RespuestaJson.datos(await _service.post('/alerts/$alertaId/confirm'))! as Json);
+      AlertaJson.desdeJson(RespuestaJson.datos(await _service.post('/alerts/${Uri.encodeComponent(alertaId)}/confirm'))! as Json);
 
   @override
   Future<List<Alerta>> obtenerHistorial() async => AlertaJson.lista(RespuestaJson.datos(await _service.get('/alerts/mine')));

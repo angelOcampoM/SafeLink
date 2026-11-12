@@ -4,12 +4,12 @@
 
 import '../dominio/dominio.dart';
 import 'alerta_guardia_repository.dart';
+import 'cliente_api.dart';
 import 'nube_mapeadores.dart';
-import 'safelink_service.dart';
 
 class NubeAlertaGuardiaRepository implements AlertaGuardiaRepository {
   NubeAlertaGuardiaRepository(this._service);
-  final SafeLinkService _service;
+  final ClienteApi _service;
 
   Alerta _alerta(Json r) => AlertaJson.desdeJson(RespuestaJson.datos(r)! as Json);
 
@@ -22,18 +22,18 @@ class NubeAlertaGuardiaRepository implements AlertaGuardiaRepository {
       );
 
   @override
-  Future<Alerta> obtenerAlerta(String alertaId) async => _alerta(await _service.get('/guard/alerts/$alertaId'));
+  Future<Alerta> obtenerAlerta(String alertaId) async => _alerta(await _service.get('/guard/alerts/${Uri.encodeComponent(alertaId)}'));
 
   @override
   Stream<Alerta> escucharAlerta(String alertaId) =>
       _service.escuchar('guard/alerts/$alertaId').map((e) => AlertaJson.desdeJson(RespuestaJson.datos(e)! as Json));
 
   @override
-  Future<Alerta> aceptarAlerta(String alertaId) async => _alerta(await _service.post('/guard/alerts/$alertaId/accept'));
+  Future<Alerta> aceptarAlerta(String alertaId) async => _alerta(await _service.post('/guard/alerts/${Uri.encodeComponent(alertaId)}/accept'));
 
   @override
   Future<void> ignorarAlerta(String alertaId) async {
-    RespuestaJson.datos(await _service.post('/guard/alerts/$alertaId/ignore'));
+    RespuestaJson.datos(await _service.post('/guard/alerts/${Uri.encodeComponent(alertaId)}/ignore'));
   }
 
   @override
@@ -42,7 +42,7 @@ class NubeAlertaGuardiaRepository implements AlertaGuardiaRepository {
   }
 
   @override
-  Future<Alerta> marcarLlegada(String alertaId) async => _alerta(await _service.post('/guard/alerts/$alertaId/arrive'));
+  Future<Alerta> marcarLlegada(String alertaId) async => _alerta(await _service.post('/guard/alerts/${Uri.encodeComponent(alertaId)}/arrive'));
 
   @override
   Future<List<Alerta>> obtenerMiHistorial() async => AlertaJson.lista(RespuestaJson.datos(await _service.get('/guard/history')));
