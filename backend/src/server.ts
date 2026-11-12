@@ -12,6 +12,10 @@ async function main(): Promise<void> {
     }
     throw e;
   }
+  if (!config.DATABASE_URL) {
+    console.error('Configuración inválida: falta DATABASE_URL (cadena de conexión a PostgreSQL). Defínela en backend/.env.');
+    process.exit(1);
+  }
   const app = buildApp(config);
   try {
     await app.listen({ host: config.HOST, port: config.PORT });

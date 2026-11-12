@@ -1,0 +1,197 @@
+// Modelo de datos de SafeLink (BE-01, paso 3).
+// Tablas y columnas en snake_case (@@map / @map); modelos y campos en camelCase.
+// Los CHECK y el índice único parcial de alerts NO se pueden expresar aquí: viven
+// en el SQL de la migración inicial (prisma/migrations/*_init/migration.sql).
+// Todas las fechas son timestamptz (UTC). Los IDs son UUID generados por la base.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+  runtime      = "nodejs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  protected_user
+  guard
+  admin
+
+  @@map("user_role")
+}
+
+enum AlertStatus {
+  pending_location
+  searching
+  in_progress
+  guard_arrived
+  closed
+  no_response
+  escalated
+  resolved_by_admin
+
+  @@map("alert_status")
+}
+
+enum TriggerMethod {
+  tap
+  hold
+  // En la app se muestra como "doble clic de volumen".
+  shake
+
+  @@map("trigger_method")
+}
+
+enum EscalationReason {
+  no_response
+  no_confirmation
+
+  @@map("escalation_reason")
+}
+
+enum Resolution {
+  resolved
+  false_alarm
+  service_incident
+
+  @@map("alert_resolution")
+}
+
+model User {
+  id                       String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                     String
+  // Guardado en minúsculas y recortado (D18); CHECK email = lower(email) en SQL.
+  email                    String    @unique
+  phone                    String
+  passwordHash             String    @map("password_hash")
+  role                     Role
+  // Baja lógica: los usuarios no se borran.
+  isActive                 Boolean   @default(true) @map("is_active")
+  // Ajuste "doble clic de volumen"; el front lo apaga por defecto.
+  volumeDoubleClickEnabled Boolean   @default(false) @map("volume_double_click_enabled")
+  falseAlarmCount          Int       @default(0) @map("false_alarm_count")
+  blockedUntil             DateTime? @map("blocked_until") @db.Timestamptz(3)
+  createdAt                DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  guardProfile  GuardProfile?
+  alerts        Alert[]        @relation("AlertOwner")
+  guardAlerts   Alert[]        @relation("AlertGuard")
+  ignores       AlertIgnore[]
+  statusChanges AlertStatusHistory[]
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+model GuardProfile {
+  userId              String    @id @map("user_id") @db.Uuid
+  // "HH:mm"; puede cruzar medianoche; inicio = fin es turno de 24 h (D1).
+  shiftStart          String    @map("shift_start") @db.Char(5)
+  shiftEnd            String    @map("shift_end") @db.Char(5)
+  coverageCenterLat   Float?    @map("coverage_center_lat")
+  coverageCenterLng   Float?    @map("coverage_center_lng")
+  coverageRadiusMeters Int?     @map("coverage_radius_meters")
+  zone                String?
+  lastLocationLat     Float?    @map("last_location_lat")
+  lastLocationLng     Float?    @map("last_location_lng")
+  lastLocationAt      DateTime? @map("last_location_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("guard_profiles")
+}
+
+model Alert {
+  id                String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId            String            @map("user_id") @db.Uuid
+  guardId           String?           @map("guard_id") @db.Uuid
+  status            AlertStatus
+  triggerMethod     TriggerMethod     @map("trigger_method")
+  // Llave de la foto en PhotoStorage (D2); photoUrl se calcula.
+  photoKey          String?           @map("photo_key")
+  evidenceIncomplete Boolean          @default(false) @map("evidence_incomplete")
+  lat               Float?
+  lng               Float?
+  heading           Int?
+  // Hora del dispositivo: solo se guarda y se devuelve (D24).
+  triggeredAt       DateTime          @map("triggered_at") @db.Timestamptz(3)
+  // Hora del servidor: base de todo lo calculado (D24).
+  receivedAt        DateTime          @default(now()) @map("received_at") @db.Timestamptz(3)
+  // Para los temporizadores de escalamiento (D5).
+  statusChangedAt   DateTime          @default(now()) @map("status_changed_at") @db.Timestamptz(3)
+  acceptedAt        DateTime?         @map("accepted_at") @db.Timestamptz(3)
+  arrivedAt         DateTime?         @map("arrived_at") @db.Timestamptz(3)
+  closedAt          DateTime?         @map("closed_at") @db.Timestamptz(3)
+  escalationReason  EscalationReason? @map("escalation_reason")
+  resolution        Resolution?
+  adminNote         String?           @map("admin_note")
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user    User                 @relation("AlertOwner", fields: [userId], references: [id], onDelete: Restrict)
+  guard   User?                @relation("AlertGuard", fields: [guardId], references: [id], onDelete: Restrict)
+  ignores AlertIgnore[]
+  history AlertStatusHistory[]
+
+  @@index([status])
+  @@index([guardId])
+  @@index([userId])
+  @@index([receivedAt])
+  @@map("alerts")
+}
+
+model AlertIgnore {
+  guardId   String   @map("guard_id") @db.Uuid
+  alertId   String   @map("alert_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  guard User  @relation(fields: [guardId], references: [id], onDelete: Cascade)
+  alert Alert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+
+  @@id([guardId, alertId])
+  @@map("alert_ignores")
+}
+
+model AlertStatusHistory {
+  id         String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  alertId    String       @map("alert_id") @db.Uuid
+  // null en la creación de la alerta.
+  fromStatus AlertStatus? @map("from_status")
+  toStatus   AlertStatus  @map("to_status")
+  // null cuando el cambio lo hace el sistema (p. ej. escalamiento).
+  actorId    String?      @map("actor_id") @db.Uuid
+  at         DateTime     @default(now()) @db.Timestamptz(3)
+
+  alert Alert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([alertId, at])
+  @@map("alert_status_history")
+}
+
+model RefreshToken {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  // Id de la sesión (claim "sid" del access token); toda la rotación comparte familia.
+  familyId     String    @map("family_id") @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  // SHA-256 en hexadecimal (64 caracteres) del token opaco; nunca el token (D25).
+  tokenHash    String    @unique @map("token_hash") @db.Char(64)
+  parentId     String?   @map("parent_id") @db.Uuid
+  expiresAt    DateTime  @map("expires_at") @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  usedAt       DateTime? @map("used_at") @db.Timestamptz(3)
+  revokedAt    DateTime? @map("revoked_at") @db.Timestamptz(3)
+  replacedById String?   @map("replaced_by_id") @db.Uuid
+
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent     RefreshToken?  @relation("RefreshRotation", fields: [parentId], references: [id], onDelete: SetNull)
+  children   RefreshToken[] @relation("RefreshRotation")
+  replacedBy RefreshToken?  @relation("RefreshReplacement", fields: [replacedById], references: [id], onDelete: SetNull)
+  replaces   RefreshToken[] @relation("RefreshReplacement")
+
+  @@index([userId])
+  @@index([familyId])
+  @@map("refresh_tokens")
+}

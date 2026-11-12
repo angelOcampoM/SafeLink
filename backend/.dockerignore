@@ -8,3 +8,4 @@ coverage
 *.log
 tests
 README.md
+src/generated

@@ -16,22 +16,53 @@ services:
       timeout: 5s
       retries: 10
 
+  # Aplica las migraciones pendientes y termina (la API espera a que acabe).
+  migrate:
+    build:
+      context: .
+      target: migrate
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-safelink}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-safelink}
+
   api:
     build: .
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
-    env_file:
-      - .env
+      migrate:
+        condition: service_completed_successfully
     environment:
       NODE_ENV: production
       HOST: 0.0.0.0
       PORT: 3000
       # Dentro de la red de Compose la base se llama "db" y usa el puerto 5432.
       DATABASE_URL: postgresql://${POSTGRES_USER:-safelink}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-safelink}
+      JWT_SECRET: ${JWT_SECRET:?Define JWT_SECRET en backend/.env}
+      # Solo las variables del esquema de la API (sin POSTGRES_PASSWORD ni DATABASE_URL_TEST).
+      # Sin valor: se toman de backend/.env y, si no existen, la API usa su valor por defecto.
+      JWT_ACCESS_EXPIRES_IN:
+      JWT_REFRESH_EXPIRES_IN:
+      CORS_ORIGINS:
+      TZ_SHIFTS:
+      GEOFENCE_METERS:
+      ACCEPT_TIMEOUT_SECONDS:
+      CONFIRM_TIMEOUT_SECONDS:
+      FALSE_ALARM_LIMIT:
+      BLOCK_DAYS:
+      LOCATION_UPDATE_SECONDS:
+      WAIT_METERS_PER_MINUTE:
+      GUARD_METERS_PER_MINUTE:
+      COVERAGE_RADIUS_MIN_METERS:
+      COVERAGE_RADIUS_MAX_METERS:
+      ADMIN_NOTE_MAX_LENGTH:
+      TRIGGERED_AT_TOLERANCE_SECONDS:
     ports:
-      - "${PORT:-3000}:3000"
+      # Solo local por defecto; API_BIND=0.0.0.0 para probar con el teléfono en la LAN.
+      - "${API_BIND:-127.0.0.1}:${PORT:-3000}:3000"
 
 volumes:
   safelink_pgdata:

@@ -1,6 +1,7 @@
 import { defineConfig } from 'vitest/config';
 
-// Las pruebas no dependen de un .env: aquí se definen variables de prueba.
+// Las pruebas unitarias no dependen de un .env; las de integración toman
+// DATABASE_URL_TEST de backend/.env (y fallan con mensaje claro si falta).
 export default defineConfig({
   test: {
     environment: 'node',
@@ -10,7 +11,6 @@ export default defineConfig({
       NODE_ENV: 'test',
       JWT_SECRET: 'secreto-solo-para-pruebas-minimo-32-caracteres',
       DATABASE_URL: 'postgresql://safelink:safelink@localhost:5433/safelink_test',
-      DATABASE_URL_TEST: 'postgresql://safelink:safelink@localhost:5433/safelink_test',
     },
   },
 });

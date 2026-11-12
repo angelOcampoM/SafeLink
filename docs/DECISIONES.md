@@ -41,7 +41,7 @@ Fuentes de verdad, en orden: el código del front, `docs/HISTORIAS_DE_USUARIO.md
 
 - **Contexto:** el front sugiere datos que no caben en las tablas básicas: alertas ignoradas por guardia (`datos/memoria_base_datos.dart:47-48`), tiempo en el estado actual para escalar (`:101-102`), historial de cambios para A-05 y ubicaciones de la alerta.
 - **Decisión:** entran `alert_ignores`, la columna `alerts.status_changed_at` y la tabla `alert_status_history`. `alert_locations` queda para BE-03.
-- **Consecuencias:** el escalamiento (BE-05) se apoya en `status_changed_at`. Ver `docs/MODELO_DATOS.md` (se crea en el paso 3 de BE-01).
+- **Consecuencias:** el escalamiento (BE-05) se apoya en `status_changed_at`. Ver `docs/MODELO_DATOS.md`.
 
 ## D6 · Diferencias entre el front y `docs/context_desarrollo_actualizado.md`
 
@@ -133,7 +133,7 @@ G-03 **ya dice** "doble clic de volumen" (`docs/HISTORIAS_DE_USUARIO.md:167`). L
 
 ## D13 · Semilla de datos
 
-- **Decisión:** la semilla crea usuarios, perfiles de guardia y alertas **activas en cada estado**, con las cuentas del front. **Sin historial sintético**: va junto con las métricas (BE-07). La semilla **solo corre con `NODE_ENV` `development` o `test`** y se niega con `production` (paso 3 de BE-01).
+- **Decisión:** la semilla crea usuarios, perfiles de guardia y las alertas de ejemplo del front (`datos_semilla.dart`): **activas en cada estado** más las no activas que el front siembra (`no_response`, `escalated`, `resolved_by_admin`), con las cuentas del front. **Sin historial sintético**: va junto con las métricas (BE-07). La semilla **solo corre con `NODE_ENV` `development` o `test`** y se niega con `production` (paso 3 de BE-01).
 - **Consecuencias:** difiere de `CTX:404` ("al menos 30 alertas cerradas") y de la semilla del front (más de 80 históricas). Ver D6 punto 15.
 
 ## D14 · Máquina de estados de la alerta
@@ -147,7 +147,7 @@ G-03 **ya dice** "doble clic de volumen" (`docs/HISTORIAS_DE_USUARIO.md:167`). L
   - **`escalationReason = no_response` no equivale a `status = no_response`:** la métrica `noResponseRate` cuenta por la razón (`dominio/regla_metricas.dart:28`).
   - Desde `in_progress` nunca se escala.
 - **Decisión:** documentar el comportamiento real y **resolver en BE-05**: definir cuándo entra `no_response` (si es un paso intermedio persistente o se omite) y alinear tabla y escalamiento. Mientras tanto el contrato admite los ocho estados y ambas razones.
-- **Consecuencias:** `docs/MODELO_DATOS.md` (se crea en el paso 3 de BE-01) marca la inconsistencia. No se debe implementar el escalamiento antes de cerrar esta decisión.
+- **Consecuencias:** `docs/MODELO_DATOS.md` marca la inconsistencia. No se debe implementar el escalamiento antes de cerrar esta decisión.
 
 ## D15 · Una alerta activa por usuario
 
@@ -213,7 +213,7 @@ G-03 **ya dice** "doble clic de volumen" (`docs/HISTORIAS_DE_USUARIO.md:167`). L
 
 - **Contexto:** `triggeredAt` viene del dispositivo; un reloj adelantado o atrasado alteraría la prioridad (`dominio/regla_prioridad.dart:29`) y los tiempos de escalamiento.
 - **Decisión:** se guarda `triggeredAt` (solo se guarda y se devuelve) y una columna nueva `alerts.received_at` (hora del servidor al recibir `POST /alerts`). `received_at` se usa en **todo lo calculado**: `waitingMinutes` y `score`, temporizadores de escalamiento con hora del servidor (`received_at` / `status_changed_at`; detalle en BE-05 junto con D14), `avgAcceptanceSeconds` = `acceptedAt − receivedAt`, `avgArrivalSeconds` = `arrivedAt − (acceptedAt ?? receivedAt)` (generales y por guardia), `alertsByHour`, los filtros `from`/`to` de las rutas del admin (historial, métricas generales y por guardia) y el orden de `admin/alerts/escalated`. Validación de `triggeredAt`: ISO válido y dentro de ±`TRIGGERED_AT_TOLERANCE_SECONDS` (configurable, 600 por defecto) respecto a la hora del servidor; fuera de la ventana se **recorta a `received_at`** (no se rechaza, para no perder una alerta real por un reloj desfasado).
-- **Consecuencias:** el JSON `Alert` del front **no cambia**: `receivedAt` no se expone (es interna). Se agrega al modelo en el paso 3 de BE-01. Difiere del front, que calcula con `triggeredAt` (`dominio/regla_metricas.dart:22,33-34`, `dominio/filtro_historial.dart:20-21`). `TRIGGERED_AT_TOLERANCE_SECONDS` es una variable nueva que falta en `backend/src/config/env.ts`.
+- **Consecuencias:** el JSON `Alert` del front **no cambia**: `receivedAt` no se expone (es interna). Se agrega al modelo en el paso 3 de BE-01. Difiere del front, que calcula con `triggeredAt` (`dominio/regla_metricas.dart:22,33-34`, `dominio/filtro_historial.dart:20-21`). `TRIGGERED_AT_TOLERANCE_SECONDS` (600 por defecto) está en `backend/src/config/env.ts` y `backend/.env.example`.
 
 ## D25 · Revocación inmediata de sesiones
 
@@ -225,6 +225,12 @@ G-03 **ya dice** "doble clic de volumen" (`docs/HISTORIAS_DE_USUARIO.md:167`). L
 
 - **Decisión:** el servidor cierra el stream al llegar el `exp` del access token; el cliente reconecta con un token renovado. Antes de cerrar por `exp`, `logout` o baja, el servidor emite `{"error":{"code":"UNAUTHORIZED",...}}`. Hay un máximo de conexiones SSE por usuario, configurable; al superarlo se **cierra la conexión más antigua** (no se rechaza la nueva, para no dejar sin datos a la app que reconecta). El valor numérico queda abierto.
 - **Consecuencias:** requisito del cliente (BE-02 / BE-04): el `escuchar()` real debe reconectar al cerrarse el stream, renovando antes el token con `POST /auth/refresh`; no debe exponer la reconexión a los view models como fin de stream, y emite error solo si no puede reconectar. Los view models solo manejan `onError` (`presentacion/usuario/estado_alerta_view_model.dart:34-42`, `presentacion/guardia/navegacion_view_model.dart:63-71`).
+
+## D27 · `etaSeconds` se calcula en cada lectura
+
+- **Contexto:** el contrato lo marcaba como calculado "al aceptar"; el guardia se mueve y el valor se desactualizaría.
+- **Decisión (de la responsable del backend):** no hay columna. Mientras la alerta esté `in_progress`: distancia Haversine entre `guard_profiles.last_location_lat/lng` y la ubicación de la alerta, dividida entre `GUARD_METERS_PER_MINUTE` (convertido a segundos, entero). `null` si falta alguna de las dos ubicaciones o la alerta no está `in_progress`. Se usa solo `last_location`; ya no se cae al centro de cobertura. Nota: la variable real en `backend/src/config/env.ts` es `GUARD_METERS_PER_MINUTE`.
+- **Consecuencias:** implementación en BE-04. Se refleja en `docs/API_CONTRATO.md` y `docs/MODELO_DATOS.md`. Misma fórmula que `ReglaEta.segundos` (`dominio/regla_eta.dart:10-13`): distancia / metros por minuto × 60, redondeada y nunca negativa. Diferencias con el mock, sin efecto en la interfaz (`presentacion/usuario/estado_alerta_page.dart:214,250` muestra "Calculando llegada…" con `null`): `_etaDe` (`datos/memoria_base_datos.dart:121-129`) usa el centro de cobertura si falta la última ubicación y devuelve 0 si falta algo, y el mock pone 0 al llegar (`:153`); el backend no usa el centro de cobertura y devuelve `null` en esos casos y desde `guard_arrived`.
 
 ---
 
@@ -242,6 +248,9 @@ Cosas que no se cierran en el paso 2 pero que el backend **debe** resolver. Cada
 - **Límites de entrada** (BE-01 paso 4 en adelante): `password` ≤ 128; largos máximos de `name`, `email`, `phone`, `zone`, `search` y `photoPath`; `heading` entero 0–359; `radiusMeters` entero; `:id` validado como UUID (inválido → `404 NOT_FOUND`); `.strict()` también en el query.
 - **Semilla** (paso 3 de BE-01): solo corre con `NODE_ENV` `development` o `test`; se niega con `production`.
 - **Logs** (BE-01 paso 4 en adelante): prohibido registrar cuerpos, coordenadas, teléfonos, `password`, `accessToken` o `refreshToken`.
+- **`passwordHash` fuera de las respuestas** (BE-01 paso 5 / BE-02): el cliente Prisma lo omite por defecto (`backend/src/db/prisma.ts`), pero se puede saltar con `select: { passwordHash: true }`, con SQL crudo (`SELECT *` / `RETURNING *` sobre `users`) o con un `new PrismaClient` fuera de `src/db/`. Regla de ESLint que lo prohíba fuera del módulo de auth, serializadores que nunca hagan spread del registro de Prisma, y pruebas del `omit` en relaciones (`include: { user: true }`) y en lo que devuelven `create`/`update`/`upsert`.
+- **`NODE_ENV` de la API** (antes de BE-02): hoy `env.ts` toma `development` si falta. Antes de agregar comportamientos solo de desarrollo (detalles de error, CORS laxo, logs verbosos), hacerla obligatoria o usar `production` por defecto.
+- **`guard_id` en estados sin guardia** (BE-04): la base acepta una alerta `searching` con `guard_id`; la API debe dejarlo en `null` en `pending_location`, `searching` y `no_response` para que la visibilidad por `guard_id` no se abra de más.
 - **JWT con algoritmo fijo `HS256`** en firma y verificación (rechazar `none` y otros).
 - Contraseñas con **argon2**; el mock las guarda en claro (`datos/memoria_base_datos.dart:43`, `datos/memoria_auth_repository.dart:23`).
 - **Login**: con correo inexistente, verificar contra un hash ficticio para igualar tiempos (BE-01).
@@ -276,8 +285,12 @@ Cosas que no se cierran en el paso 2 pero que el backend **debe** resolver. Cada
 | `datos/memoria_admin_repository.dart:174-178` (`desbloquearUsuario`) | Opera sobre cualquier id; revienta si no existe | Solo `protected_user`; si no, `404 NOT_FOUND` (BE-07) |
 | `datos/nube_auth_repository.dart:50-54` (`/auth/session`) | Sin token (D7) | Exigir Bearer (BE-01) |
 
+**Validaciones que la base no puede imponer (paso 3 de BE-01)**
+
+- La API debe validar que `alerts.guard_id` y `alert_ignores.guard_id` sean usuarios con rol `guard` (no se puede con CHECK).
+
 **Decisiones de diseño aún abiertas**
 
+- **Ventana de gracia del refresh (D25), a resolver en BE-02:** D25 pide devolver "el mismo sucesor ya emitido", pero `refresh_tokens` solo guarda `token_hash`, así que el token en claro del sucesor no se puede reenviar. Opciones: cifrar temporalmente el sucesor, o redefinir la gracia como "aceptar el padre ya rotado dentro de la ventana, sin revocar la familia, emitiendo un sucesor nuevo de la misma familia".
 - Nombre de la variable del intervalo de `: ping` del SSE (BE-03).
 - Valores por defecto de la ventana de gracia del refresh (D25) y del máximo de conexiones SSE por usuario (D26; al superarlo se cierra la más antigua).
-- Agregar `TRIGGERED_AT_TOLERANCE_SECONDS` (600) a `backend/src/config/env.ts` (D24).

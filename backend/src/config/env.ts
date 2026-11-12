@@ -32,6 +32,7 @@ export const envSchema = z.object({
   COVERAGE_RADIUS_MIN_METERS: entero(500),
   COVERAGE_RADIUS_MAX_METERS: entero(10000),
   ADMIN_NOTE_MAX_LENGTH: entero(300),
+  TRIGGERED_AT_TOLERANCE_SECONDS: entero(600),
 });
 
 export type Config = z.infer<typeof envSchema>;

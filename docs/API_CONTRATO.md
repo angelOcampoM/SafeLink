@@ -124,7 +124,7 @@ Todos en `nube_mapeadores.dart:12-46`.
 
 **Estados activos:** `pending_location`, `searching`, `in_progress`, `guard_arrived` (`enums.dart:32`). **Terminales:** `closed`, `resolved_by_admin` (`enums.dart:35`). `no_response` y `escalated` no son ni activos ni terminales: por eso, cuando una alerta se escala, deja de ser la "alerta activa" del usuario y el canal `alerts/active` emite `null`.
 
-Estados y transiciones: ver `docs/MODELO_DATOS.md` (se crea en el paso 3 de BE-01) y la decisión D14 (hay una inconsistencia documentada).
+Estados y transiciones: ver `docs/MODELO_DATOS.md` y la decisión D14 (hay una inconsistencia documentada).
 
 ---
 
@@ -259,7 +259,7 @@ Ninguna otra ruta devuelve `accessToken` ni `refreshToken`. Nunca se devuelve la
 | `escalationReason` | enum o `null` | | Se conserva después de resolver (`alt-304` en `datos_semilla.dart:291`) |
 | `resolution` | enum o `null` | | |
 | `adminNote` | string o `null` | | Se guarda recortada (`trim`) |
-| `etaSeconds` | integer o `null` | **sí** | `distancia(guardia.lastLocation o coverageCenter, alerta.location) / GUARD_METERS_PER_MINUTE × 60`, redondeado, nunca negativo (`regla_eta.dart:10-13`). Lo calcula el **backend al aceptar**. En el mock `aceptarAlerta` no lo llena (`memoria_alerta_guardia_repository.dart:60-65`): solo la simulación lo pone y lo baja hasta 0 al llegar (`memoria_base_datos.dart:121-129,148,153`) |
+| `etaSeconds` | integer o `null` | **sí** | **Calculado en cada lectura, sin columna (D27, BE-04).** Solo con la alerta `in_progress`: distancia Haversine entre `guardia.lastLocation` y `alerta.location`, entre `GUARD_METERS_PER_MINUTE`, en segundos enteros, nunca negativo (`regla_eta.dart:10-13`). `null` si falta alguna de las dos ubicaciones o la alerta no está `in_progress`. En el mock `aceptarAlerta` no lo llena (`memoria_alerta_guardia_repository.dart:60-65`): solo la simulación lo pone y lo baja hasta 0 al llegar (`memoria_base_datos.dart:121-129,148,153`) |
 
 **Calculados** (no son columnas de `alerts`): `userName`, `userPhone`, `guardName`, `etaSeconds`, `photoUrl` (`alerta.dart:3-4`, aunque ese comentario solo menciona tres).
 
