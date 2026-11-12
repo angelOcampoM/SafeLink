@@ -46,6 +46,15 @@ services:
       # Sin valor: se toman de backend/.env y, si no existen, la API usa su valor por defecto.
       JWT_ACCESS_EXPIRES_IN:
       JWT_REFRESH_EXPIRES_IN:
+      REFRESH_GRACE_SECONDS:
+      JWT_SESSION_MAX_AGE:
+      RATE_LIMIT_LOGIN_MAX:
+      RATE_LIMIT_LOGIN_WINDOW:
+      RATE_LIMIT_REFRESH_MAX:
+      RATE_LIMIT_REFRESH_WINDOW:
+      ARGON2_MEMORY_KIB:
+      ARGON2_TIME_COST:
+      ARGON2_PARALLELISM:
       CORS_ORIGINS:
       TZ_SHIFTS:
       GEOFENCE_METERS:

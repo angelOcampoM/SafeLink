@@ -23,9 +23,12 @@
     "db:reset": "prisma migrate reset --force",
     "db:test:create": "node scripts/db-test.mjs create",
     "db:test:reset": "node scripts/db-test.mjs reset",
-    "db:test:deploy": "node scripts/db-test.mjs deploy"
+    "db:test:deploy": "node scripts/db-test.mjs deploy",
+    "verificar:conexion": "powershell -ExecutionPolicy Bypass -File scripts/verificar-conexion.ps1"
   },
   "dependencies": {
+    "@fastify/jwt": "^10.2.7",
+    "@fastify/rate-limit": "^11.2.2",
     "@prisma/adapter-pg": "7.10.1",
     "@prisma/client": "7.10.1",
     "argon2": "^0.45.2",

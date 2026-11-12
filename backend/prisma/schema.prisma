@@ -77,8 +77,8 @@ model User {
   createdAt                DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
   guardProfile  GuardProfile?
-  alerts        Alert[]        @relation("AlertOwner")
-  guardAlerts   Alert[]        @relation("AlertGuard")
+  alerts        Alert[]              @relation("AlertOwner")
+  guardAlerts   Alert[]              @relation("AlertGuard")
   ignores       AlertIgnore[]
   statusChanges AlertStatusHistory[]
   refreshTokens RefreshToken[]
@@ -87,17 +87,17 @@ model User {
 }
 
 model GuardProfile {
-  userId              String    @id @map("user_id") @db.Uuid
+  userId               String    @id @map("user_id") @db.Uuid
   // "HH:mm"; puede cruzar medianoche; inicio = fin es turno de 24 h (D1).
-  shiftStart          String    @map("shift_start") @db.Char(5)
-  shiftEnd            String    @map("shift_end") @db.Char(5)
-  coverageCenterLat   Float?    @map("coverage_center_lat")
-  coverageCenterLng   Float?    @map("coverage_center_lng")
-  coverageRadiusMeters Int?     @map("coverage_radius_meters")
-  zone                String?
-  lastLocationLat     Float?    @map("last_location_lat")
-  lastLocationLng     Float?    @map("last_location_lng")
-  lastLocationAt      DateTime? @map("last_location_at") @db.Timestamptz(3)
+  shiftStart           String    @map("shift_start") @db.Char(5)
+  shiftEnd             String    @map("shift_end") @db.Char(5)
+  coverageCenterLat    Float?    @map("coverage_center_lat")
+  coverageCenterLng    Float?    @map("coverage_center_lng")
+  coverageRadiusMeters Int?      @map("coverage_radius_meters")
+  zone                 String?
+  lastLocationLat      Float?    @map("last_location_lat")
+  lastLocationLng      Float?    @map("last_location_lng")
+  lastLocationAt       DateTime? @map("last_location_at") @db.Timestamptz(3)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -105,30 +105,30 @@ model GuardProfile {
 }
 
 model Alert {
-  id                String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId            String            @map("user_id") @db.Uuid
-  guardId           String?           @map("guard_id") @db.Uuid
-  status            AlertStatus
-  triggerMethod     TriggerMethod     @map("trigger_method")
+  id                 String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId             String            @map("user_id") @db.Uuid
+  guardId            String?           @map("guard_id") @db.Uuid
+  status             AlertStatus
+  triggerMethod      TriggerMethod     @map("trigger_method")
   // Llave de la foto en PhotoStorage (D2); photoUrl se calcula.
-  photoKey          String?           @map("photo_key")
-  evidenceIncomplete Boolean          @default(false) @map("evidence_incomplete")
-  lat               Float?
-  lng               Float?
-  heading           Int?
+  photoKey           String?           @map("photo_key")
+  evidenceIncomplete Boolean           @default(false) @map("evidence_incomplete")
+  lat                Float?
+  lng                Float?
+  heading            Int?
   // Hora del dispositivo: solo se guarda y se devuelve (D24).
-  triggeredAt       DateTime          @map("triggered_at") @db.Timestamptz(3)
+  triggeredAt        DateTime          @map("triggered_at") @db.Timestamptz(3)
   // Hora del servidor: base de todo lo calculado (D24).
-  receivedAt        DateTime          @default(now()) @map("received_at") @db.Timestamptz(3)
+  receivedAt         DateTime          @default(now()) @map("received_at") @db.Timestamptz(3)
   // Para los temporizadores de escalamiento (D5).
-  statusChangedAt   DateTime          @default(now()) @map("status_changed_at") @db.Timestamptz(3)
-  acceptedAt        DateTime?         @map("accepted_at") @db.Timestamptz(3)
-  arrivedAt         DateTime?         @map("arrived_at") @db.Timestamptz(3)
-  closedAt          DateTime?         @map("closed_at") @db.Timestamptz(3)
-  escalationReason  EscalationReason? @map("escalation_reason")
-  resolution        Resolution?
-  adminNote         String?           @map("admin_note")
-  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  statusChangedAt    DateTime          @default(now()) @map("status_changed_at") @db.Timestamptz(3)
+  acceptedAt         DateTime?         @map("accepted_at") @db.Timestamptz(3)
+  arrivedAt          DateTime?         @map("arrived_at") @db.Timestamptz(3)
+  closedAt           DateTime?         @map("closed_at") @db.Timestamptz(3)
+  escalationReason   EscalationReason? @map("escalation_reason")
+  resolution         Resolution?
+  adminNote          String?           @map("admin_note")
+  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
 
   user    User                 @relation("AlertOwner", fields: [userId], references: [id], onDelete: Restrict)
   guard   User?                @relation("AlertGuard", fields: [guardId], references: [id], onDelete: Restrict)
@@ -172,18 +172,20 @@ model AlertStatusHistory {
 }
 
 model RefreshToken {
-  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   // Id de la sesión (claim "sid" del access token); toda la rotación comparte familia.
-  familyId     String    @map("family_id") @db.Uuid
-  userId       String    @map("user_id") @db.Uuid
+  familyId        String    @map("family_id") @db.Uuid
+  // Inicio de la sesión (created_at de la raíz); se copia a cada sucesor. Fija la vida máxima absoluta.
+  familyStartedAt DateTime  @default(now()) @map("family_started_at") @db.Timestamptz(3)
+  userId          String    @map("user_id") @db.Uuid
   // SHA-256 en hexadecimal (64 caracteres) del token opaco; nunca el token (D25).
-  tokenHash    String    @unique @map("token_hash") @db.Char(64)
-  parentId     String?   @map("parent_id") @db.Uuid
-  expiresAt    DateTime  @map("expires_at") @db.Timestamptz(3)
-  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
-  usedAt       DateTime? @map("used_at") @db.Timestamptz(3)
-  revokedAt    DateTime? @map("revoked_at") @db.Timestamptz(3)
-  replacedById String?   @map("replaced_by_id") @db.Uuid
+  tokenHash       String    @unique @map("token_hash") @db.Char(64)
+  parentId        String?   @map("parent_id") @db.Uuid
+  expiresAt       DateTime  @map("expires_at") @db.Timestamptz(3)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  usedAt          DateTime? @map("used_at") @db.Timestamptz(3)
+  revokedAt       DateTime? @map("revoked_at") @db.Timestamptz(3)
+  replacedById    String?   @map("replaced_by_id") @db.Uuid
 
   user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   parent     RefreshToken?  @relation("RefreshRotation", fields: [parentId], references: [id], onDelete: SetNull)

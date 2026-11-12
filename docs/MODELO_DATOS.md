@@ -2,7 +2,7 @@
 
 **Historias que cubre:** U-01 a U-09, G-01 a G-07, A-01 a A-08 (modelo transversal del backend).
 **Tarjeta:** BE-01, paso 3 (`feat(BE-01): modelo de datos, migración inicial y semillas`).
-**Fuentes verificadas:** `backend/prisma/schema.prisma`, `backend/prisma/migrations/20261112024720_init/migration.sql`, `backend/prisma/migrations/20261112030815_restricciones_extra/migration.sql`, `backend/prisma/seed.ts`, `lib/dominio/regla_alerta.dart`, `lib/datos/memoria_base_datos.dart`. Decisiones relacionadas en `docs/DECISIONES.md` (D1, D2, D5, D8, D10, D13, D14, D15, D17, D18, D23, D24, D25); formas JSON en `docs/API_CONTRATO.md`.
+**Fuentes verificadas:** `backend/prisma/schema.prisma`, `backend/prisma/migrations/20261112024720_init/migration.sql`, `backend/prisma/migrations/20261112030815_restricciones_extra/migration.sql`, `backend/prisma/migrations/20261112042801_refresh_family_started_at/migration.sql`, `backend/prisma/seed.ts`, `lib/dominio/regla_alerta.dart`, `lib/datos/memoria_base_datos.dart`. Decisiones relacionadas en `docs/DECISIONES.md` (D1, D2, D5, D8, D10, D13, D14, D15, D17, D18, D23, D24, D25); formas JSON en `docs/API_CONTRATO.md`.
 
 Si este documento y el código discrepan, gana el código y se reporta; no se corrige a ciegas.
 
@@ -112,6 +112,7 @@ erDiagram
         uuid user_id FK
         char64 token_hash UK
         uuid parent_id FK
+        timestamptz family_started_at
         timestamptz expires_at
         timestamptz created_at
         timestamptz used_at
@@ -261,10 +262,11 @@ Cubre las sesiones (D8, D25). **Toda la tabla es interna**: ningún campo viaja 
 | `user_id` | `uuid` | no | — | FK `users(id)` Cascade; índice `refresh_tokens_user_id_idx` | Dueño |
 | `token_hash` | `char(64)` | no | — | **único** (`refresh_tokens_token_hash_key`); CHECK `refresh_tokens_token_hash_format_chk` (`^[0-9a-f]{64}$`) | SHA-256 en hexadecimal del token opaco; nunca se guarda el token (D25) |
 | `parent_id` | `uuid` | sí | — | FK `refresh_tokens(id)` SetNull | Token del que se rotó |
-| `expires_at` | `timestamptz(3)` | no | — | — | Vencimiento (30 días por defecto, D8) |
+| `family_started_at` | `timestamptz(3)` | no | `CURRENT_TIMESTAMP` | — | Inicio de la sesión (se copia a cada sucesor). Sirve para la vida máxima absoluta `JWT_SESSION_MAX_AGE` (D25). La migración rellenó las filas existentes con el `created_at` más antiguo de su familia |
+| `expires_at` | `timestamptz(3)` | no | — | — | Vencimiento: `min(emisión + JWT_REFRESH_EXPIRES_IN, family_started_at + JWT_SESSION_MAX_AGE)` (30 días y 90 días por defecto, D8, D25) |
 | `created_at` | `timestamptz(3)` | no | `CURRENT_TIMESTAMP` | — | Emisión |
-| `used_at` | `timestamptz(3)` | sí | — | — | Cuándo se usó para rotar; reutilizarlo después revoca la familia |
-| `revoked_at` | `timestamptz(3)` | sí | — | — | Revocación (logout, baja, reutilización) |
+| `used_at` | `timestamptz(3)` | sí | — | — | Cuándo se usó para rotar; reutilizarlo fuera de la ventana de gracia (`REFRESH_GRACE_SECONDS`) revoca la familia (D25) |
+| `revoked_at` | `timestamptz(3)` | sí | — | — | Revocación (logout, baja, reutilización, hermano de gracia sin usar) |
 | `replaced_by_id` | `uuid` | sí | — | FK `refresh_tokens(id)` SetNull | Sucesor emitido en la rotación (para la ventana de gracia, D25) |
 
 ---

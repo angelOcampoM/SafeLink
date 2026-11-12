@@ -16,6 +16,7 @@ import {
   notFound,
   outsideGeofence,
   serviceUnavailable,
+  tooManyRequests,
   unauthorized,
   userBlocked,
 } from '../../src/errors/app-error.js';
@@ -59,13 +60,14 @@ describe('Contrato de mensajes con lib/dominio/errores.dart (BE-01 paso 4)', () 
     expect(notFound().message).toBe('No encontramos lo que buscabas');
   });
 
-  it('los 9 códigos del front están en ERROR_CODES y FORBIDDEN es el único extra', () => {
+  it('los 9 códigos del front están en ERROR_CODES y los únicos extras aprobados son FORBIDDEN y TOO_MANY_REQUESTS', () => {
     const frente = new Set([...pares.map(([c]) => c), 'NOT_FOUND', 'INVALID_STATE']);
     expect(frente.size).toBe(9);
     for (const c of frente) expect(ERROR_CODES).toContain(c);
     const extras = ERROR_CODES.filter((c) => !frente.has(c));
-    expect(extras).toEqual(['FORBIDDEN']);
+    expect(extras).toEqual(['FORBIDDEN', 'TOO_MANY_REQUESTS']);
     expect(MESSAGES.FORBIDDEN).toBe('No tienes permiso para realizar esta acción.');
+    expect(MESSAGES.TOO_MANY_REQUESTS).toBe('Demasiados intentos. Espera un momento e intenta de nuevo.');
   });
 
   it('MESSAGES cubre todos los códigos salvo INVALID_STATE', () => {
@@ -80,6 +82,7 @@ describe('Tabla código -> HTTP -> cuerpo (docs/API_CONTRATO.md)', () => {
     ['invalidCredentials', invalidCredentials, 'INVALID_CREDENTIALS', 401, MESSAGES.INVALID_CREDENTIALS],
     ['unauthorized', unauthorized, 'UNAUTHORIZED', 401, MESSAGES.UNAUTHORIZED],
     ['forbidden', forbidden, 'FORBIDDEN', 403, MESSAGES.FORBIDDEN],
+    ['tooManyRequests', tooManyRequests, 'TOO_MANY_REQUESTS', 429, MESSAGES.TOO_MANY_REQUESTS],
     ['userBlocked', userBlocked, 'USER_BLOCKED', 403, MESSAGES.USER_BLOCKED],
     ['notFound', () => notFound(), 'NOT_FOUND', 404, MESSAGES.NOT_FOUND],
     ['emailTaken', emailTaken, 'EMAIL_TAKEN', 409, MESSAGES.EMAIL_TAKEN],

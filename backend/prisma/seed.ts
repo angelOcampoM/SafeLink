@@ -6,7 +6,7 @@
 // Solo corre con NODE_ENV development o test.
 
 import { createHash } from 'node:crypto';
-import argon2 from 'argon2';
+import { createPasswordHasher } from '../src/auth/password.js';
 import { envSchema } from '../src/config/env.js';
 import { createPrisma } from '../src/db/prisma.js';
 import { AlertStatus, Role, TriggerMethod } from '../src/generated/prisma/enums.js';
@@ -281,7 +281,14 @@ async function main(): Promise<void> {
   }
   // Mismos valores y defaults que la API (src/config/env.ts).
   const cfg = envSchema
-    .pick({ TZ_SHIFTS: true, ACCEPT_TIMEOUT_SECONDS: true, CONFIRM_TIMEOUT_SECONDS: true })
+    .pick({
+      TZ_SHIFTS: true,
+      ACCEPT_TIMEOUT_SECONDS: true,
+      CONFIRM_TIMEOUT_SECONDS: true,
+      ARGON2_MEMORY_KIB: true,
+      ARGON2_TIME_COST: true,
+      ARGON2_PARALLELISM: true,
+    })
     .safeParse(process.env);
   if (!cfg.success) {
     console.error(
@@ -289,6 +296,11 @@ async function main(): Promise<void> {
     );
     process.exit(1);
   }
+  const hasher = createPasswordHasher({
+    memoryCost: cfg.data.ARGON2_MEMORY_KIB,
+    timeCost: cfg.data.ARGON2_TIME_COST,
+    parallelism: cfg.data.ARGON2_PARALLELISM,
+  });
   const tz = cfg.data.TZ_SHIFTS;
   const aceptacionMs = cfg.data.ACCEPT_TIMEOUT_SECONDS * 1000;
   const confirmacionMs = cfg.data.CONFIRM_TIMEOUT_SECONDS * 1000;
@@ -302,7 +314,7 @@ async function main(): Promise<void> {
   try {
     // Usuarios
     const creado = new Date(ahora.getTime() - 90 * 86_400_000);
-    const passwordHash = await argon2.hash(PASSWORD, { type: argon2.argon2id });
+    const passwordHash = await hasher.hash(PASSWORD);
     for (const c of cuentas) {
       const data = {
         name: c.name,

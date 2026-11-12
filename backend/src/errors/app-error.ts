@@ -12,6 +12,7 @@ export const ERROR_CODES = [
   'INVALID_STATE',
   'OUTSIDE_GEOFENCE',
   'SERVICE_UNAVAILABLE',
+  'TOO_MANY_REQUESTS',
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];
@@ -26,6 +27,7 @@ export const MESSAGES = {
   ALERT_TAKEN: 'Otro guardia ya aceptó esta alerta',
   OUTSIDE_GEOFENCE: 'Aún no estás en el punto de la alerta',
   SERVICE_UNAVAILABLE: 'No pudimos conectar con el servidor. Intenta de nuevo.',
+  TOO_MANY_REQUESTS: 'Demasiados intentos. Espera un momento e intenta de nuevo.',
 } as const;
 
 export interface AppErrorExtra {
@@ -56,6 +58,10 @@ export const invalidCredentials = (): AppError =>
 
 export const unauthorized = (): AppError =>
   new AppError('UNAUTHORIZED', MESSAGES.UNAUTHORIZED, 401);
+
+/** Rate limit excedido (429); el front lo ve como error genérico con este mensaje. */
+export const tooManyRequests = (): AppError =>
+  new AppError('TOO_MANY_REQUESTS', MESSAGES.TOO_MANY_REQUESTS, 429);
 
 export const forbidden = (): AppError => new AppError('FORBIDDEN', MESSAGES.FORBIDDEN, 403);
 
