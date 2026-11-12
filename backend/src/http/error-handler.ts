@@ -7,6 +7,8 @@ import {
   invalidState,
   notFound,
   serviceUnavailable,
+  tooManyRequests,
+  unauthorized,
 } from '../errors/app-error.js';
 import { errorBody } from './envelope.js';
 import { describeZodError } from './validate.js';
@@ -93,6 +95,8 @@ export function toAppError(err: unknown): AppError | null {
   const status = statusOf(err);
 
   if (code !== undefined) {
+    // Cualquier fallo de @fastify/jwt (ausente, malformado, firma inválida, vencido): mensaje fijo.
+    if (code.startsWith('FST_JWT_') || code.startsWith('FAST_JWT_')) return unauthorized();
     if (code === 'FST_ERR_CTP_BODY_TOO_LARGE') return invalidInput(MSG_BODY_TOO_LARGE);
     if (code.startsWith('FST_ERR_CTP_') || code.startsWith('FST_ERR_VALIDATION')) {
       return invalidInput(MSG_BODY_INVALID);
@@ -104,6 +108,7 @@ export function toAppError(err: unknown): AppError | null {
     if (DB_NOT_FOUND_CODES.has(code)) return notFound();
   }
   if (errName(err) === 'PrismaClientInitializationError') return serviceUnavailable();
+  if (status === 429) return tooManyRequests();
   if (status === 413) return invalidInput(MSG_BODY_TOO_LARGE);
   if (status === 415) return invalidInput(MSG_BODY_INVALID);
   if (status === 400 && typeof err === 'object' && err !== null && 'validation' in err) {
@@ -147,28 +152,28 @@ function logUnexpected(
   else request.log.error(fields, msg);
 }
 
-/** Para la opción `frameworkErrors` de Fastify (URL inválida, parámetro demasiado largo, etc.). */
-export function frameworkErrorHandler(
-  err: FastifyError,
-  request: FastifyRequest,
-  reply: FastifyReply,
-): void {
-  let appError =
-    err.code === 'FST_ERR_BAD_URL' || err.code === 'FST_ERR_MAX_PARAM_LENGTH'
-      ? notFound()
-      : toAppError(err);
-  if (appError === null) {
-    logUnexpected(request, err, process.env.NODE_ENV === 'production', 'Error inesperado');
-    appError = internalError();
-  }
-  void reply.status(appError.httpStatus).send(errorBody(appError));
+/** Para la opción frameworkErrors de Fastify (URL inválida, parámetro demasiado largo, etc.). */
+export function createFrameworkErrorHandler(
+  isProduction: boolean,
+): (err: FastifyError, request: FastifyRequest, reply: FastifyReply) => void {
+  return (err: FastifyError, request: FastifyRequest, reply: FastifyReply): void => {
+    let appError =
+      err.code === 'FST_ERR_BAD_URL' || err.code === 'FST_ERR_MAX_PARAM_LENGTH'
+        ? notFound()
+        : toAppError(err);
+    if (appError === null) {
+      logUnexpected(request, err, isProduction, 'Error inesperado');
+      appError = internalError();
+    }
+    void reply.status(appError.httpStatus).send(errorBody(appError));
+  };
 }
 
 export function registerErrorHandling(
   app: FastifyInstance,
-  options: { isProduction?: boolean } = {},
+  options: { isProduction: boolean },
 ): void {
-  const isProduction = options.isProduction ?? process.env.NODE_ENV === 'production';
+  const { isProduction } = options;
 
   app.setErrorHandler((err: FastifyError, request: FastifyRequest, reply: FastifyReply) => {
     let appError = toAppError(err);

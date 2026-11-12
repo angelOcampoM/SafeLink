@@ -1,7 +1,7 @@
 # SafeLink — Registro de decisiones
 
 **Historias que cubre:** U-01 a U-09, G-01 a G-07, A-01 a A-08 (decisiones transversales del backend).
-**Tarjeta:** BE-01 (paso 2). Varias decisiones se implementan en BE-02 a BE-07; se indica en cada una.
+**Tarjeta:** BE-01 (paso 2; actualizado en el paso 5: D25, D28 y D29). Varias decisiones se implementan en BE-02 a BE-07; se indica en cada una.
 **Fecha de todas las decisiones:** 2026-11-10. **Decidido por:** el equipo / la responsable del backend.
 
 Formato de cada decisión: contexto, opciones, decisión, consecuencias. Las rutas de archivo del front son relativas a `lib/`. Si el código y este documento discrepan, se reporta; no se corrige a ciegas.
@@ -34,7 +34,7 @@ Fuentes de verdad, en orden: el código del front, `docs/HISTORIAS_DE_USUARIO.md
 ## D4 · Conexión de la app a un dispositivo físico
 
 - **Contexto:** el front no tiene cliente HTTP; `SafeLinkService` es simulado (`datos/safelink_service.dart:1-8`, `main.dart:44,117-127`).
-- **Decisión:** el paso 8 de BE-01 agrega un **cliente HTTP mínimo** en la app (solo login y `GET /auth/me`), activado con `--dart-define=API_URL`. El modo simulado sigue por defecto.
+- **Decisión:** el paso 8 de BE-01 agrega un **cliente HTTP mínimo** en la app (`lib/datos/http_safelink_service.dart`): login, `/auth/me`, refresh, logout y `/auth/session`, almacén de tokens (`almacen_tokens.dart`), refresh compartido (single-flight) ante un 401 y refresh antes de restaurar la sesión; activado con `--dart-define=API_URL` (en release/profile solo `https`). El tiempo real llega en BE-03/BE-04. El modo simulado sigue por defecto.
 - **Consecuencias:** toca `lib/` y `pubspec.yaml`, por lo que **requiere confirmación explícita antes de tocar `lib/`**. El resto de la app se conecta en BE-02 en adelante.
 
 ## D5 · Tablas extra
@@ -218,8 +218,22 @@ G-03 **ya dice** "doble clic de volumen" (`docs/HISTORIAS_DE_USUARIO.md:167`). L
 ## D25 · Revocación inmediata de sesiones
 
 - **Contexto:** con solo `is_active` y un JWT de 15 min, un logout o una baja tardarían hasta 15 min en surtir efecto.
-- **Decisión:** el access JWT lleva `sid` (id de la familia en `refresh_tokens`) además de `sub` y `role`, firmado con HS256. `authenticate`, en la **misma consulta** que relee `is_active`, rechaza un `sid` revocado con `401`. **Excepción:** `POST /auth/session` usa verificación propia: `401` solo si falta el token, la firma o el algoritmo no son válidos, o venció; con `sid` revocado, usuario inactivo o `userId ≠ sub` responde `200` con `data: null` (D7). `logout` revoca su familia; la baja de un guardia revoca todas las suyas; ambos cierran los streams SSE abiertos vía `EventBus`. Refresh token: CSPRNG de al menos 256 bits, hash **SHA-256 indexado** (no argon2: es un secreto aleatorio de alta entropía y se busca por hash), rotación con detección de reutilización (reutilizar un token rotado revoca la familia) y una **ventana de gracia corta y configurable** para dos refresh concurrentes legítimos: dentro de ella se devuelve el **mismo sucesor ya emitido** (no se crea otra rama de la familia).
-- **Consecuencias:** una consulta a la base por petición autenticada. Complementa D8.
+- **Decisión:** el access JWT lleva `sid` (id de la familia en `refresh_tokens`) además de `sub` y `role`, firmado con HS256. `authenticate`, en la **misma consulta** que relee `is_active`, rechaza un `sid` revocado con `401`. **Excepción:** `POST /auth/session` usa verificación propia: `401` solo si falta el token, la firma o el algoritmo no son válidos, o venció; con `sid` revocado, usuario inactivo o `userId ≠ sub` responde `200` con `data: null` (D7). `logout` revoca su familia; la baja de un guardia revoca todas las suyas; ambos cierran los streams SSE abiertos vía `EventBus`. Refresh token: CSPRNG de al menos 256 bits, hash **SHA-256 indexado** (no argon2: es un secreto aleatorio de alta entropía y se busca por hash), rotación con detección de reutilización (reutilizar un token rotado revoca la familia) y una **ventana de gracia corta y configurable** para dos refresh concurrentes legítimos (ver abajo, implementada en BE-01 paso 5).
+- **Implementación (BE-01 paso 5, `backend/src/auth/tokens.ts`):**
+  - **Refresh token:** 32 bytes de CSPRNG en base64url; en la base solo se guarda su SHA-256 en hexadecimal (`token_hash`).
+  - **Forma del token:** un `refreshToken` que no sea base64url de 43 caracteres da `401` sin tocar la base.
+  - **Vigencia deslizante con tope absoluto:** `expires_at = min(now + JWT_REFRESH_EXPIRES_IN, family_started_at + JWT_SESSION_MAX_AGE)` (`JWT_SESSION_MAX_AGE`, 90d por defecto). Un refresh vencido, o de una sesión que superó la vida máxima, da `401` **sin** revocar la familia.
+  - **Serialización por familia:** toda operación que cambia una familia (rotar, revocar, revocar todas las de un usuario) toma primero `pg_advisory_xact_lock(hashtextextended(family_id, 0))`; la rotación después bloquea la fila con `SELECT … FOR UPDATE`. Esto corrige la carrera revocación contra rotación: ningún sucesor nace después de una revocación. `revokeAllUserFamilies` toma los locks de varias familias en orden estable (ordenadas) para evitar interbloqueos.
+  - **Hermano de gracia:** al rotar normalmente una rama que tiene hermano de gracia (mismo `parent_id`), el hermano que no se haya usado se revoca.
+  - **Gracia solo con sucesor intacto:** la reutilización dentro de la ventana se acepta solo si el sucesor original sigue sin usar ni revocar; si ya rotó, es reutilización y se revoca la familia.
+  - **Token revocado presentado:** si se presenta un token ya revocado (p. ej. el hermano descartado) y la familia aún tiene tokens vivos, es reutilización: se revoca toda la familia. El cliente legítimo nunca vuelve a presentar la rama que descartó.
+  - **Ventana de gracia (`REFRESH_GRACE_SECONDS`, 0–60, default 5; 0 la desactiva):** un token ya rotado, presentado dentro de la ventana contada desde su `used_at`, se acepta **una vez más** y emite un **sucesor nuevo** de la misma familia (`parent_id` = el token rotado), **sin revocar** la familia. No se reenvía el sucesor original porque solo se guarda el hash. La gracia consumida se detecta porque el token ya tiene 2 hijos.
+  - **Reutilización:** fuera de la ventana, o con la gracia ya consumida, se revoca **toda la familia** y se responde `401`.
+  - **JWT:** al verificar se exigen `exp`, `iat`, `sub` y `sid` y se aplica `maxAge` igual a `JWT_ACCESS_EXPIRES_IN`. La verificación es manual (`verifyAccessToken`, Bearer con formato estricto), no `request.jwtVerify`.
+  - **Rol desde la base:** `request.user` (`id`, `role`, `sid`) lo asigna **solo** `authenticate` y toma el rol de la base de datos, no del claim del token. `POST /auth/session` tiene la política `custom` en el registro central (`backend/src/security/policies.ts`): no lleva el hook de autenticación general y verifica su token por su cuenta.
+  - **argon2:** argon2id con parámetros fijados por entorno (`ARGON2_MEMORY_KIB` 65536, `ARGON2_TIME_COST` 3, `ARGON2_PARALLELISM` 4). En un login correcto, si `needsRehash` indica parámetros distintos, el hash se actualiza (un fallo no bloquea el login).
+  - **Login con usuario inactivo:** se verifica la contraseña contra su hash real y después se rechaza con `INVALID_CREDENTIALS`, para igualar tiempos con los demás casos.
+- **Consecuencias:** una consulta a la base por petición autenticada. Dentro de la ventana de gracia **pueden coexistir dos sucesores vivos** de la misma familia (el original y el de la gracia); ambos mueren al revocar la familia. Reemplaza la idea inicial de "devolver el mismo sucesor", que no es posible sin guardar el token en claro. Complementa D8.
 
 ## D26 · Streams SSE de larga vida
 
@@ -231,6 +245,18 @@ G-03 **ya dice** "doble clic de volumen" (`docs/HISTORIAS_DE_USUARIO.md:167`). L
 - **Contexto:** el contrato lo marcaba como calculado "al aceptar"; el guardia se mueve y el valor se desactualizaría.
 - **Decisión (de la responsable del backend):** no hay columna. Mientras la alerta esté `in_progress`: distancia Haversine entre `guard_profiles.last_location_lat/lng` y la ubicación de la alerta, dividida entre `GUARD_METERS_PER_MINUTE` (convertido a segundos, entero). `null` si falta alguna de las dos ubicaciones o la alerta no está `in_progress`. Se usa solo `last_location`; ya no se cae al centro de cobertura. Nota: la variable real en `backend/src/config/env.ts` es `GUARD_METERS_PER_MINUTE`.
 - **Consecuencias:** implementación en BE-04. Se refleja en `docs/API_CONTRATO.md` y `docs/MODELO_DATOS.md`. Misma fórmula que `ReglaEta.segundos` (`dominio/regla_eta.dart:10-13`): distancia / metros por minuto × 60, redondeada y nunca negativa. Diferencias con el mock, sin efecto en la interfaz (`presentacion/usuario/estado_alerta_page.dart:214,250` muestra "Calculando llegada…" con `null`): `_etaDe` (`datos/memoria_base_datos.dart:121-129`) usa el centro de cobertura si falta la última ubicación y devuelve 0 si falta algo, y el mock pone 0 al llegar (`:153`); el backend no usa el centro de cobertura y devuelve `null` en esos casos y desde `guard_arrived`.
+
+## D28 · `NODE_ENV` por defecto `production`
+
+- **Contexto:** `env.ts` tomaba `development` si `NODE_ENV` faltaba; los comportamientos solo de desarrollo (errores detallados, CORS laxo, logs verbosos) quedarían activos por descuido.
+- **Decisión:** si `NODE_ENV` falta, vale `production` (`backend/src/config/env.ts`): falla del lado seguro. El modo desarrollo se pide de forma explícita (`NODE_ENV=development` en `.env`; `.env.example` ya lo trae). La semilla (`prisma/seed.ts`) exige por su cuenta `development` o `test` definido y se niega en cualquier otro caso, incluido no definido.
+- **Consecuencias:** quien copie `.env.example` no nota diferencia; quien no defina la variable corre en modo producción (sin pila en el log, ver paso 4). Atiende el pendiente "`NODE_ENV` de la API".
+
+## D29 · Rate limit y código `TOO_MANY_REQUESTS`
+
+- **Contexto:** `POST /auth/login` y `/auth/refresh` son públicos y permiten adivinar contraseñas o tokens.
+- **Decisión:** `@fastify/rate-limit` con almacén **en memoria**, **por IP**, solo en `POST /auth/login` (10 por 1 m) y `POST /auth/refresh` (30 por 1 m); topes y ventanas configurables (`RATE_LIMIT_LOGIN_MAX` / `RATE_LIMIT_LOGIN_WINDOW`, `RATE_LIMIT_REFRESH_MAX` / `RATE_LIMIT_REFRESH_WINDOW`). Cuenta **todos** los intentos, no solo los fallidos. Al excederse: `429` con `{ "error": { "code": "TOO_MANY_REQUESTS", "message": "Demasiados intentos. Espera un momento e intenta de nuevo." } }` y cabecera `Retry-After`; no se envían `X-RateLimit-*`. `TOO_MANY_REQUESTS` es un código nuevo, **EXCEPCIÓN aprobada por la responsable** a "no inventar códigos" (igual que `FORBIDDEN`, D9). También se mapea un 429 de Fastify no controlado (`error-handler.ts`).
+- **Consecuencias:** el front trata los códigos desconocidos como error genérico y muestra el `message` (`datos/nube_mapeadores.dart:~262`). Con el almacén en memoria el límite es por proceso (una instancia). Detrás de un proxy hay que configurar `trustProxy`, o todas las peticiones compartirán la IP del proxy. **`POST /auth/register` (BE-02) debe sumarse** al límite.
 
 ---
 
@@ -244,18 +270,23 @@ Cosas que no se cierran en el paso 2 pero que el backend **debe** resolver. Cada
 - **`@fastify/helmet`** con encabezados de seguridad.
 - **`bodyLimit`** explícito: **atendido** en BE-01 paso 4 con `BODY_LIMIT_BYTES` (1 MiB por defecto, máximo 10 MiB). Con la subida de foto en BE-03 se sube solo en esa ruta, nunca el global.
 - **Recurso ajeno = 404, no 403** (BE-02 en adelante): `forbidden()` solo cuando el rol no tiene permiso para la ruta. La propiedad se valida antes de escribir (`where: { id, ownerId }`); no depender de que una violación de FK (400) o de unicidad (409) dé la respuesta, porque 400/409 frente a 404 permite enumerar.
-- **Errores de plugins** (BE-01 paso 5 y BE-02): traducir `FST_JWT_*` a `unauthorized()` y el 429 de rate limit a su propio error, ambos con mensaje fijo; hoy un 4xx de Fastify no mapeado termina en 500.
-- **Rate limit** en `POST /auth/login`, `/auth/refresh` (BE-01) y `POST /alerts` (BE-03); en `POST /auth/register` (BE-02); además, por usuario y acorde a `LOCATION_UPDATE_SECONDS`, en `PUT /guard/location` (BE-04) y `POST /alerts/:id/locations` (BE-03).
-- **Deny-by-default** (BE-01, paso 6): toda ruta declara `roles` o `public: true` en su configuración; un hook `onRoute` hace fallar el arranque si falta; una prueba recorre todas las rutas registradas.
+- **Errores de plugins**: traducción de `FST_JWT_*` (y `FAST_JWT_*`) a `UNAUTHORIZED` con mensaje fijo: **atendido en BE-01 paso 5** (`backend/src/http/error-handler.ts`). El 429 con su propio error: **atendido** (D29).
+- **`Cache-Control: no-store`** en todas las respuestas bajo `/api/v1`: **atendido en BE-01 paso 5** (`backend/src/app.ts`).
+- **Rate limit**: `POST /auth/login` y `/auth/refresh`: **atendido** (D29). **Sigue pendiente en BE-02:** `POST /auth/register`. `POST /alerts` (BE-03); además, por usuario y acorde a `LOCATION_UPDATE_SECONDS`, en `PUT /guard/location` (BE-04) y `POST /alerts/:id/locations` (BE-03).
+- **Deny-by-default**: **atendido en BE-01 paso 6**. Registro central único `ROUTE_POLICIES` (`backend/src/security/policies.ts`) con las 36 entradas; un hook `onRoute` aborta el arranque si una ruta bajo `/api/v1` no tiene política, si su `config` (opcional) contradice la central o si está fuera del prefijo (solo `GET /health` exento). Detalle y matriz en `docs/PERMISOS.md`; pruebas en `backend/tests/integration/seguridad/` y `backend/tests/unit/politicas-contrato.test.ts`.
 - **Límites de entrada** (BE-01 paso 4 en adelante): `password` ≤ 128; largos máximos de `name`, `email`, `phone`, `zone`, `search` y `photoPath`; `heading` entero 0–359; `radiusMeters` entero; `:id` validado como UUID (inválido → `404 NOT_FOUND`); `.strict()` también en el query.
 - **Semilla** (paso 3 de BE-01): solo corre con `NODE_ENV` `development` o `test`; se niega con `production`.
 - **Logs** (BE-01 paso 4 en adelante): prohibido registrar cuerpos, coordenadas, teléfonos, `password`, `accessToken` o `refreshToken`.
-- **`passwordHash` fuera de las respuestas** (BE-01 paso 5 / BE-02): el cliente Prisma lo omite por defecto (`backend/src/db/prisma.ts`), pero se puede saltar con `select: { passwordHash: true }`, con SQL crudo (`SELECT *` / `RETURNING *` sobre `users`) o con un `new PrismaClient` fuera de `src/db/`. Regla de ESLint que lo prohíba fuera del módulo de auth, serializadores que nunca hagan spread del registro de Prisma, y pruebas del `omit` en relaciones (`include: { user: true }`) y en lo que devuelven `create`/`update`/`upsert`.
-- **`NODE_ENV` de la API** (antes de BE-02): hoy `env.ts` toma `development` si falta. Antes de agregar comportamientos solo de desarrollo (detalles de error, CORS laxo, logs verbosos), hacerla obligatoria o usar `production` por defecto.
+- **`passwordHash` fuera de las respuestas**: **atendido en BE-01 paso 5.** El cliente Prisma lo omite por defecto (`backend/src/db/prisma.ts`). Regla de ESLint (`backend/eslint.config.mjs`, `no-restricted-syntax`) que prohíbe `passwordHash` dentro de `select`/`omit` fuera de `src/modules/auth/`, y `new PrismaClient` fuera de `src/db/` (exentos `tests/**`). Serializador `User` explícito, campo por campo, sin spread (`src/modules/auth/serializers.ts`). **Sigue pendiente (BE-02 en adelante):** el SQL crudo (`SELECT *` / `RETURNING *` sobre `users`) no lo cubre la regla; pruebas del `omit` en relaciones (`include: { user: true }`) y en lo que devuelven `create`/`update`/`upsert`.
+- **`NODE_ENV` de la API**: **atendido** (D28): `production` por defecto.
+- **Rate limit solo por IP** (antes de cualquier despliegue): (a) detrás de Docker con puertos publicados, docker-proxy puede hacer que todos los clientes compartan la IP del gateway y un solo cubo; verificarlo con `API_BIND=0.0.0.0`. Si algún día se configura `trustProxy`, que sea una lista de IP concretas, nunca `true` (X-Forwarded-For se puede falsificar). (b) No hay límite por cuenta (correo normalizado) contra ataques distribuidos a una sola cuenta. (c) En IPv6 cada /128 es una clave distinta.
+- **`JWT_SECRET` de baja entropía** (antes de cualquier despliegue): hoy solo se exigen 32 caracteres. En `production`, rechazar valores de ejemplo o triviales y exigir al menos 32 bytes aleatorios (43+ caracteres base64url) con el comando del README.
+- **Regla ESLint de `passwordHash`**: es una capa extra que se puede saltar (clave computada `{[k]: false}`, `$queryRaw` que seleccione `password_hash`, o desde `tests/**`). El control real es el `omit` global de `backend/src/db/prisma.ts` y la prueba "ninguna respuesta contiene passwordHash"; mantener esa prueba en cada tarjeta nueva.
+- **Baja de usuarios** (BE-06): poner primero `is_active=false` y después `revokeAllUserFamilies`; así una familia creada por un login concurrente entre la lectura y el bloqueo ya no sirve (`authenticate` y la rotación rechazan inactivos).
 - **`guard_id` en estados sin guardia** (BE-04): la base acepta una alerta `searching` con `guard_id`; la API debe dejarlo en `null` en `pending_location`, `searching` y `no_response` para que la visibilidad por `guard_id` no se abra de más.
-- **JWT con algoritmo fijo `HS256`** en firma y verificación (rechazar `none` y otros).
-- Contraseñas con **argon2**; el mock las guarda en claro (`datos/memoria_base_datos.dart:43`, `datos/memoria_auth_repository.dart:23`).
-- **Login**: con correo inexistente, verificar contra un hash ficticio para igualar tiempos (BE-01).
+- **JWT con algoritmo fijo `HS256`** en firma y verificación: **atendido en BE-01 paso 5** (`backend/src/plugins/auth.ts`: `sign.algorithm` y `verify.algorithms` = `HS256`).
+- Contraseñas con **argon2** (argon2id con parámetros por entorno `ARGON2_*`, por defecto los de la librería, y `needsRehash` en el login, `backend/src/auth/password.ts`): **atendido en BE-01 paso 5**; el mock las guarda en claro (`datos/memoria_base_datos.dart:43`, `datos/memoria_auth_repository.dart:23`).
+- **Login**: hash ficticio para igualar tiempos con correo inexistente: **atendido en BE-01 paso 5** (se precalienta en `onReady`). Con usuario inactivo se verifica contra su hash real (D25).
 - **`EMAIL_TAKEN` en register**: riesgo de enumeración de correos **aceptado**, mitigado con rate limit (BE-02).
 - **Esquemas zod `.strict()`** en todos los cuerpos y queries: una clave extra (`role`, `isActive`, `falseAlarmCount`…) devuelve `400 INVALID_STATE`.
 - **Validaciones de entrada**: `lat` −90..90 y `lng` −180..180, finitos.
@@ -293,6 +324,6 @@ Cosas que no se cierran en el paso 2 pero que el backend **debe** resolver. Cada
 
 **Decisiones de diseño aún abiertas**
 
-- **Ventana de gracia del refresh (D25), a resolver en BE-02:** D25 pide devolver "el mismo sucesor ya emitido", pero `refresh_tokens` solo guarda `token_hash`, así que el token en claro del sucesor no se puede reenviar. Opciones: cifrar temporalmente el sucesor, o redefinir la gracia como "aceptar el padre ya rotado dentro de la ventana, sin revocar la familia, emitiendo un sucesor nuevo de la misma familia".
+- **Ventana de gracia del refresh (D25):** **cerrada en BE-01 paso 5.** Se eligió aceptar el token ya rotado una vez más y emitir un sucesor nuevo de la misma familia; `REFRESH_GRACE_SECONDS` vale 5 por defecto.
 - Nombre de la variable del intervalo de `: ping` del SSE (BE-03).
-- Valores por defecto de la ventana de gracia del refresh (D25) y del máximo de conexiones SSE por usuario (D26; al superarlo se cierra la más antigua).
+- Valor por defecto del máximo de conexiones SSE por usuario (D26; al superarlo se cierra la más antigua).

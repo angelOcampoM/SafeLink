@@ -20,6 +20,7 @@ import {
   userBlocked,
 } from '../../src/errors/app-error.js';
 import { registerErrorHandling } from '../../src/http/error-handler.js';
+import { crearAppAislada } from './app-aislada.js';
 import { parse, parseIdParam } from '../../src/http/validate.js';
 
 const baseEnv = { NODE_ENV: 'test', JWT_SECRET: 'x'.repeat(32) };
@@ -75,9 +76,16 @@ afterEach(async () => {
   app = undefined;
 });
 
+// Rutas de prueba /t/*: instancia propia sin deny-by-default (buildApp abortaría el arranque).
 async function crear(extraEnv: Record<string, string> = {}): Promise<FastifyInstance> {
-  app = buildApp(loadConfig({ ...baseEnv, ...extraEnv }));
-  registrarRutas(app);
+  app = crearAppAislada(loadConfig({ ...baseEnv, ...extraEnv }), registrarRutas);
+  await app.ready();
+  return app;
+}
+
+// App real: el 404 de ruta inexistente y /health se siguen probando contra buildApp.
+async function crearReal(): Promise<FastifyInstance> {
+  app = buildApp(loadConfig(baseEnv));
   await app.ready();
   return app;
 }
@@ -135,7 +143,7 @@ describe('Error genérico (no se filtra nada)', () => {
       },
     });
     const propia = Fastify({ logger: { level: 'info', stream } });
-    registerErrorHandling(propia);
+    registerErrorHandling(propia, { isProduction: true });
     propia.post('/boom', async () => {
       throw new Error('SELECT secret FROM users');
     });
@@ -286,21 +294,21 @@ describe('parseIdParam', () => {
 
 describe('Ruta inexistente', () => {
   it('GET /nada -> 404 con mensaje del front', async () => {
-    const a = await crear();
+    const a = await crearReal();
     const res = await request(a.server).get('/nada');
     expect(res.status).toBe(404);
     expect(res.body).toEqual({ error: { code: 'NOT_FOUND', message: 'GET /nada no existe' } });
   });
 
   it('el query no aparece en el mensaje', async () => {
-    const a = await crear();
+    const a = await crearReal();
     const res = await request(a.server).get('/nada?token=abc');
     expect(res.body.error.message).toBe('GET /nada no existe');
     expect(JSON.stringify(res.body)).not.toContain('abc');
   });
 
   it('el método POST se refleja', async () => {
-    const a = await crear();
+    const a = await crearReal();
     const res = await request(a.server).post('/nada').send({});
     expect(res.status).toBe(404);
     expect(res.body.error.message).toBe('POST /nada no existe');
@@ -309,30 +317,36 @@ describe('Ruta inexistente', () => {
 
 describe('/health y forma de las respuestas', () => {
   it('/health sigue en {"data":{"status":"ok"}}', async () => {
-    const a = await crear();
+    const a = await crearReal();
     const res = await request(a.server).get('/health');
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ data: { status: 'ok' } });
   });
 
   it('toda respuesta tiene exactamente una clave de primer nivel (data o error)', async () => {
+    const real = buildApp(loadConfig(baseEnv));
+    await real.ready();
     const a = await crear();
-    const rutas = [
-      '/health',
-      '/nada',
-      '/t/generico',
-      '/t/db/P2002',
-      '/t/db/P2025',
-      '/t/db/P1001',
-      '/t/id/abc',
-      '/t/app-error/9',
-      '/t/app-error/1',
+    const rutas: Array<[FastifyInstance, string]> = [
+      [real, '/health'],
+      [real, '/nada'],
+      [a, '/t/generico'],
+      [a, '/t/db/P2002'],
+      [a, '/t/db/P2025'],
+      [a, '/t/db/P1001'],
+      [a, '/t/id/abc'],
+      [a, '/t/app-error/9'],
+      [a, '/t/app-error/1'],
     ];
-    for (const r of rutas) {
-      const res = await request(a.server).get(r);
-      const claves = Object.keys(res.body);
-      expect(claves, r).toHaveLength(1);
-      expect(['data', 'error']).toContain(claves[0]);
+    try {
+      for (const [instancia, r] of rutas) {
+        const res = await request(instancia.server).get(r);
+        const claves = Object.keys(res.body);
+        expect(claves, r).toHaveLength(1);
+        expect(['data', 'error']).toContain(claves[0]);
+      }
+    } finally {
+      await real.close();
     }
     const post = await request(a.server).post('/t/validar').send({});
     expect(Object.keys(post.body)).toEqual(['error']);

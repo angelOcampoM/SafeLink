@@ -1,5 +1,6 @@
 import { buildApp } from './app.js';
 import { ConfigError, loadConfig, type Config } from './config/env.js';
+import { createPrisma } from './db/prisma.js';
 
 async function main(): Promise<void> {
   let config: Config;
@@ -16,7 +17,11 @@ async function main(): Promise<void> {
     console.error('Configuración inválida: falta DATABASE_URL (cadena de conexión a PostgreSQL). Defínela en backend/.env.');
     process.exit(1);
   }
-  const app = buildApp(config);
+  const prisma = createPrisma(config.DATABASE_URL);
+  const app = buildApp(config, { prisma });
+  app.addHook('onClose', async () => {
+    await prisma.$disconnect();
+  });
   try {
     await app.listen({ host: config.HOST, port: config.PORT });
   } catch (e) {

@@ -9,6 +9,7 @@ import { ConfigError, loadConfig } from '../../src/config/env.js';
 import { MESSAGES } from '../../src/errors/app-error.js';
 import { registerErrorHandling } from '../../src/http/error-handler.js';
 import { parse, parseIdParam, userMsg } from '../../src/http/validate.js';
+import { crearAppAislada } from './app-aislada.js';
 
 const baseEnv = { NODE_ENV: 'test', JWT_SECRET: 'x'.repeat(32) };
 const GENERICO = 'Los datos enviados no son válidos';
@@ -71,8 +72,8 @@ afterEach(async () => {
 });
 
 async function crear(env: Record<string, string> = {}): Promise<FastifyInstance> {
-  app = buildApp(loadConfig({ ...baseEnv, ...env }));
-  registrar(app);
+  // Instancia propia sin deny-by-default: buildApp aborta el arranque con rutas /t/* sin política.
+  app = crearAppAislada(loadConfig({ ...baseEnv, ...env }), registrar);
   await app.ready();
   return app;
 }
@@ -145,7 +146,10 @@ describe('frameworkErrors (URL inválida, parámetro largo)', () => {
 
 describe('404 con ruta inexistente muy larga', () => {
   it('trunca el path a 100 caracteres con elipsis', async () => {
-    const a = await crear();
+    // App real: el 404 de ruta inexistente se prueba contra buildApp.
+    app = buildApp(loadConfig(baseEnv));
+    await app.ready();
+    const a = app;
     const path = `/${'z'.repeat(10 * 1024)}`;
     const res = await request(a.server).get(path);
     expect(res.status).toBe(404);
