@@ -60,6 +60,7 @@ services:
       COVERAGE_RADIUS_MAX_METERS:
       ADMIN_NOTE_MAX_LENGTH:
       TRIGGERED_AT_TOLERANCE_SECONDS:
+      BODY_LIMIT_BYTES:
     ports:
       # Solo local por defecto; API_BIND=0.0.0.0 para probar con el teléfono en la LAN.
       - "${API_BIND:-127.0.0.1}:${PORT:-3000}:3000"

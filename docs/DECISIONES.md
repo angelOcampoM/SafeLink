@@ -240,9 +240,11 @@ Cosas que no se cierran en el paso 2 pero que el backend **debe** resolver. Cada
 
 **Plataforma (BE-01, paso 4 en adelante)**
 
-- **Manejador global de errores** (paso 4): ningún error inesperado filtra la traza ni detalles internos; siempre `500 SERVICE_UNAVAILABLE` con el mensaje fijo. El 404 de ruta inexistente refleja solo el path, sin query string.
+- **Manejador global de errores**: **atendido** en BE-01 paso 4. Ningún error inesperado filtra la traza ni detalles internos; siempre `500 SERVICE_UNAVAILABLE` con el mensaje fijo. El 404 de ruta inexistente refleja solo el path, sin query string y truncado a 100 caracteres. Fuera de production el log incluye solo los marcos de la pila (sin el mensaje original).
 - **`@fastify/helmet`** con encabezados de seguridad.
-- **`bodyLimit`** explícito (con la subida de foto en BE-03 se sube solo en esa ruta).
+- **`bodyLimit`** explícito: **atendido** en BE-01 paso 4 con `BODY_LIMIT_BYTES` (1 MiB por defecto, máximo 10 MiB). Con la subida de foto en BE-03 se sube solo en esa ruta, nunca el global.
+- **Recurso ajeno = 404, no 403** (BE-02 en adelante): `forbidden()` solo cuando el rol no tiene permiso para la ruta. La propiedad se valida antes de escribir (`where: { id, ownerId }`); no depender de que una violación de FK (400) o de unicidad (409) dé la respuesta, porque 400/409 frente a 404 permite enumerar.
+- **Errores de plugins** (BE-01 paso 5 y BE-02): traducir `FST_JWT_*` a `unauthorized()` y el 429 de rate limit a su propio error, ambos con mensaje fijo; hoy un 4xx de Fastify no mapeado termina en 500.
 - **Rate limit** en `POST /auth/login`, `/auth/refresh` (BE-01) y `POST /alerts` (BE-03); en `POST /auth/register` (BE-02); además, por usuario y acorde a `LOCATION_UPDATE_SECONDS`, en `PUT /guard/location` (BE-04) y `POST /alerts/:id/locations` (BE-03).
 - **Deny-by-default** (BE-01, paso 6): toda ruta declara `roles` o `public: true` en su configuración; un hook `onRoute` hace fallar el arranque si falta; una prueba recorre todas las rutas registradas.
 - **Límites de entrada** (BE-01 paso 4 en adelante): `password` ≤ 128; largos máximos de `name`, `email`, `phone`, `zone`, `search` y `photoPath`; `heading` entero 0–359; `radiusMeters` entero; `:id` validado como UUID (inválido → `404 NOT_FOUND`); `.strict()` también en el query.

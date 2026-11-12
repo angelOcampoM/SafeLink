@@ -34,7 +34,7 @@ Marcas usadas: **(front)** = existe tal cual en el código del front. **(decidid
 
 ### Cuerpos mal formados
 
-En el mock, un campo obligatorio ausente (`c['email']!`) o un código de enum desconocido (`CodigosJson.desde`) revienta con una excepción que **no** es un `ErrorDominio` (`safelink_service.dart:129,165`, `nube_mapeadores.dart:43`). En el backend eso se responde con `400 INVALID_STATE` y un mensaje en español (D9).
+En el mock, un campo obligatorio ausente (`c['email']!`) o un código de enum desconocido (`CodigosJson.desde`) revienta con una excepción que **no** es un `ErrorDominio` (`safelink_service.dart:129,165`, `nube_mapeadores.dart:43`). En el backend eso se responde con `400 INVALID_STATE` y un mensaje en español (D9). También responden `400 INVALID_STATE` el JSON malformado, el `content-type` no soportado y un cuerpo mayor a `BODY_LIMIT_BYTES` (1 MiB por defecto, máximo 10 MiB; **no** 413). Una violación de unicidad que no capture la lógica de negocio responde `409 INVALID_STATE` genérico; los servicios deben lanzar el código específico (p. ej. `EMAIL_TAKEN`) antes de llegar ahí. Una URL mal codificada o un parámetro de ruta demasiado largo responden `404 NOT_FOUND`. Los mensajes de validación nunca repiten valores ni claves arbitrarias enviadas por el cliente.
 
 ---
 
@@ -58,7 +58,7 @@ Las acciones sin resultado devuelven `{ "data": null }` (`safelink_service.dart:
 
 ### remainingMeters
 
-Solo aparece en `OUTSIDE_GEOFENCE`. Es la distancia que falta para entrar a la geocerca (`distancia − GEOFENCE_METERS`, mínimo 0). Es **`null`** cuando no se puede calcular (el guardia no tiene última ubicación o la alerta no tiene ubicación): el front lo envía como infinito y el mapeador lo serializa `null`, y al leerlo `null` vuelve a infinito (`nube_mapeadores.dart:247,257`, `memoria_alerta_guardia_repository.dart:90-92`).
+Solo aparece en `OUTSIDE_GEOFENCE`. Es la distancia que falta para entrar a la geocerca (`distancia − GEOFENCE_METERS`, mínimo 0, redondeada a 1 decimal). Es **`null`** cuando no se puede calcular (el guardia no tiene última ubicación o la alerta no tiene ubicación): el front lo envía como infinito y el mapeador lo serializa `null`, y al leerlo `null` vuelve a infinito (`nube_mapeadores.dart:247,257`, `memoria_alerta_guardia_repository.dart:90-92`).
 
 ```json
 { "error": { "code": "OUTSIDE_GEOFENCE", "message": "Aún no estás en el punto de la alerta", "remainingMeters": 132.4 } }
@@ -100,7 +100,7 @@ Los valores 300, 500 y 10000 salen de configuración, no del código (`ADMIN_NOT
 
 Para el registro y la edición de guardia (nombre, correo, teléfono) el mock no valida nada (lo hace el formulario, `presentacion/admin/editar_guardia_view_model.dart:46-48`); el backend debe repetir las reglas de `regla_registro.dart` con sus mismos mensajes (`Escribe tu nombre`, `Escribe tu nombre completo`, `Correo no válido`, `Debe tener 10 dígitos`, líneas 14-29) y responder `400 INVALID_STATE`.
 
-**Mensajes de `NOT_FOUND`:** `La alerta ya no existe` (`memoria_base_datos.dart:79`), `No encontramos a ese guardia` (`memoria_base_datos.dart:92`), `No encontramos lo que buscabas` (por defecto, `errores.dart:43`) y, para una ruta que no existe, `<MÉTODO> <ruta> no existe` (p. ej. `GET /foo no existe`, `safelink_service.dart:115`). El mensaje refleja **solo el path**, sin query string (no se devuelven datos del cliente). Canal en tiempo real desconocido: `Canal desconocido` (`safelink_service.dart:88`).
+**Mensajes de `NOT_FOUND`:** `La alerta ya no existe` (`memoria_base_datos.dart:79`), `No encontramos a ese guardia` (`memoria_base_datos.dart:92`), `No encontramos lo que buscabas` (por defecto, `errores.dart:43`) y, para una ruta que no existe, `<MÉTODO> <ruta> no existe` (p. ej. `GET /foo no existe`, `safelink_service.dart:115`). El mensaje refleja **solo el path**, sin query string y truncado a 100 caracteres con `…` (no se devuelven datos del cliente). Canal en tiempo real desconocido: `Canal desconocido` (`safelink_service.dart:88`).
 
 ### Cómo interpreta el front cada código
 
