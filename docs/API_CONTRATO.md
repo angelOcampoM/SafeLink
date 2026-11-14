@@ -387,12 +387,12 @@ Evidencia de las rutas: `safelink_service.dart:124-157`. Cliente: `nube_auth_rep
 | Método | Ruta | Rol | Req. | `data` | Errores propios | Historia | Tarjeta |
 |---|---|---|---|---|---|---|---|
 | POST | `/auth/login` (`:125-131`) | público | `{ "email", "password" }` (`.strict()`; `email` recortado, en minúsculas, 1–254 caracteres; `password` 1–128) | User + `accessToken` + `refreshToken` | `INVALID_CREDENTIALS` (correo inexistente, contraseña mala o `isActive=false`; el correo se compara sin mayúsculas ni espacios, `memoria_auth_repository.dart:16-17`); `TOO_MANY_REQUESTS` (429) | U-02, G-01 | BE-01 (implementado) |
-| POST | `/auth/register` (`:132-143`) | público | `{ "name", "email", "phone", "password" }` | User + tokens (queda con sesión abierta) | `EMAIL_TAKEN`; `INVALID_STATE` (validación). Siempre crea `protected_user` (`auth_repository.dart:16`) | U-01 | BE-02 |
+| POST | `/auth/register` (`:132-143`) | público | `{ "name", "email", "phone", "password" }` | User + tokens (queda con sesión abierta) | `EMAIL_TAKEN`; `INVALID_STATE` (validación). Siempre crea `protected_user` (`auth_repository.dart:16`) | U-01 | BE-02 (implementado) |
 | POST | `/auth/refresh` **(EXCEPCIÓN: no existe en el front)** | público (usa el refresh token) | `{ "refreshToken" }` (`.strict()`; hasta 512 caracteres) | User + `accessToken` + `refreshToken` nuevos (rotación) | `UNAUTHORIZED` (forma inválida, desconocido, vencido, sesión sobre su vida máxima, reutilizado, revocado, usuario inactivo); `TOO_MANY_REQUESTS` (429) | U-02, G-01 | BE-01 (implementado; la app lo usa desde BE-02) |
 | POST | `/auth/logout` (`:144-147`) | autenticado (cualquier rol) | sin cuerpo | `null` | — | U-02 | BE-01 (implementado) |
 | GET | `/auth/me` (`:148`) | autenticado (cualquier rol) | — | User actualizado (bloqueo, falsas alarmas) | — | U-02, G-01 | BE-01 (implementado) |
 | POST | `/auth/session` (`:149-152`) | Bearer, con **verificación propia** (no el hook general) | `{ "userId" }` (`.strict()`; texto de hasta 100 caracteres) | User, o `null` | `401 UNAUTHORIZED` solo si falta el token, la firma o el algoritmo no son válidos, o venció. `200` con `data: null` si el `sid` está revocado, el usuario está inactivo o `userId ≠ sub` (también si `userId` no es un UUID) | U-02 | BE-01 (implementado) |
-| PATCH | `/users/me/settings` (`:153-157`) | `protected_user` | `{ "volumeDoubleClickEnabled": boolean }` | User actualizado | — | U-05 | BE-02 |
+| PATCH | `/users/me/settings` (`:153-157`) | `protected_user` | `{ "volumeDoubleClickEnabled": boolean }` | User actualizado | — | U-05 | BE-02 (implementado) |
 
 Notas:
 
@@ -454,11 +454,11 @@ Evidencia: `safelink_service.dart:202-296`. Cliente: `nube_admin_repository.dart
 
 | Método | Ruta | Req. | `data` | Errores propios | Historia | Tarjeta (tentativa) |
 |---|---|---|---|---|---|---|
-| GET | `/admin/guards` (`:203-208`) | query `search` (el front lo manda siempre, aunque vacío, `nube_admin_repository.dart:23`) | Guard[] | — | A-02 | BE-06 |
-| POST | `/admin/guards` (`:209-220`) | `{ "name", "email", "phone", "password" }` | Guard (turno `08:00`–`16:00`, sin cobertura, `isActive=true`, `memoria_admin_repository.dart:53-59`) | `EMAIL_TAKEN`; `INVALID_STATE` (contraseña y demás validaciones) | A-01 | BE-06 |
-| GET | `/admin/guards/:id` (`:221`) | — | Guard | `NOT_FOUND` `No encontramos a ese guardia` (si el id no existe **o no es rol `guard`**; igual en PATCH, DELETE y `coverage`) | A-02 (extra del front) | BE-06 |
-| PATCH | `/admin/guards/:id` (`:222-233`) | `{ "name"?, "email"?, "phone"? }` (solo manda los que cambian, `nube_admin_repository.dart:36-40`; **no** cambia contraseña ni turno) | Guard | `EMAIL_TAKEN`; `NOT_FOUND` | A-02 | BE-06 |
-| DELETE | `/admin/guards/:id` (`:234-237`) | — | `null`. **Baja lógica**: `isActive=false`, no borra el registro (`memoria_admin_repository.dart:75-78`) | `NOT_FOUND` | A-02 | BE-06 |
+| GET | `/admin/guards` (`:203-208`) | query `search` (el front lo manda siempre, aunque vacío, `nube_admin_repository.dart:23`) | Guard[] | — | A-02 | BE-02 (implementado) |
+| POST | `/admin/guards` (`:209-220`) | `{ "name", "email", "phone", "password" }` | Guard (turno `08:00`–`16:00`, sin cobertura, `isActive=true`, `memoria_admin_repository.dart:53-59`) | `EMAIL_TAKEN`; `INVALID_STATE` (contraseña y demás validaciones) | A-01 | BE-02 (implementado) |
+| GET | `/admin/guards/:id` (`:221`) | — | Guard | `NOT_FOUND` `No encontramos a ese guardia` (si el id no existe **o no es rol `guard`**; igual en PATCH, DELETE y `coverage`) | A-02 (extra del front) | BE-02 (implementado) |
+| PATCH | `/admin/guards/:id` (`:222-233`) | `{ "name"?, "email"?, "phone"? }` (solo manda los que cambian, `nube_admin_repository.dart:36-40`; **no** cambia contraseña ni turno) | Guard | `EMAIL_TAKEN`; `NOT_FOUND` | A-02 | BE-02 (implementado) |
+| DELETE | `/admin/guards/:id` (`:234-237`) | — | `null`. **Baja lógica**: `isActive=false`, no borra el registro (`memoria_admin_repository.dart:75-78`) | `NOT_FOUND` | A-02 | BE-02 (implementado) |
 | PUT | `/admin/guards/:id/coverage` (`:238-251`) | `{ "shiftStart", "shiftEnd", "center": {lat,lng}, "radiusMeters": int, "zone": string }` | Guard | `INVALID_STATE` 400 (formato de turno, radio fuera de rango, zona vacía; ver sección 2); `NOT_FOUND` | A-03 | BE-06 |
 | POST | `/admin/alerts/:id/resolve` (`:252-262`) | `{ "resolution", "adminNote" }` (nota obligatoria, 1–300 caracteres) | Alert (`resolved_by_admin`, `resolution`, `adminNote`, `closedAt`) | `INVALID_STATE` 409 `Esta alerta ya no está escalada`; `INVALID_STATE` 400 por nota; `NOT_FOUND` | A-04 | BE-05 |
 | GET | `/admin/alerts` (`:263-268`) | query de la sección 4.8 | Alert[] (todas, también activas) | `INVALID_STATE` 400 (filtro inválido) | A-05 | BE-07 |

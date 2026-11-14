@@ -4,6 +4,7 @@ import type { Config } from './config/env.js';
 import type { PrismaClient } from './db/prisma.js';
 import { tooManyRequests } from './errors/app-error.js';
 import { createFrameworkErrorHandler, registerErrorHandling } from './http/error-handler.js';
+import { adminRoutes } from './modules/admin/routes.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { authPluginRoot } from './plugins/auth.js';
 import { healthRoutes } from './routes/health.js';
@@ -88,6 +89,7 @@ export function buildApp(config: Config, deps: AppDependencies = {}): FastifyIns
           },
         });
         await api.register(authRoutes, { prisma });
+        await api.register(adminRoutes, { prisma });
       },
       { prefix: API_PREFIX },
     );

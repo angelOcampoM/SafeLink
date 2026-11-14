@@ -10,8 +10,10 @@ import {
 } from '../../auth/tokens.js';
 import { durationToSeconds } from '../../config/duration.js';
 import type { Config } from '../../config/env.js';
+import { esCorreoDuplicado } from '../../db/errores-prisma.js';
 import type { PrismaClient } from '../../db/prisma.js';
-import { invalidCredentials, unauthorized } from '../../errors/app-error.js';
+import { emailTaken, invalidCredentials, unauthorized } from '../../errors/app-error.js';
+import { Role } from '../../generated/prisma/enums.js';
 import type { AccessClaims } from '../../plugins/auth.js';
 import {
   serializeUser,
@@ -67,6 +69,49 @@ export function createAuthService({ prisma, config, hasher, signAccessToken }: A
       const family = await createTokenFamily(prisma, user.id, refreshOptions);
       const accessToken = signAccessToken({ sub: user.id, role: user.role, sid: family.familyId });
       return serializeUserWithTokens(user, { accessToken, refreshToken: family.token });
+    },
+
+    /**
+     * U-01 · Registro público. El rol NO se recibe: siempre es usuario
+     * protegido. Queda con la sesión abierta, igual que el login.
+     */
+    async register(input: {
+      name: string;
+      email: string;
+      phone: string;
+      password: string;
+    }): Promise<UserWithTokensJson> {
+      const passwordHash = await hasher.hash(input.password);
+      let user;
+      try {
+        user = await prisma.user.create({
+          data: {
+            name: input.name,
+            email: input.email,
+            phone: input.phone,
+            passwordHash,
+            role: Role.protected_user,
+          },
+        });
+      } catch (error) {
+        // La unicidad la decide la base, no una consulta previa: entre el
+        // SELECT y el INSERT cabe otro registro con el mismo correo.
+        if (esCorreoDuplicado(error)) throw emailTaken();
+        throw error;
+      }
+
+      const family = await createTokenFamily(prisma, user.id, refreshOptions);
+      const accessToken = signAccessToken({ sub: user.id, role: user.role, sid: family.familyId });
+      return serializeUserWithTokens(user, { accessToken, refreshToken: family.token });
+    },
+
+    /** U-05 · El usuario protegido enciende o apaga su disparo por doble clic. */
+    async updateSettings(userId: string, volumeDoubleClickEnabled: boolean): Promise<UserJson> {
+      const user = await prisma.user.update({
+        where: { id: userId },
+        data: { volumeDoubleClickEnabled },
+      });
+      return serializeUser(user);
     },
 
     async me(userId: string): Promise<UserJson> {
