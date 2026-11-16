@@ -4,7 +4,13 @@ import { durationToSeconds } from '../../config/duration.js';
 import type { PrismaClient } from '../../db/prisma.js';
 import { ok } from '../../http/envelope.js';
 import { parse } from '../../http/validate.js';
-import { loginBodySchema, refreshBodySchema, sessionBodySchema } from './schemas.js';
+import {
+  loginBodySchema,
+  refreshBodySchema,
+  registerBodySchema,
+  sessionBodySchema,
+  settingsBodySchema,
+} from './schemas.js';
 import { createAuthService } from './service.js';
 
 export interface AuthRoutesOptions {
@@ -51,6 +57,15 @@ export async function authRoutes(app: FastifyInstance, options: AuthRoutesOption
     return ok(await service.login(body.email, body.password));
   });
 
+  // U-01: público. Se limita por IP igual que el login, porque EMAIL_TAKEN
+  // permitiría enumerar correos (riesgo aceptado en el contrato, D-BE-02).
+  app.post('/auth/register', { config: { rateLimit: loginLimit } }, async (request, reply) => {
+    const body = parse(registerBodySchema, request.body);
+    const creado = await service.register(body);
+    void reply.code(201); // D22: los POST que crean recurso responden 201
+    return ok(creado);
+  });
+
   app.post('/auth/refresh', { config: { rateLimit: refreshLimit } }, async (request) => {
     const body = parse(refreshBodySchema, request.body);
     return ok(await service.refresh(body.refreshToken));
@@ -59,6 +74,12 @@ export async function authRoutes(app: FastifyInstance, options: AuthRoutesOption
   app.get('/auth/me', async (request) => ok(await service.me(request.user.id)));
 
   app.post('/auth/logout', async (request) => ok(await service.logout(request.user.sid)));
+
+  // U-05: solo el usuario protegido, y solo sobre su propia cuenta.
+  app.patch('/users/me/settings', async (request) => {
+    const body = parse(settingsBodySchema, request.body);
+    return ok(await service.updateSettings(request.user.id, body.volumeDoubleClickEnabled));
+  });
 
   // Política 'custom' (D7, D25): sin el control general. 401 solo por token ausente,
   // inválido o vencido; el resto de fallos de sesión responden 200 con data: null.
