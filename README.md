@@ -59,6 +59,7 @@ docs/
   GUIA_ESTILOS.md
   HISTORIAS_DE_USUARIO.md    U-01…U-09, G-01…G-07, A-01…A-08 con sus criterios y su estado
   PLAN_DE_PRUEBAS.md         los 83 casos del esquema y la prueba que cubre cada uno
+  CONTRATO_AUTENTICACION.md  BE-02: lo que el backend debe cumplir, sea cual sea
 ```
 
 ## Regla de dependencias
