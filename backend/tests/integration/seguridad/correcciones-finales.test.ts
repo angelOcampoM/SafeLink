@@ -11,12 +11,25 @@ import { ROUTE_POLICIES } from '../../../src/security/policies.js';
 import { PASSWORD, configPrueba, hasherPrueba, login } from '../auth/helpers.js';
 import { abrirDb, type ContextoDb } from '../db/helpers.js';
 
+// Rutas que YA están implementadas: las demás se cubren con stubs más abajo.
+// Al implementar una ruta nueva hay que agregarla aquí, o Fastify falla al
+// arrancar con "Method 'X' already declared for route '...'" porque el stub
+// choca con la ruta real. (BE-01: auth; BE-02: registro, ajustes y guardias.)
 const REALES = new Set([
+  // BE-01
   'POST /auth/login',
   'POST /auth/refresh',
   'POST /auth/logout',
   'GET /auth/me',
   'POST /auth/session',
+  // BE-02
+  'POST /auth/register',
+  'PATCH /users/me/settings',
+  'GET /admin/guards',
+  'POST /admin/guards',
+  'GET /admin/guards/:id',
+  'PATCH /admin/guards/:id',
+  'DELETE /admin/guards/:id',
 ]);
 
 describe('guards: ruta con roles sin authenticate decorado', () => {

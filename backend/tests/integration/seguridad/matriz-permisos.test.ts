@@ -20,14 +20,38 @@ import { abrirDb, type ContextoDb } from '../db/helpers.js';
 
 const MSG_FORBIDDEN = 'No tienes permiso para realizar esta acción.';
 const UUID_RUTA = '3f2b8c1e-9a4d-4e6b-8f10-2c7d5a9b0e11';
+// Rutas que YA están implementadas: las demás se cubren con stubs más abajo.
+// Al implementar una ruta nueva hay que agregarla aquí, o Fastify falla al
+// arrancar con "Method 'X' already declared for route '...'" porque el stub
+// choca con la ruta real. (BE-01: auth; BE-02: registro, ajustes y guardias.)
 const REALES = new Set([
+  // BE-01
   'POST /auth/login',
   'POST /auth/refresh',
   'POST /auth/logout',
   'GET /auth/me',
   'POST /auth/session',
+  // BE-02
+  'POST /auth/register',
+  'PATCH /users/me/settings',
+  'GET /admin/guards',
+  'POST /admin/guards',
+  'GET /admin/guards/:id',
+  'PATCH /admin/guards/:id',
+  'DELETE /admin/guards/:id',
 ]);
 const ROLES: readonly Role[] = ['protected_user', 'guard', 'admin'];
+
+/**
+ * La petición pasó el control de acceso y llegó al manejador. No se exige 2xx:
+ * una ruta ya implementada puede responder 400 o 404 ante un cuerpo o un id de
+ * relleno, y eso no dice nada del permiso. Lo que importa aquí es que no la
+ * frenaron por falta de token (401) ni por rol (403).
+ */
+function esperarQueLlegue(res: { status: number; body: unknown }): void {
+  expect(res.status, JSON.stringify(res.body)).not.toBe(401);
+  expect(res.status, JSON.stringify(res.body)).not.toBe(403);
+}
 
 const entradas = Object.entries(ROUTE_POLICIES) as Array<[string, RoutePolicy]>;
 const conRoles = entradas.filter(([, p]) => typeof p !== 'string') as Array<[string, readonly Role[]]>;
@@ -158,9 +182,7 @@ describe('rol x ruta: 2xx si está permitido, 403 FORBIDDEN si no', () => {
     const token = clave === 'POST /auth/logout' ? await tokenDe(emails[rol]) : tokens[rol];
     const res = await enviar(app, metodo, url, token);
     if (permitido) {
-      expect(res.status, JSON.stringify(res.body)).toBeGreaterThanOrEqual(200);
-      expect(res.status).toBeLessThan(300);
-      expect(Object.keys(res.body)).toEqual(['data']);
+      esperarQueLlegue(res);
     } else {
       expect(res.status).toBe(403);
       expect(res.body).toEqual({ error: { code: 'FORBIDDEN', message: MSG_FORBIDDEN } });
@@ -195,19 +217,19 @@ describe('rutas public: anónimo no recibe 401 ni 403', () => {
     expect(res.body.error.code === 'UNAUTHORIZED' || res.body.error.code === 'INVALID_STATE').toBe(true);
   });
 
-  it('POST /auth/register (stub) anónimo -> 200', async () => {
+  it('POST /auth/register anónimo llega a la ruta (sin cuerpo válido responde 400)', async () => {
     const res = await enviar(app, 'POST', `${API_PREFIX}/auth/register`);
-    expect(res.status).toBe(200);
+    esperarQueLlegue(res);
   });
 
   it.each(ROLES)('POST /auth/register también acepta a un token de %s (no restringe por rol)', async (rol) => {
     const res = await enviar(app, 'POST', `${API_PREFIX}/auth/register`, tokens[rol]);
-    expect(res.status).toBe(200);
+    esperarQueLlegue(res);
   });
 
   it('las rutas public no exigen token ni siquiera con uno basura', async () => {
     const res = await enviar(app, 'POST', `${API_PREFIX}/auth/register`, 'basura.basura.basura');
-    expect(res.status).toBe(200);
+    esperarQueLlegue(res);
   });
 });
 
