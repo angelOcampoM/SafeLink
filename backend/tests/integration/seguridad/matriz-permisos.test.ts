@@ -139,10 +139,14 @@ afterAll(async () => {
   await db.cerrar();
 });
 
-describe('matriz de permisos: cubre las 36 rutas de la política', () => {
-  it('hay 36 claves, 5 reales de auth y el resto stubs', () => {
-    expect(entradas).toHaveLength(36);
-    expect(entradas.filter(([k]) => !REALES.has(k))).toHaveLength(31);
+describe('matriz de permisos: cubre todas las rutas de la política', () => {
+  // Los conteos salen de REALES, no de un número escrito a mano: así la prueba
+  // no se rompe cada vez que una tarjeta implementa rutas nuevas.
+  it('cada ruta de la política está cubierta: las implementadas de verdad y el resto con stubs', () => {
+    expect(entradas).toHaveLength(Object.keys(ROUTE_POLICIES).length);
+    // Si REALES tuviera una clave que no existe en la política, este conteo baja.
+    expect(entradas.filter(([k]) => REALES.has(k))).toHaveLength(REALES.size);
+    expect(entradas.filter(([k]) => !REALES.has(k))).toHaveLength(entradas.length - REALES.size);
   });
 });
 
