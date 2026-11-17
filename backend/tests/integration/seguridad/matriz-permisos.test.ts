@@ -17,6 +17,7 @@ import {
   login,
 } from '../auth/helpers.js';
 import { abrirDb, type ContextoDb } from '../db/helpers.js';
+import { abrirSse } from '../sse-helpers.js';
 
 const MSG_FORBIDDEN = 'No tienes permiso para realizar esta acción.';
 const UUID_RUTA = '3f2b8c1e-9a4d-4e6b-8f10-2c7d5a9b0e11';
@@ -39,6 +40,13 @@ const REALES = new Set([
   'GET /admin/guards/:id',
   'PATCH /admin/guards/:id',
   'DELETE /admin/guards/:id',
+  // BE-03
+  'POST /alerts',
+  'GET /alerts/mine',
+  'POST /alerts/:id/locations',
+  'POST /alerts/:id/confirm',
+  'GET /alerts/:id/photo',
+  'GET /events/alerts/active',
 ]);
 const ROLES: readonly Role[] = ['protected_user', 'guard', 'admin'];
 
@@ -62,7 +70,21 @@ function partir(clave: string): { metodo: string; url: string } {
 }
 
 type Metodo = 'get' | 'post' | 'put' | 'patch' | 'delete' | 'head';
+
+/**
+ * Un canal SSE real no termina: se lee su primer evento (o su error JSON previo) y se corta.
+ * Los canales que aún son stub responden JSON normal: se usa ese cuerpo.
+ */
+async function enviarSse(app: FastifyInstance, url: string, token?: string) {
+  const c = await abrirSse(app, url, token);
+  const esStream = (c.headers['content-type'] ?? '').startsWith('text/event-stream');
+  const body = esStream ? await c.siguiente() : c.json;
+  c.cerrar();
+  return { status: c.status, headers: c.headers, body };
+}
+
 function enviar(app: FastifyInstance, metodo: string, url: string, token?: string, cuerpo?: object) {
+  if (metodo === 'GET' && url.startsWith(`${API_PREFIX}/events/`)) return enviarSse(app, url, token);
   let r = request(app.server)[metodo.toLowerCase() as Metodo](url);
   if (token !== undefined) r = r.set('Authorization', `Bearer ${token}`);
   if (['POST', 'PUT', 'PATCH'].includes(metodo)) r = r.send(cuerpo ?? {});
@@ -229,6 +251,12 @@ describe('rutas public: anónimo no recibe 401 ni 403', () => {
   it.each(ROLES)('POST /auth/register también acepta a un token de %s (no restringe por rol)', async (rol) => {
     const res = await enviar(app, 'POST', `${API_PREFIX}/auth/register`, tokens[rol]);
     esperarQueLlegue(res);
+  });
+
+  it('GET /alerts/:id/photo anónimo llega a la ruta: sin firma válida responde 404, no 401', async () => {
+    const res = await enviar(app, 'GET', `${API_PREFIX}/alerts/${UUID_RUTA}/photo`);
+    esperarQueLlegue(res);
+    expect(res.status).toBe(404);
   });
 
   it('las rutas public no exigen token ni siquiera con uno basura', async () => {

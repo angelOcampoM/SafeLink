@@ -23,6 +23,7 @@ Fuentes de verdad, en orden: el código del front, `docs/HISTORIAS_DE_USUARIO.md
 - **Opciones:** guardar la ruta tal cual; subir el archivo por `multipart/form-data`; usar un bucket desde el inicio.
 - **Decisión:** interfaz `PhotoStorage { save(stream, mime) → { key, url }; url(key) }` y columna `alerts.photo_key`. `photoUrl` es un campo **calculado** (`PhotoStorage.url(photo_key)`). En BE-03 la subida es multipart a **disco local**; un bucket queda para después, detrás de la misma interfaz.
 - **Consecuencias:** `evidenceIncomplete = true` cuando `photo_key` es nulo. Hasta BE-03 el front sigue mandando `photoPath`; el backend lo acepta pero no puede guardar el archivo. Ver `docs/API_CONTRATO.md`, sección 8.
+- **Implementación (BE-03):** la subida va en la **misma ruta** `POST /alerts` como `multipart/form-data` (campo `data` con el mismo JSON y archivo opcional `photo`), para no agregar rutas que el front no conoce. Con JSON (lo que manda hoy el front) la alerta se crea sin foto y con `evidenceIncomplete = true`: `photoPath` es una ruta del teléfono y nunca se usa. `PhotoStorage` quedó como `save(bytes) → key`, `read(key)`, `remove(key)` (`backend/src/storage/photo-storage.ts`); la URL la arma un firmador aparte (D30). Disco local en `PHOTO_DIR` (`storage/fotos`, ignorada por git; volumen `safelink_fotos` en Compose). JPEG, PNG o WebP por firma de bytes; máximo `PHOTO_MAX_BYTES` (5 MiB). Si la alerta no se crea (bloqueo, otra activa), la foto se borra.
 
 ## D3 · Tiempo real con SSE
 
@@ -260,6 +261,21 @@ G-03 **ya dice** "doble clic de volumen" (`docs/HISTORIAS_DE_USUARIO.md:167`). L
 
 ---
 
+## D30 · URL firmada para ver la foto (BE-03)
+
+- **Contexto:** la app pinta la foto con `Image.network(fotoUrl)` (`presentacion/comun/widgets/alert_detail_sheet.dart:57`), que no manda el header `Authorization`. Una ruta autenticada con Bearer no le serviría, y el token nunca puede ir en el query (sección 6 del contrato).
+- **Decisión:** `photoUrl` es una URL firmada de vida corta: `GET /api/v1/alerts/:id/photo?exp=<epoch>&sig=<hmac>`. La firma es HMAC-SHA256 de `id.photoKey.exp` con una llave derivada de `JWT_SECRET`; caduca a los `PHOTO_URL_TTL_SECONDS` (900). La URL la emite el servidor solo a quien ya puede ver la alerta (hoy, su dueño; BE-04 y BE-05 la reutilizan con sus reglas de D23). La base de la URL es `PUBLIC_API_URL` (la misma `API_URL` de la app); sin ella, `http://127.0.0.1:PORT/api/v1`.
+- **Consecuencias:** **EXCEPCIÓN** de rutas: `GET /alerts/:id/photo` no existe en el front y su política es `public` (la autoriza la firma, no el token). Es la segunda ruta extra junto a `POST /auth/refresh`; `tests/unit/politicas-contrato.test.ts` la lista en `EXTRAS`. Cualquier fallo (sin firma, alterada, vencida, de otra alerta o foto inexistente) responde `404 NOT_FOUND`, sin distinguir. Respuesta con `Content-Type` detectado por bytes, `X-Content-Type-Options: nosniff` y `Cache-Control: no-store`. Como cada snapshot del canal trae una URL nueva, la app siempre tiene una vigente mientras la alerta esté abierta.
+
+## D31 · Transporte SSE (BE-03)
+
+- **Decisión:** `backend/src/realtime/sse.ts` (`SseHub`) es común a los cuatro canales; cada canal solo da su snapshot y su tema del `EventBus` (`backend/src/realtime/event-bus.ts`, en memoria). BE-03 implementa `alerts/active`; BE-04 y BE-05 agregan los suyos en `backend/src/modules/events/routes.ts`.
+- **Ping y revocación:** cada `SSE_PING_SECONDS` (25) se manda `: ping` y se revisa en la base que la sesión siga viva (`findLiveSessionUser`). Así un `logout` o una baja cierran el stream con `UNAUTHORIZED` **a más tardar en el siguiente ping**, sin que el módulo de auth tenga que conocer los streams. Es una variante de D25 ("cierran los streams vía `EventBus`"): el retraso máximo es `SSE_PING_SECONDS`.
+- **Vencimiento (D26):** el stream se cierra al llegar el `exp` del access token, avisando antes `UNAUTHORIZED`.
+- **Máximo por usuario (D26):** `SSE_MAX_CONNECTIONS_PER_USER` (3); al pasarse se cierra la conexión **más antigua**.
+- **Snapshots:** un aviso del bus vuelve a leer el snapshot de la base; varios avisos seguidos producen a lo más una lectura extra. Quien cambie una alerta debe publicar `alertsTopicForUser(userId)` (BE-03 lo hace al crear, mover y confirmar; **BE-04 y BE-05 deben hacerlo** al aceptar, marcar llegada, escalar y resolver, o el usuario no verá el cambio).
+- **Apagado:** un hook `preClose` cierra todos los streams para que la API no se quede esperando.
+
 ## Pendientes de seguridad para tarjetas siguientes
 
 Cosas que no se cierran en el paso 2 pero que el backend **debe** resolver. Cada una se atiende en la tarjeta indicada.
@@ -272,8 +288,8 @@ Cosas que no se cierran en el paso 2 pero que el backend **debe** resolver. Cada
 - **Recurso ajeno = 404, no 403** (BE-02 en adelante): `forbidden()` solo cuando el rol no tiene permiso para la ruta. La propiedad se valida antes de escribir (`where: { id, ownerId }`); no depender de que una violación de FK (400) o de unicidad (409) dé la respuesta, porque 400/409 frente a 404 permite enumerar.
 - **Errores de plugins**: traducción de `FST_JWT_*` (y `FAST_JWT_*`) a `UNAUTHORIZED` con mensaje fijo: **atendido en BE-01 paso 5** (`backend/src/http/error-handler.ts`). El 429 con su propio error: **atendido** (D29).
 - **`Cache-Control: no-store`** en todas las respuestas bajo `/api/v1`: **atendido en BE-01 paso 5** (`backend/src/app.ts`).
-- **Rate limit**: `POST /auth/login` y `/auth/refresh`: **atendido** (D29). **Sigue pendiente en BE-02:** `POST /auth/register`. `POST /alerts` (BE-03); además, por usuario y acorde a `LOCATION_UPDATE_SECONDS`, en `PUT /guard/location` (BE-04) y `POST /alerts/:id/locations` (BE-03).
-- **Deny-by-default**: **atendido en BE-01 paso 6**. Registro central único `ROUTE_POLICIES` (`backend/src/security/policies.ts`) con las 36 entradas; un hook `onRoute` aborta el arranque si una ruta bajo `/api/v1` no tiene política, si su `config` (opcional) contradice la central o si está fuera del prefijo (solo `GET /health` exento). Detalle y matriz en `docs/PERMISOS.md`; pruebas en `backend/tests/integration/seguridad/` y `backend/tests/unit/politicas-contrato.test.ts`.
+- **Rate limit**: `POST /auth/login` y `/auth/refresh`: **atendido** (D29). **Sigue pendiente en BE-02:** `POST /auth/register`. **Atendido en BE-03**, por usuario (no por IP) y después de autenticar: `POST /alerts` (`RATE_LIMIT_ALERTS_PER_MINUTE`, 5 por minuto) y `POST /alerts/:id/locations` (`RATE_LIMIT_LOCATIONS_PER_WINDOW`, 3 por ventana de `LOCATION_UPDATE_SECONDS`). Sigue pendiente `PUT /guard/location` (BE-04).
+- **Deny-by-default**: **atendido en BE-01 paso 6**. Registro central único `ROUTE_POLICIES` (`backend/src/security/policies.ts`) con las 37 entradas (36 de BE-01 más la foto de BE-03, D30); un hook `onRoute` aborta el arranque si una ruta bajo `/api/v1` no tiene política, si su `config` (opcional) contradice la central o si está fuera del prefijo (solo `GET /health` exento). Detalle y matriz en `docs/PERMISOS.md`; pruebas en `backend/tests/integration/seguridad/` y `backend/tests/unit/politicas-contrato.test.ts`.
 - **Límites de entrada** (BE-01 paso 4 en adelante): `password` ≤ 128; largos máximos de `name`, `email`, `phone`, `zone`, `search` y `photoPath`; `heading` entero 0–359; `radiusMeters` entero; `:id` validado como UUID (inválido → `404 NOT_FOUND`); `.strict()` también en el query.
 - **Semilla** (paso 3 de BE-01): solo corre con `NODE_ENV` `development` o `test`; se niega con `production`.
 - **Logs** (BE-01 paso 4 en adelante): prohibido registrar cuerpos, coordenadas, teléfonos, `password`, `accessToken` o `refreshToken`.
@@ -293,11 +309,11 @@ Cosas que no se cierran en el paso 2 pero que el backend **debe** resolver. Cada
 - **`GET /health`** solo responde `status`.
 - **`PUT /users/me/device-token`** (contexto, BE-04): no permitido para `admin`.
 
-**Foto (BE-03)**
+**Foto (BE-03)** — **atendido en BE-03** (D2, D30)
 
-- Se sirve por ruta autenticada con la misma autorización que la alerta (o URL firmada de vida corta); nunca como archivo estático público ni con token en el query.
-- `photo_key` es un UUID generado por el servidor.
-- MIME validado por firma de bytes y tamaño máximo.
+- Se sirve por URL firmada de vida corta (D30); nunca como archivo estático público ni con token en el query.
+- `photo_key` es un UUID generado por el servidor (`randomUUID`); el `photoPath` del cliente nunca se usa como ruta.
+- MIME validado por firma de bytes y tamaño máximo (`PHOTO_MAX_BYTES`).
 - El `photoPath` del cliente nunca se usa como ruta del sistema de archivos.
 
 **Rutas de administración (BE-06)**

@@ -30,6 +30,10 @@ export const ROUTE_POLICIES: Readonly<Record<string, RoutePolicy>> = Object.free
   'GET /alerts/mine': USER,
   'POST /alerts/:id/locations': USER,
   'POST /alerts/:id/confirm': USER,
+  // EXCEPCIÓN (BE-03, D2): no existe en el front. La app ve la foto con Image.network, que no
+  // manda Authorization; la autorización es la firma HMAC de vida corta de la URL (photo-urls.ts),
+  // que solo emite el servidor a quien ya puede ver la alerta.
+  'GET /alerts/:id/photo': 'public',
 
   // Guardia
   'GET /guard/me': GUARD,

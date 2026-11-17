@@ -8,6 +8,7 @@
 // `Authorization: Bearer` en todas las rutas salvo login/register/refresh y, ante
 // un 401, hace UN refresh compartido (single-flight) y reintenta una vez.
 // Nunca escribe tokens en logs.
+// Foto de la alerta (U-06, D2): `postConArchivo` la manda como multipart.
 // Tiempo real (SSE): llega en BE-03/BE-04; por ahora `escuchar` informa que no está.
 
 import 'dart:async';
@@ -56,14 +57,33 @@ class HttpSafeLinkService extends ClienteApi {
       });
 
   @override
-  Future<Json> enviar(String metodo, String ruta, {Json? cuerpo, Map<String, String>? query}) async {
+  Future<Json> enviar(String metodo, String ruta, {Json? cuerpo, Map<String, String>? query}) =>
+      _enviar(metodo, ruta, cuerpo, query);
+
+  /// U-06 · D2: `multipart/form-data` con el JSON en el campo `data` y la foto en
+  /// `photo`. Si el archivo no se puede leer, la alerta viaja igual sin foto (el
+  /// backend la marca como evidencia incompleta): nunca se pierde una alerta por la foto.
+  @override
+  Future<Json> postConArchivo(String ruta, Json datos, {String? rutaArchivo}) =>
+      _enviar('POST', ruta, datos, null, rutaArchivo: rutaArchivo, multipart: true);
+
+  Future<Json> _enviar(
+    String metodo,
+    String ruta,
+    Json? cuerpo,
+    Map<String, String>? query, {
+    String? rutaArchivo,
+    bool multipart = false,
+  }) async {
     final publica = _publicas.contains(ruta);
-    var r = await _una(metodo, ruta, cuerpo, query, conBearer: !publica);
+    Future<_Resp> una({required bool conBearer}) =>
+        _una(metodo, ruta, cuerpo, query, conBearer: conBearer, rutaArchivo: rutaArchivo, multipart: multipart);
+    var r = await una(conBearer: !publica);
 
     if (ruta == '/auth/logout') {
       try {
         if (r.esNoAutorizado && (await _refrescar()).estado == _EstadoRefresh.listo) {
-          r = await _una(metodo, ruta, cuerpo, query, conBearer: true); // un solo reintento
+          r = await una(conBearer: true); // un solo reintento
         }
       } finally {
         // La sesión local se cierra pase lo que pase con el servidor.
@@ -76,7 +96,7 @@ class HttpSafeLinkService extends ClienteApi {
     if (!publica && r.esNoAutorizado) {
       final refresh = await _refrescar();
       if (refresh.estado == _EstadoRefresh.listo) {
-        r = await _una(metodo, ruta, cuerpo, query, conBearer: true);
+        r = await una(conBearer: true); // el multipart se vuelve a armar: su cuerpo no se reutiliza
       } else if (refresh.estado == _EstadoRefresh.falloRed) {
         return refresh.error ?? _sinConexion;
       }
@@ -115,20 +135,35 @@ class HttpSafeLinkService extends ClienteApi {
   }
 
   /// Una petición HTTP, sin reintentos. Guarda los tokens de login/register/refresh.
-  Future<_Resp> _una(String metodo, String ruta, Json? cuerpo, Map<String, String>? query, {required bool conBearer}) async {
+  Future<_Resp> _una(
+    String metodo,
+    String ruta,
+    Json? cuerpo,
+    Map<String, String>? query, {
+    required bool conBearer,
+    String? rutaArchivo,
+    bool multipart = false,
+  }) async {
     final uri = Uri.parse('$_base$ruta').replace(queryParameters: (query == null || query.isEmpty) ? null : query);
     final conCuerpo = metodo == 'POST' || metodo == 'PUT' || metodo == 'PATCH';
 
     final http.Response res;
     try {
-      final peticion = http.Request(metodo, uri)
+      final http.BaseRequest peticion;
+      if (multipart) {
+        peticion = await _multipart(metodo, uri, cuerpo, rutaArchivo);
+      } else {
+        final json = http.Request(metodo, uri);
+        if (conCuerpo) {
+          json.headers['Content-Type'] = 'application/json';
+          json.body = jsonEncode(cuerpo ?? const <String, Object?>{}); // {} si no hay datos
+        }
+        peticion = json;
+      }
+      peticion
         ..followRedirects = false
         ..headers['Accept'] = 'application/json'
         ..headers.addAll({if (conBearer && _accessToken != null) 'Authorization': 'Bearer $_accessToken'});
-      if (conCuerpo) {
-        peticion.headers['Content-Type'] = 'application/json';
-        peticion.body = jsonEncode(cuerpo ?? const <String, Object?>{}); // {} si no hay datos
-      }
       // Un solo tiempo máximo para enviar y leer la respuesta.
       res = await (() async => http.Response.fromStream(await _http.send(peticion)))().timeout(tiempoMaximo);
     } on Object {
@@ -149,6 +184,21 @@ class HttpSafeLinkService extends ClienteApi {
       cuerpoRespuesta = await _extraerTokens(cuerpoRespuesta);
     }
     return _Resp(res.statusCode, cuerpoRespuesta);
+  }
+
+  /// Petición multipart: el JSON va en `data` y, si se puede leer, el archivo en `photo`.
+  /// El nombre del archivo que viaja es fijo: la ruta local del teléfono no sale del equipo
+  /// (el servidor tampoco la usaría, D2).
+  Future<http.MultipartRequest> _multipart(String metodo, Uri uri, Json? cuerpo, String? rutaArchivo) async {
+    final peticion = http.MultipartRequest(metodo, uri)..fields['data'] = jsonEncode(cuerpo ?? const <String, Object?>{});
+    if (rutaArchivo != null && rutaArchivo.isNotEmpty) {
+      try {
+        peticion.files.add(await http.MultipartFile.fromPath('photo', rutaArchivo, filename: 'evidencia'));
+      } on Object {
+        // Sin acceso al archivo (o en web): la alerta viaja sin foto.
+      }
+    }
+    return peticion;
   }
 
   /// Guarda los tokens y los quita del User antes de entregarlo al mapeador.

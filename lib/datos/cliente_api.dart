@@ -23,6 +23,11 @@ abstract class ClienteApi {
   /// o el refresh dio UNAUTHORIZED), `{ "error": ... }` = fallo de red.
   Future<Json?> restaurarSesionGuardada() async => null;
 
+  /// POST con un archivo adjunto (U-06: la foto de la alerta). [datos] es el
+  /// mismo JSON de siempre y [rutaArchivo] la ruta local del archivo, o `null`.
+  /// Por defecto (servicio simulado) es un POST normal: el archivo no viaja.
+  Future<Json> postConArchivo(String ruta, Json datos, {String? rutaArchivo}) => post(ruta, datos);
+
   Future<Json> get(String ruta, {Map<String, String> query = const {}}) => enviar('GET', ruta, query: query);
   Future<Json> post(String ruta, [Json cuerpo = const {}]) => enviar('POST', ruta, cuerpo: cuerpo);
   Future<Json> put(String ruta, [Json cuerpo = const {}]) => enviar('PUT', ruta, cuerpo: cuerpo);

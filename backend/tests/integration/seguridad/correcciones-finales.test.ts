@@ -30,6 +30,13 @@ const REALES = new Set([
   'GET /admin/guards/:id',
   'PATCH /admin/guards/:id',
   'DELETE /admin/guards/:id',
+  // BE-03
+  'POST /alerts',
+  'GET /alerts/mine',
+  'POST /alerts/:id/locations',
+  'POST /alerts/:id/confirm',
+  'GET /alerts/:id/photo',
+  'GET /events/alerts/active',
 ]);
 
 describe('guards: ruta con roles sin authenticate decorado', () => {
@@ -193,7 +200,8 @@ describe('recorrido de rutas registradas', () => {
     const claves = sinHead().map((r) => `${r.metodo} ${r.url.slice(API_PREFIX.length)}`);
     expect(new Set(claves).size).toBe(claves.length);
     expect([...claves].sort()).toEqual(Object.keys(ROUTE_POLICIES).sort());
-    expect(claves).toHaveLength(36);
+    // 36 de BE-01 + GET /alerts/:id/photo (BE-03, D30).
+    expect(claves).toHaveLength(37);
   });
 
   it('solo /health queda fuera del prefijo', () => {
@@ -238,6 +246,7 @@ describe('recorrido de rutas registradas', () => {
       return typeof p === 'string';
     });
     expect(libres.map((r) => `${r.metodo} ${r.url.slice(API_PREFIX.length)}`).sort()).toEqual([
+      'GET /alerts/:id/photo',
       'POST /auth/login',
       'POST /auth/refresh',
       'POST /auth/register',
