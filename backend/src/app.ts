@@ -5,10 +5,17 @@ import type { PrismaClient } from './db/prisma.js';
 import { tooManyRequests } from './errors/app-error.js';
 import { createFrameworkErrorHandler, registerErrorHandling } from './http/error-handler.js';
 import { adminRoutes } from './modules/admin/routes.js';
+import { alertsRoutes } from './modules/alerts/routes.js';
+import { createAlertsService } from './modules/alerts/service.js';
 import { authRoutes } from './modules/auth/routes.js';
+import { eventsRoutes } from './modules/events/routes.js';
 import { authPluginRoot } from './plugins/auth.js';
+import { alertsTopicForUser, createMemoryEventBus, type EventBus } from './realtime/event-bus.js';
+import { createSseHub } from './realtime/sse.js';
 import { healthRoutes } from './routes/health.js';
 import { registerRouteGuards } from './security/guards.js';
+import { createDiskPhotoStorage } from './storage/photo-storage.js';
+import { createPhotoUrlSigner } from './storage/photo-urls.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -21,6 +28,8 @@ export const API_PREFIX = '/api/v1';
 export interface AppDependencies {
   /** Sin prisma solo se registra /health (las rutas con base de datos no existen). */
   prisma?: PrismaClient;
+  /** Bus de eventos del tiempo real (D3); por defecto, uno en memoria. */
+  bus?: EventBus;
 }
 
 export function buildApp(config: Config, deps: AppDependencies = {}): FastifyInstance {
@@ -69,6 +78,33 @@ export function buildApp(config: Config, deps: AppDependencies = {}): FastifyIns
   void app.register(healthRoutes);
   const { prisma } = deps;
   if (prisma) {
+    // Alertas (BE-03): un solo servicio para las rutas REST y el canal alerts/active. Cada
+    // cambio publica en el bus, y el canal SSE de ese usuario manda un snapshot nuevo.
+    const bus = deps.bus ?? createMemoryEventBus();
+    const hub = createSseHub(bus, {
+      pingSeconds: config.SSE_PING_SECONDS,
+      maxConnectionsPerUser: config.SSE_MAX_CONNECTIONS_PER_USER,
+    });
+    const photos = createDiskPhotoStorage(config.PHOTO_DIR);
+    const photoUrls = createPhotoUrlSigner({
+      secret: config.JWT_SECRET,
+      publicApiUrl: config.PUBLIC_API_URL ?? `http://127.0.0.1:${String(config.PORT)}/api/v1`,
+      ttlSeconds: config.PHOTO_URL_TTL_SECONDS,
+    });
+    const alerts = createAlertsService({
+      prisma,
+      serialize: {
+        photoUrl: (alertId, photoKey) => (photoKey ? photoUrls.url(alertId, photoKey) : null),
+        guardMetersPerMinute: config.GUARD_METERS_PER_MINUTE,
+      },
+      triggeredAtToleranceSeconds: config.TRIGGERED_AT_TOLERANCE_SECONDS,
+      onUserAlertChanged: (userId) => bus.publish(alertsTopicForUser(userId)),
+    });
+    // Los streams abiertos no deben impedir que la API se apague.
+    app.addHook('preClose', async () => {
+      hub.closeAll();
+    });
+
     void app.register(authPluginRoot, { prisma });
     void app.register(
       async (api) => {
@@ -90,6 +126,8 @@ export function buildApp(config: Config, deps: AppDependencies = {}): FastifyIns
         });
         await api.register(authRoutes, { prisma });
         await api.register(adminRoutes, { prisma });
+        await api.register(alertsRoutes, { prisma, service: alerts, photos, photoUrls });
+        await api.register(eventsRoutes, { prisma, hub, alerts });
       },
       { prefix: API_PREFIX },
     );

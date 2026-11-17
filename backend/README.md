@@ -169,6 +169,42 @@ La contraseña de Postgres (`POSTGRES_PASSWORD`, y la misma dentro de `DATABASE_
 
 Pendientes conocidos que no son de BE-01 (detalle en `docs/DECISIONES.md`, "Pendientes de seguridad"): rate limit de `register` (BE-02); refresh token en almacenamiento seguro (Keystore/Keychain) antes de producción; permiso `INTERNET` en el manifest `main` de Android para un build release; `JWT_SECRET` de alta entropía y rate limit por cuenta antes de cualquier despliegue.
 
+## BE-03: alertas y evidencia
+
+Rutas del usuario protegido (`src/modules/alerts/`) y canal en tiempo real (`src/modules/events/`, `src/realtime/`):
+
+| Ruta | Qué hace |
+|---|---|
+| `POST /alerts` | Crea la alerta (U-03 a U-06). Sin ubicación queda `pending_location`; sin foto, `evidenceIncomplete`. JSON o `multipart/form-data` con `data` + `photo` |
+| `GET /alerts/mine` | Historial del usuario, la más reciente primero |
+| `POST /alerts/:id/locations` | Ubicación en vivo (U-07); en `pending_location` publica la alerta |
+| `POST /alerts/:id/confirm` | "Ya fui atendido" (U-09), solo con el guardia en el lugar |
+| `GET /alerts/:id/photo?exp&sig` | La foto, con la URL firmada que llega en `photoUrl` (D30) |
+| `GET /events/alerts/active` | SSE: la alerta activa del usuario o `null`, con cada cambio (D31) |
+
+Variables nuevas (todas con valor por defecto): `RATE_LIMIT_ALERTS_PER_MINUTE`, `RATE_LIMIT_LOCATIONS_PER_WINDOW`, `PHOTO_DIR`, `PHOTO_MAX_BYTES`, `PHOTO_URL_TTL_SECONDS`, `PUBLIC_API_URL`, `SSE_PING_SECONDS`, `SSE_MAX_CONNECTIONS_PER_USER`. Con el teléfono en la LAN pon `PUBLIC_API_URL` con la IP de tu computadora, o la app no podrá abrir las fotos.
+
+```powershell
+$base = "http://127.0.0.1:3000/api/v1"
+$login = Invoke-RestMethod -Method Post -Uri "$base/auth/login" -ContentType "application/json" `
+  -Body (@{ email = "usuario@safelink.mx"; password = "SafeLink1" } | ConvertTo-Json)
+$h = @{ Authorization = "Bearer $($login.data.accessToken)" }
+
+# Crear una alerta (JSON, sin foto)
+$alerta = Invoke-RestMethod -Method Post -Uri "$base/alerts" -Headers $h -ContentType "application/json" `
+  -Body (@{ triggerMethod = "tap"; triggeredAt = (Get-Date).ToUniversalTime().ToString("o"); location = @{ lat = 18.84; lng = -99.18 }; heading = 35; photoPath = $null } | ConvertTo-Json)
+
+# Con foto (curl.exe): el campo data lleva el mismo JSON
+curl.exe -s -X POST "$base/alerts" -H "Authorization: Bearer $($login.data.accessToken)" `
+  -F 'data={"triggerMethod":"hold","triggeredAt":"2026-11-16T18:00:00Z","location":{"lat":18.84,"lng":-99.18},"heading":35}' `
+  -F "photo=@foto.jpg"
+
+# Escuchar el canal (se queda abierto; Ctrl+C para salir)
+curl.exe -N "$base/events/alerts/active" -H "Authorization: Bearer $($login.data.accessToken)"
+```
+
+Pruebas: `tests/unit/be03-*.test.ts` (reglas, validación, foto, transporte SSE; no necesitan base) y `tests/integration/alertas/` (contra `safelink_test`).
+
 ## Aviso: OneDrive y rutas con espacios
 
 El repo está dentro de OneDrive y la ruta contiene espacios. `node_modules` tiene miles de archivos y OneDrive puede ralentizar la sincronización o bloquear archivos: considera excluir `backend/node_modules` de la sincronización. Entrecomilla cualquier ruta con espacios al usar la terminal.

@@ -52,6 +52,8 @@ services:
       RATE_LIMIT_LOGIN_WINDOW:
       RATE_LIMIT_REFRESH_MAX:
       RATE_LIMIT_REFRESH_WINDOW:
+      RATE_LIMIT_ALERTS_PER_MINUTE:
+      RATE_LIMIT_LOCATIONS_PER_WINDOW:
       ARGON2_MEMORY_KIB:
       ARGON2_TIME_COST:
       ARGON2_PARALLELISM:
@@ -70,9 +72,19 @@ services:
       ADMIN_NOTE_MAX_LENGTH:
       TRIGGERED_AT_TOLERANCE_SECONDS:
       BODY_LIMIT_BYTES:
+      PHOTO_MAX_BYTES:
+      PHOTO_URL_TTL_SECONDS:
+      PUBLIC_API_URL:
+      SSE_PING_SECONDS:
+      SSE_MAX_CONNECTIONS_PER_USER:
+      # Ruta dentro del contenedor; los archivos viven en el volumen safelink_fotos.
+      PHOTO_DIR: /app/storage/fotos
+    volumes:
+      - safelink_fotos:/app/storage/fotos
     ports:
       # Solo local por defecto; API_BIND=0.0.0.0 para probar con el teléfono en la LAN.
       - "${API_BIND:-127.0.0.1}:${PORT:-3000}:3000"
 
 volumes:
   safelink_pgdata:
+  safelink_fotos:

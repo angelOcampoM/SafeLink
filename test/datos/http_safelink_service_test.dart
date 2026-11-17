@@ -11,8 +11,10 @@ import 'package:http/testing.dart';
 import 'package:safelink/datos/almacen_tokens.dart';
 import 'package:safelink/datos/http_safelink_service.dart';
 import 'package:safelink/datos/nube_alerta_guardia_repository.dart';
+import 'package:safelink/datos/nube_alerta_usuario_repository.dart';
 import 'package:safelink/datos/nube_auth_repository.dart';
 import 'package:safelink/datos/safelink_service.dart';
+import 'package:safelink/dominio/dominio.dart';
 import 'package:safelink/main.dart';
 
 const _usuario = {
@@ -342,6 +344,91 @@ void main() {
       expect(p.followRedirects, isFalse);
     });
   });
+  group('foto de la alerta (U-06, D2)', () {
+    late Directory dir;
+    setUp(() => dir = Directory.systemTemp.createTempSync('safelink-foto-'));
+    tearDown(() => dir.deleteSync(recursive: true));
+
+    const jpeg = [0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46];
+    const alerta = {
+      'id': 'alt-1', 'userId': 'usr-1', 'userName': null, 'userPhone': null, 'guardId': null, 'guardName': null,
+      'status': 'searching', 'triggerMethod': 'tap', 'photoUrl': 'http://x/foto', 'evidenceIncomplete': false,
+      'location': {'lat': 18.84, 'lng': -99.18}, 'heading': 35, 'triggeredAt': '2026-11-16T18:00:00.000Z',
+      'acceptedAt': null, 'arrivedAt': null, 'closedAt': null, 'escalationReason': null, 'resolution': null,
+      'adminNote': null, 'etaSeconds': null,
+    };
+
+    String cuerpoTexto(http.Request r) => latin1.decode(r.bodyBytes);
+
+    test('crearAlerta manda multipart con el JSON en data y la foto en photo', () async {
+      final foto = File('${dir.path}/IMG_2026_secreta.jpg')..writeAsBytesSync(jpeg);
+      final s = servicio((r) async => _json({'data': alerta}, 201));
+
+      final creada = await NubeAlertaUsuarioRepository(s).crearAlerta(
+        metodo: MetodoDisparo.toque,
+        disparadaEn: DateTime.utc(2026, 11, 16, 18),
+        ubicacion: const PuntoGeo(18.84, -99.18),
+        rumbo: 35,
+        rutaFoto: foto.path,
+      );
+
+      expect(creada.evidenciaIncompleta, isFalse);
+      final p = peticiones.single;
+      expect(p.url.path, '/api/v1/alerts');
+      expect(p.headers['content-type'], startsWith('multipart/form-data; boundary='));
+      final texto = cuerpoTexto(p);
+      expect(texto, contains('name="data"'));
+      expect(texto, contains('"triggerMethod":"tap"'));
+      expect(texto, contains('name="photo"; filename="evidencia"'));
+      // La ruta local del teléfono solo viaja dentro del JSON (photoPath), nunca como nombre de archivo.
+      expect(texto, isNot(contains('filename="IMG_2026_secreta.jpg"')));
+    });
+
+    test('si la foto no existe, la alerta se manda igual sin el archivo', () async {
+      final s = servicio((r) async => _json({'data': {...alerta, 'photoUrl': null, 'evidenceIncomplete': true}}, 201));
+
+      final creada = await NubeAlertaUsuarioRepository(s).crearAlerta(
+        metodo: MetodoDisparo.mantener,
+        disparadaEn: DateTime.utc(2026, 11, 16, 18),
+        rutaFoto: '${dir.path}/no-existe.jpg',
+      );
+
+      expect(creada.evidenciaIncompleta, isTrue);
+      final texto = cuerpoTexto(peticiones.single);
+      expect(texto, contains('name="data"'));
+      expect(texto, isNot(contains('name="photo"')));
+    });
+
+    test('ante un 401 renueva el token y reintenta con la foto otra vez', () async {
+      await almacen.guardarRefresh('refresh-1');
+      final foto = File('${dir.path}/f.jpg')..writeAsBytesSync(jpeg);
+      var intentos = 0;
+      final s = servicio((r) async {
+        if (r.url.path.endsWith('/auth/refresh')) return _conTokens('acceso-2', 'refresh-2');
+        intentos += 1;
+        return intentos == 1 ? _noAutorizado() : _json({'data': alerta}, 201);
+      });
+
+      await NubeAlertaUsuarioRepository(s).crearAlerta(
+        metodo: MetodoDisparo.toque,
+        disparadaEn: DateTime.utc(2026, 11, 16, 18),
+        rutaFoto: foto.path,
+      );
+
+      final alertas = peticiones.where((r) => r.url.path.endsWith('/alerts')).toList();
+      expect(alertas, hasLength(2));
+      expect(cuerpoTexto(alertas.last), contains('name="photo"'));
+      expect(alertas.last.headers['Authorization'], 'Bearer acceso-2');
+    });
+
+    test('el servicio simulado sigue recibiendo un POST normal con photoPath', () async {
+      final s = SafeLinkService(latenciaMin: Duration.zero, latenciaMax: Duration.zero);
+      final r = await s.postConArchivo('/auth/login', {'email': 'nadie@safelink.mx', 'password': 'x'}, rutaArchivo: '/x.jpg');
+      expect((r['error']! as Map)['code'], 'INVALID_CREDENTIALS');
+      s.dispose();
+    });
+  });
+
   test('escuchar informa que el tiempo real llega después', () async {
     final s = servicio((r) async => _json({'data': null}));
     final e = await s.escuchar('alerts/active').first;

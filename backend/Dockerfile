@@ -28,6 +28,8 @@ WORKDIR /app
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY package.json ./
+# Fotos de evidencia (D2): carpeta propia del usuario node, montada como volumen en Compose.
+RUN mkdir -p /app/storage/fotos && chown -R node:node /app/storage
 USER node
 EXPOSE 3000
 CMD ["node", "dist/server.js"]

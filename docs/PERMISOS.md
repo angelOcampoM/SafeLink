@@ -38,7 +38,7 @@ Códigos: sin token, token inválido, sesión revocada o usuario inactivo = `401
 
 ## 3. Matriz rol × ruta
 
-Leyenda: ✅ permitido (sujeto a la regla de la última columna), 401 = no autenticado, 403 = rol incorrecto. Las rutas son relativas a `/api/v1`. 36 entradas: 31 rutas del front, `POST /auth/refresh` (excepción aprobada, D8) y 4 canales SSE.
+Leyenda: ✅ permitido (sujeto a la regla de la última columna), 401 = no autenticado, 403 = rol incorrecto. Las rutas son relativas a `/api/v1`. 37 entradas: 31 rutas del front, `POST /auth/refresh` (excepción aprobada, D8), `GET /alerts/:id/photo` (excepción, D30) y 4 canales SSE.
 
 La columna "Regla de propiedad o visibilidad" describe lo que define el contrato y las decisiones (D9, D22, D23); se implementa en la tarjeta indicada. Un recurso ajeno responde `404 NOT_FOUND`, nunca 403.
 
@@ -80,10 +80,11 @@ La columna "Regla de propiedad o visibilidad" describe lo que define el contrato
 | 34 | `GET /events/guard/alerts` (SSE) | 401 | 403 | ✅ | 403 | Visibilidad reevaluada por guardia en cada emisión (D22) | BE-04 |
 | 35 | `GET /events/guard/alerts/:id` (SSE) | 401 | 403 | ✅ | 403 | `assertGuardCanSee`; si deja de ser visible, evento `NOT_FOUND` y cierre | BE-04 |
 | 36 | `GET /events/admin/alerts/escalated` (SSE) | 401 | 403 | 403 | ✅ | Solo alertas `escalated` | BE-05 |
+| 37 | `GET /alerts/:id/photo` | ✅ | ✅ | ✅ | ✅ | Pública; la autoriza la firma HMAC de la URL, que solo emite el servidor a quien puede ver la alerta. Cualquier fallo, 404 (D30) | BE-03 |
 
 En los canales SSE, 401 y 403 se responden como HTTP normal antes de abrir el stream (D22). Nunca se acepta el token en el query string.
 
-Estado de implementación hoy: solo las filas 1, 3, 4, 5 y 6 tienen handler (módulo `backend/src/modules/auth/routes.ts`). El resto está en `ROUTE_POLICIES` pero la ruta aún no existe; hasta entonces responde 404 por ser inexistente, no por permisos.
+Estado de implementación hoy: tienen handler las rutas de BE-01 y BE-02 (auth, ajustes y guardias) y las de BE-03: filas 8 a 11, 33 y 37 (`backend/src/modules/alerts/` y `backend/src/modules/events/`). El resto está en `ROUTE_POLICIES` pero la ruta aún no existe; hasta entonces responde 404 por ser inexistente, no por permisos.
 
 ## 4. Reglas de propiedad y visibilidad
 

@@ -6,3 +6,5 @@ coverage
 !.env.example
 *.log
 src/generated
+# Fotos de evidencia guardadas en local (D2): datos personales, nunca al repo.
+/storage

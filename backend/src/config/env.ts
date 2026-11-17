@@ -36,6 +36,10 @@ export const envSchema = z.object({
   RATE_LIMIT_LOGIN_WINDOW: duracion('1m'),
   RATE_LIMIT_REFRESH_MAX: entero(30),
   RATE_LIMIT_REFRESH_WINDOW: duracion('1m'),
+  // Rate limit POR USUARIO (BE-03): alertas creadas por minuto y envíos de ubicación por
+  // ventana de LOCATION_UPDATE_SECONDS (holgura para el jitter del teléfono).
+  RATE_LIMIT_ALERTS_PER_MINUTE: entero(5),
+  RATE_LIMIT_LOCATIONS_PER_WINDOW: entero(3),
   // Parámetros de argon2id (por defecto, los de la librería).
   ARGON2_MEMORY_KIB: entero(65536).pipe(z.number().min(19456).max(1048576)),
   ARGON2_TIME_COST: entero(3).pipe(z.number().min(2).max(10)),
@@ -69,6 +73,17 @@ export const envSchema = z.object({
   ADMIN_NOTE_MAX_LENGTH: entero(300),
   TRIGGERED_AT_TOLERANCE_SECONDS: entero(600),
   BODY_LIMIT_BYTES: entero(1048576).pipe(z.number().max(10 * 1024 * 1024)),
+  // Foto de evidencia (D2 · BE-03): carpeta local, tamaño máximo y vida de la URL firmada.
+  PHOTO_DIR: z.string().min(1).default('storage/fotos'),
+  PHOTO_MAX_BYTES: entero(5 * 1024 * 1024).pipe(z.number().max(15 * 1024 * 1024)),
+  PHOTO_URL_TTL_SECONDS: entero(900).pipe(z.number().max(86400)),
+  // Base de la API tal como la abre la app (la misma API_URL del front, D4). Sin ella se usa
+  // http://127.0.0.1:PORT/api/v1, que solo sirve en esta computadora.
+  PUBLIC_API_URL: z.url({ protocol: /^https?$/ }).optional(),
+  // Tiempo real (D3, D26): cada cuánto se manda `: ping` (y se revisa la sesión) y cuántos
+  // streams puede tener abiertos un mismo usuario (al pasarse se cierra el más antiguo).
+  SSE_PING_SECONDS: entero(25).pipe(z.number().max(300)),
+  SSE_MAX_CONNECTIONS_PER_USER: entero(3).pipe(z.number().max(20)),
 });
 
 export type Config = z.infer<typeof envSchema>;

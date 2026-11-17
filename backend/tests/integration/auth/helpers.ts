@@ -40,6 +40,8 @@ const BASE_PRUEBA = {
   ARGON2_PARALLELISM: String(ARGON2_PRUEBA.parallelism),
   RATE_LIMIT_LOGIN_MAX: '100000',
   RATE_LIMIT_REFRESH_MAX: '100000',
+  RATE_LIMIT_ALERTS_PER_MINUTE: '100000',
+  RATE_LIMIT_LOCATIONS_PER_WINDOW: '100000',
 };
 
 export function configPrueba(extra: Record<string, string> = {}): Config {

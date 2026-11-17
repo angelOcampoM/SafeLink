@@ -425,6 +425,20 @@ Comportamiento (front):
 - `POST /alerts/:id/locations` sobre una alerta en `pending_location` la pasa a `searching` y le pone esa ubicación; en otros estados solo actualiza `location` (`memoria_alerta_usuario_repository.dart:52-60`). El servidor asigna la hora (`recordedAt`).
 - `GET /alerts/mine`: no admite filtros; el front filtra en el cliente (`dominio/filtro_mi_historial.dart:21`). Evidencia del orden: `memoria_alerta_usuario_repository.dart:76`.
 
+Implementado en BE-03 (`backend/src/modules/alerts/`):
+
+- `POST /alerts` acepta **también** `multipart/form-data`: campo `data` con el mismo JSON de la tabla y archivo opcional `photo` (JPEG, PNG o WebP, hasta `PHOTO_MAX_BYTES`). Con foto, `evidenceIncomplete = false` y `photoUrl` trae una URL firmada (D30). Con JSON, la alerta se crea sin foto (`evidenceIncomplete = true`). Errores propios del multipart: `400 INVALID_STATE` `La foto no es una imagen válida`, `La foto es demasiado grande` o `Los datos de la alerta no son válidos`.
+- Mensaje del `409` con otra alerta activa: `Ya tienes una alerta activa`. Mensaje del `409` en `POST /alerts/:id/locations` con la alerta ya no activa: `Tu alerta ya no está activa`.
+- Rate limit **por usuario** (no por IP): `POST /alerts` `RATE_LIMIT_ALERTS_PER_MINUTE` (5 por minuto); `POST /alerts/:id/locations` `RATE_LIMIT_LOCATIONS_PER_WINDOW` (3 por ventana de `LOCATION_UPDATE_SECONDS`). Al pasarse: `429 TOO_MANY_REQUESTS`.
+- Cada cambio de estado deja su fila en `alert_status_history` (`actorId` = el usuario).
+- `etaSeconds` ya se calcula para el dueño (D27) con la última ubicación del guardia asignado; BE-04 es quien la actualiza.
+
+| Método | Ruta | Req. | Respuesta | Rol | Tarjeta |
+|---|---|---|---|---|---|
+| GET | `/alerts/:id/photo?exp=…&sig=…` **(EXCEPCIÓN, D30)** | — | La imagen (`Content-Type` por bytes, `nosniff`) | `public`: la autoriza la firma de la URL | BE-03 |
+
+No la llama el front por su nombre: la recibe ya armada en `photoUrl`. Cualquier fallo responde `404 NOT_FOUND`.
+
 ### 5.3 Guardia
 
 Evidencia: `safelink_service.dart:182-200`. Cliente: `nube_alerta_guardia_repository.dart`. Rol de todas: `guard`.
@@ -506,7 +520,7 @@ Reglas del transporte:
 
 - `Content-Type: text/event-stream`. Cada evento: `data: {"data": ...}\n\n`, con el mismo envoltorio que las respuestas REST (`safelink_service.dart:90`).
 - **Al conectar** se envía el estado actual como primer evento (snapshot completo). En el mock el stream emite el valor actual al suscribirse (`memoria_base_datos.dart:58-63`). **Cada evento es un snapshot completo, no un delta**: el front reemplaza su estado con lo que llega. Puede haber eventos repetidos con el mismo contenido (el mock emite ante cualquier cambio global); el cliente debe tolerarlo.
-- Comentario `: ping\n\n` periódico para mantener viva la conexión. El intervalo es configurable por variable de entorno (nombre por definir en BE-03).
+- Comentario `: ping\n\n` periódico para mantener viva la conexión. El intervalo es `SSE_PING_SECONDS` (25 por defecto); en cada ping se revisa que la sesión siga viva (D31). Máximo de streams por usuario: `SSE_MAX_CONNECTIONS_PER_USER` (3).
 - Errores una vez abierto el stream: `data: {"error":{"code":"...","message":"..."}}\n\n` y se cierra la conexión. Así actúa el mock con un canal desconocido: emite un solo evento de error (`safelink_service.dart:88`). Alerta inexistente en `guard/alerts/:id`: `NOT_FOUND`.
 - Autenticación: header `Authorization: Bearer <accessToken>`. **Nunca** el token en el query string (queda en logs y en el historial). Si falta o es inválido el token, o el rol no corresponde, se responde **antes de abrir el stream** con HTTP 401 / 403 y el envoltorio JSON normal **(decidido, D22)**.
 - Rol por canal: el usuario solo recibe su alerta; el guardia, solo lo que le corresponde; el admin, solo escaladas. Rol incorrecto: `403 FORBIDDEN`.
@@ -557,8 +571,9 @@ Los valores de modo demo (`segundosEscalamientoDemo`, `segundosNuevaAlertaMin/Ma
 
 - **Hoy (front):** `POST /alerts` manda `photoPath`, una ruta local del teléfono (`nube_alerta_usuario_repository.dart:27`). El mock solo pone una URL de prueba si `photoPath != null` (`memoria_alerta_usuario_repository.dart:36`).
 - **Backend:** la foto se guarda detrás de una interfaz `PhotoStorage { save(stream, mime) → { key, url }; url(key) }`. La tabla `alerts` guarda `photo_key`. `photoUrl` en la respuesta se calcula con `PhotoStorage.url(photo_key)`; es `null` si no hay foto, y entonces `evidenceIncomplete = true`.
-- **Subida real:** `multipart/form-data` a disco local, definida en BE-03. Hasta entonces `photoPath` se acepta pero no se puede usar para guardar el archivo; la forma exacta de la subida (misma ruta o ruta aparte) se decide en BE-03.
-- Como el front espera `photoUrl` como string, debe ser una URL que la app pueda abrir con la sesión que tiene (detalle en BE-03).
+- **Subida real (BE-03):** `multipart/form-data` en la **misma ruta** `POST /alerts` (campo `data` + archivo `photo`), a disco local. `photoPath` se sigue aceptando por JSON pero no se usa.
+- **`photoUrl` (BE-03, D30):** URL firmada de vida corta (`PHOTO_URL_TTL_SECONDS`, 900 s) hacia `GET /api/v1/alerts/:id/photo`, porque `Image.network` no manda el header `Authorization`. Su base es `PUBLIC_API_URL`.
+- **Front (BE-03):** `nube_alerta_usuario_repository.dart` manda la alerta con `postConArchivo` y `HttpSafeLinkService` la envía como multipart (`data` + `photo`, con nombre de archivo fijo `evidencia`). Si el archivo no se puede leer, la alerta viaja sin foto. La cámara real llega con los sensores (Sprint 3): mientras tanto la cámara simulada no produce archivo y la alerta queda con evidencia incompleta.
 - **Seguridad de la foto (BE-03):**
   - Se sirve por una **ruta autenticada** con la misma autorización que la alerta (dueño, guardia con visibilidad, admin) o con una URL firmada de vida corta. Nunca como archivo estático público ni con el token en el query.
   - `photo_key` es un UUID **generado por el servidor**.

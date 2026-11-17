@@ -19,13 +19,18 @@ class NubeAlertaUsuarioRepository implements AlertaUsuarioRepository {
     int? rumbo,
     String? rutaFoto,
   }) async {
-    final r = await _service.post('/alerts', {
-      'triggerMethod': CodigosJson.metodo[metodo],
-      'triggeredAt': disparadaEn.toIso8601String(),
-      'location': ubicacion == null ? null : PuntoGeoJson.aJson(ubicacion),
-      'heading': rumbo,
-      'photoPath': rutaFoto,
-    });
+    // U-06 · D2: la foto viaja como archivo; `photoPath` se queda para el simulado.
+    final r = await _service.postConArchivo(
+      '/alerts',
+      {
+        'triggerMethod': CodigosJson.metodo[metodo],
+        'triggeredAt': disparadaEn.toIso8601String(),
+        'location': ubicacion == null ? null : PuntoGeoJson.aJson(ubicacion),
+        'heading': rumbo,
+        'photoPath': rutaFoto,
+      },
+      rutaArchivo: rutaFoto,
+    );
     return AlertaJson.desdeJson(RespuestaJson.datos(r)! as Json);
   }
 

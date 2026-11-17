@@ -26,9 +26,13 @@ const canalesFront = (() => {
   return [...canales].sort();
 })();
 
+// Rutas del backend que el front no llama por su nombre, cada una con su decisión documentada:
+// refresh (D8) y la foto con URL firmada (BE-03, D2: la app la recibe ya armada en photoUrl).
+const EXTRAS = ['POST /auth/refresh', 'GET /alerts/:id/photo'];
+
 const claves = Object.keys(ROUTE_POLICIES);
 const clavesEvents = claves.filter((k) => k.startsWith('GET /events/'));
-const clavesRest = claves.filter((k) => !k.startsWith('GET /events/') && k !== 'POST /auth/refresh');
+const clavesRest = claves.filter((k) => !k.startsWith('GET /events/') && !EXTRAS.includes(k));
 
 describe('Contrato de políticas de acceso front <-> backend (BE-01 paso 6)', () => {
   it('la extracción por regex encuentra las 31 rutas del front, sin duplicados', () => {
@@ -50,11 +54,17 @@ describe('Contrato de políticas de acceso front <-> backend (BE-01 paso 6)', ()
     expect(clavesEvents.map((k) => k.replace('GET /events/', '')).sort()).toEqual(canalesFront);
   });
 
-  it('POST /auth/refresh es la única ruta extra y no existe en el front', () => {
-    expect(rutasFront).not.toContain('POST /auth/refresh');
-    expect(claves).toContain('POST /auth/refresh');
-    expect(claves).toHaveLength(rutasFront.length + canalesFront.length + 1);
-    expect(claves).toHaveLength(36);
+  it('las únicas rutas extra son las documentadas y no existen en el front', () => {
+    for (const extra of EXTRAS) {
+      expect(rutasFront).not.toContain(extra);
+      expect(claves).toContain(extra);
+    }
+    expect(claves).toHaveLength(rutasFront.length + canalesFront.length + EXTRAS.length);
+    expect(claves).toHaveLength(37);
+  });
+
+  it('la ruta de la foto es pública: la autoriza la firma de la URL, no el token (D2)', () => {
+    expect(ROUTE_POLICIES['GET /alerts/:id/photo']).toBe('public');
   });
 
   it('todas las claves siguen el formato "MÉTODO /ruta" y los canales SSE son GET', () => {
