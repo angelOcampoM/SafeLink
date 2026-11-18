@@ -32,7 +32,7 @@ Para levantar todo en contenedores: `docker compose up --build`. Para apagar: `d
 | `npm start` | Ejecuta `dist/server.js` (requiere variables de entorno ya cargadas) |
 | `npm run typecheck` | Verificación de tipos |
 | `npm run lint` | ESLint |
-| `npm test` | Pruebas con Vitest. Las unitarias no necesitan `.env`; las de integración (`tests/integration/db/`) requieren `npm run db:up`, `npm run db:test:create`, `npm run db:test:deploy` y `DATABASE_URL_TEST` en `.env` |
+| `npm test` | Pruebas con Vitest. Las unitarias no necesitan `.env`; las de integración (`tests/integration/db/`) requieren `npm run db:up`, `npm run db:test:create`, `npm run db:test:deploy` y `DATABASE_URL_TEST` en `.env`. Los archivos se ejecutan en serie (`fileParallelism: false`) porque las pruebas de integración comparten la base de pruebas |
 | `npm run db:up` | Levanta Postgres (`docker compose up -d db`) |
 | `npm run db:generate` | Genera el cliente de Prisma en `src/generated` (ignorado por git) |
 | `npm run db:migrate` | `prisma migrate dev`: aplica migraciones y crea nuevas con `--name` |
