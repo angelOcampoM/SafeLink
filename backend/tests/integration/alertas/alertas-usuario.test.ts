@@ -6,13 +6,23 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { crearEntorno, login, type Entorno } from '../auth/helpers.js';
+import { etaSeconds, roundEtaUp } from '../../../src/domain/alert-rules.js';
+import { snapToGrid } from '../../../src/domain/geo.js';
+import { configPrueba, crearEntorno, login, type Entorno } from '../auth/helpers.js';
+import {
+  CENTRO_ALERTA,
+  LEJOS_DE_ALERTA,
+  asignarGuardia as asignarGuardiaPorApi,
+  prepararPerfilGuardia,
+  tokenDe,
+} from '../flujo/guardia-flujo.js';
 
 const API = '/api/v1';
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00]);
 
 let env: Entorno;
 let tokenUsuario: string;
+let tokenGuardia: string;
 let dirFotos: string;
 
 beforeAll(async () => {
@@ -27,6 +37,9 @@ afterAll(async () => {
 beforeEach(async () => {
   await env.prisma.alert.deleteMany();
   tokenUsuario = await token(env.usuarios.protegido.email);
+  // D46: el guardia real (perfil con cobertura y turno de 24 h) atiende por las rutas de BE-04.
+  await prepararPerfilGuardia(env, env.usuarios.guardia.id);
+  tokenGuardia = await tokenDe(env, env.usuarios.guardia.email);
 });
 
 async function token(email: string): Promise<string> {
@@ -48,13 +61,12 @@ const cuerpo = (extra: Record<string, unknown> = {}) => ({
 const crear = (body: object, t = tokenUsuario) =>
   request(env.app.server).post(`${API}/alerts`).set(conToken(t)).send(body);
 
-/** Simula al guardia (BE-04 aún no existe): asigna y mueve la alerta directo en la base. */
-async function asignarGuardia(alertId: string, status: 'in_progress' | 'guard_arrived') {
-  await env.prisma.alert.update({
-    where: { id: alertId },
-    data: { status, guardId: env.usuarios.guardia.id, acceptedAt: new Date(), ...(status === 'guard_arrived' ? { arrivedAt: new Date() } : {}) },
-  });
-}
+/** D46: el guardia acepta (y llega) por POST /guard/alerts/:id/accept y /arrive, con PUT /guard/location. */
+const asignarGuardia = (
+  alertId: string,
+  status: 'in_progress' | 'guard_arrived',
+  ubicacion?: { lat: number; lng: number },
+) => asignarGuardiaPorApi(env, tokenGuardia, alertId, status, ubicacion);
 
 // ── POST /alerts ──────────────────────────────────────────────────────
 
@@ -257,10 +269,7 @@ describe('POST /alerts/:id/confirm', () => {
   it('U-08: con el guardia en camino el dueño ve su nombre y el tiempo estimado', async () => {
     const creada = await crear(cuerpo());
     const id = creada.body.data.id as string;
-    await env.prisma.guardProfile.create({
-      data: { userId: env.usuarios.guardia.id, shiftStart: '00:00', shiftEnd: '00:00', lastLocationLat: 18.85, lastLocationLng: -99.18 },
-    });
-    await asignarGuardia(id, 'in_progress');
+    await asignarGuardia(id, 'in_progress', LEJOS_DE_ALERTA);
 
     const res = await request(env.app.server).get(`${API}/alerts/mine`).set(conToken(tokenUsuario));
     const a = res.body.data[0];
@@ -268,7 +277,14 @@ describe('POST /alerts/:id/confirm', () => {
     expect(a.guardName).toBe('Nombre guardia');
     expect(a.etaSeconds).toEqual(expect.any(Number));
     expect(a.etaSeconds).toBeGreaterThan(0);
-    await env.prisma.guardProfile.delete({ where: { userId: env.usuarios.guardia.id } });
+    // D47: la vista del dueño ajusta al guardia a su celda y redondea hacia arriba (valor exacto del contrato).
+    const cfg = configPrueba();
+    expect(a.etaSeconds).toBe(
+      roundEtaUp(
+        etaSeconds('in_progress', snapToGrid(LEJOS_DE_ALERTA, cfg.ETA_GUARD_GRID_METERS), CENTRO_ALERTA, cfg.GUARD_METERS_PER_MINUTE),
+        cfg.ETA_ROUNDING_SECONDS,
+      ),
+    );
   });
 });
 

@@ -389,7 +389,7 @@ G-03 **ya dice** "doble clic de volumen" (`docs/HISTORIAS_DE_USUARIO.md:167`). L
 
 ## D46 · Migración de las pruebas de BE-03
 
-- **Estado:** aprobada, se implementa en BE-04 (paso 8).
+- **Estado:** implementada (paso 8; helper `backend/tests/integration/flujo/guardia-flujo.ts`, migrados `alertas-usuario.test.ts` y `canal-alerta-activa.test.ts`, y caso de extremo a extremo en `flujo-completo.test.ts`). Ninguna aserción se relajó; la de ETA de U-08 se volvió más estricta (valor exacto según D47). Los fixtures que preparan un estado concreto para probar otra cosa (restricciones de base, visibilidad, historial) siguen escribiendo directo en la base.
 - **Decisión:** las pruebas de BE-03 que simulaban al guardia escribiendo directo en la base (`alertas-usuario.test.ts`) se migran a las **rutas reales** del guardia, **sin debilitar ninguna aserción**.
 - **Consecuencias:** si alguna aserción no se puede conservar con la ruta real, se reporta en lugar de relajarla.
 
