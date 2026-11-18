@@ -104,7 +104,12 @@ export function buildApp(config: Config, deps: AppDependencies = {}): FastifyIns
       triggeredAtToleranceSeconds: config.TRIGGERED_AT_TOLERANCE_SECONDS,
       onUserAlertChanged: (userId) => bus.publish(alertsTopicForUser(userId)),
     });
-    const guard = createGuardService({ prisma, serialize, timeZone: config.TZ_SHIFTS });
+    const guard = createGuardService({
+      prisma,
+      serialize,
+      timeZone: config.TZ_SHIFTS,
+      onUserAlertChanged: (userId) => bus.publish(alertsTopicForUser(userId)),
+    });
     // Los streams abiertos no deben impedir que la API se apague.
     app.addHook('preClose', async () => {
       hub.closeAll();

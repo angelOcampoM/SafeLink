@@ -1,21 +1,16 @@
 // Cuerpos de las rutas del usuario protegido (BE-03). Forma exacta de
 // lib/datos/nube_alerta_usuario_repository.dart:22-28 y :39.
 import { z } from 'zod';
+import { locationBodySchema, locationField } from '../../http/location-schema.js';
 import { userMsg } from '../../http/validate.js';
 
 /** Largo máximo de photoPath: es solo informativo (ver sección 8 del contrato); nunca se usa como ruta. */
 const PHOTO_PATH_MAX = 500;
 
-const LOCATION_MSG = userMsg('La ubicación no es válida');
 const HEADING_MSG = userMsg('El rumbo no es válido');
 
-/** Coordenadas dentro de rango (sección 9 del contrato). zod 4 ya rechaza NaN e Infinity. */
-export const locationField = z
-  .object({
-    lat: z.number(LOCATION_MSG).min(-90, LOCATION_MSG).max(90, LOCATION_MSG),
-    lng: z.number(LOCATION_MSG).min(-180, LOCATION_MSG).max(180, LOCATION_MSG),
-  })
-  .strict();
+// Las coordenadas viven en un módulo compartido; se reexportan para no cambiar los imports.
+export { locationField, locationBodySchema };
 
 /**
  * U-03 · U-04 · U-05 · U-06. El front manda siempre las cinco claves; las opcionales
@@ -46,6 +41,3 @@ export const createAlertBodySchema = z
   .strict();
 
 export type CreateAlertBody = z.output<typeof createAlertBodySchema>;
-
-/** U-07: una posición nueva del usuario mientras la alerta sigue activa. */
-export const locationBodySchema = z.object({ location: locationField }).strict();

@@ -1,7 +1,8 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { AppError, notFound } from '../../errors/app-error.js';
 import { ok } from '../../http/envelope.js';
-import { parseIdParam } from '../../http/validate.js';
+import { locationBodySchema } from '../../http/location-schema.js';
+import { parse, parseIdParam } from '../../http/validate.js';
 import { ALERT_NOT_FOUND } from '../alerts/service.js';
 import type { GuardService } from './service.js';
 
@@ -24,6 +25,18 @@ export async function guardRoutes(app: FastifyInstance, options: GuardRoutesOpti
   // Extra del front: historial y métricas comparten lista (D41)
   app.get('/guard/history', async (request) => ok(await service.history(request.user.id)));
   app.get('/guard/metrics', async (request) => ok(await service.metrics(request.user.id)));
+
+  // G-06: límite por guardia (no por IP) y en preHandler, ya autenticado; mismo criterio que U-07.
+  const locationLimit = {
+    max: app.config.RATE_LIMIT_LOCATIONS_PER_WINDOW,
+    timeWindow: app.config.LOCATION_UPDATE_SECONDS * 1000,
+    hook: 'preHandler' as const,
+    keyGenerator: (request: FastifyRequest): string => request.user?.id ?? request.ip,
+  };
+  app.put('/guard/location', { config: { rateLimit: locationLimit } }, async (request) => {
+    const body = parse(locationBodySchema, request.body);
+    return ok(await service.updateLocation(request.user.id, body.location));
+  });
 
   // G-04
   app.get('/guard/alerts/:id', async (request) => {

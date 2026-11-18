@@ -273,7 +273,7 @@ G-03 **ya dice** "doble clic de volumen" (`docs/HISTORIAS_DE_USUARIO.md:167`). L
 - **Ping y revocación:** cada `SSE_PING_SECONDS` (25) se manda `: ping` y se revisa en la base que la sesión siga viva (`findLiveSessionUser`). Así un `logout` o una baja cierran el stream con `UNAUTHORIZED` **a más tardar en el siguiente ping**, sin que el módulo de auth tenga que conocer los streams. Es una variante de D25 ("cierran los streams vía `EventBus`"): el retraso máximo es `SSE_PING_SECONDS`.
 - **Vencimiento (D26):** el stream se cierra al llegar el `exp` del access token, avisando antes `UNAUTHORIZED`.
 - **Máximo por usuario (D26):** `SSE_MAX_CONNECTIONS_PER_USER` (3); al pasarse se cierra la conexión **más antigua**.
-- **Snapshots:** un aviso del bus vuelve a leer el snapshot de la base; varios avisos seguidos producen a lo más una lectura extra. Quien cambie una alerta debe publicar `alertsTopicForUser(userId)` (BE-03 lo hace al crear, mover y confirmar; **BE-04 y BE-05 deben hacerlo** al aceptar, marcar llegada, escalar y resolver, o el usuario no verá el cambio).
+- **Snapshots:** un aviso del bus vuelve a leer el snapshot de la base; varios avisos seguidos producen a lo más una lectura extra. Quien cambie una alerta debe publicar `alertsTopicForUser(userId)` (BE-03 lo hace al crear, mover y confirmar; **BE-04 y BE-05 deben hacerlo** al aceptar, marcar llegada, escalar y resolver, o el usuario no verá el cambio; `PUT /guard/location` también lo hace si el guardia tiene una alerta `in_progress`, para refrescar el ETA).
 - **Apagado:** un hook `preClose` cierra todos los streams para que la API no se quede esperando.
 
 ---
@@ -324,9 +324,9 @@ G-03 **ya dice** "doble clic de volumen" (`docs/HISTORIAS_DE_USUARIO.md:167`). L
 
 ## D38 · `PUT /guard/location`
 
-- **Estado:** aprobada, se implementa en BE-04 (paso 2).
+- **Estado:** implementada (paso 2; `backend/src/modules/guard/routes.ts` y `service.ts`).
 - **Decisión:** límite por usuario, en `preHandler` (después de autenticar), con ventana `LOCATION_UPDATE_SECONDS` y tope `RATE_LIMIT_LOCATIONS_PER_WINDOW` (los mismos de `POST /alerts/:id/locations`, D29 y pendientes de seguridad). Validación: `lat` −90..90 y `lng` −180..180, finitos, `.strict()`. **No exige turno vigente**: el guardia puede reportar su posición fuera de turno.
-- **Consecuencias:** cierra el pendiente de rate limit de `PUT /guard/location`.
+- **Consecuencias:** cierra el pendiente de rate limit de `PUT /guard/location`. Como en `POST /alerts/:id/locations`, una petición rechazada con `400` consume cupo (el límite corre antes de validar el cuerpo); un `401` no. Si el guardia tiene una alerta `in_progress`, se publica `alertsTopicForUser(dueño)` una vez por dueño para refrescar el ETA (D31).
 
 ## D39 · Ignorar es idempotente
 
@@ -399,7 +399,7 @@ Cosas que no se cierran en el paso 2 pero que el backend **debe** resolver. Cada
 - **Recurso ajeno = 404, no 403** (BE-02 en adelante): `forbidden()` solo cuando el rol no tiene permiso para la ruta. La propiedad se valida antes de escribir (`where: { id, ownerId }`); no depender de que una violación de FK (400) o de unicidad (409) dé la respuesta, porque 400/409 frente a 404 permite enumerar.
 - **Errores de plugins**: traducción de `FST_JWT_*` (y `FAST_JWT_*`) a `UNAUTHORIZED` con mensaje fijo: **atendido en BE-01 paso 5** (`backend/src/http/error-handler.ts`). El 429 con su propio error: **atendido** (D29).
 - **`Cache-Control: no-store`** en todas las respuestas bajo `/api/v1`: **atendido en BE-01 paso 5** (`backend/src/app.ts`).
-- **Rate limit**: `POST /auth/login` y `/auth/refresh`: **atendido** (D29). **Sigue pendiente en BE-02:** `POST /auth/register`. **Atendido en BE-03**, por usuario (no por IP) y después de autenticar: `POST /alerts` (`RATE_LIMIT_ALERTS_PER_MINUTE`, 5 por minuto) y `POST /alerts/:id/locations` (`RATE_LIMIT_LOCATIONS_PER_WINDOW`, 3 por ventana de `LOCATION_UPDATE_SECONDS`). Sigue pendiente `PUT /guard/location` (BE-04; se resuelve con D38).
+- **Rate limit**: `POST /auth/login` y `/auth/refresh`: **atendido** (D29). **Sigue pendiente en BE-02:** `POST /auth/register`. **Atendido en BE-03**, por usuario (no por IP) y después de autenticar: `POST /alerts` (`RATE_LIMIT_ALERTS_PER_MINUTE`, 5 por minuto) y `POST /alerts/:id/locations` (`RATE_LIMIT_LOCATIONS_PER_WINDOW`, 3 por ventana de `LOCATION_UPDATE_SECONDS`). `PUT /guard/location`: **atendido en BE-04 paso 2** (D38), por usuario y después de autenticar, con el mismo límite.
 - **Deny-by-default**: **atendido en BE-01 paso 6**. Registro central único `ROUTE_POLICIES` (`backend/src/security/policies.ts`) con las 37 entradas (36 de BE-01 más la foto de BE-03, D30); un hook `onRoute` aborta el arranque si una ruta bajo `/api/v1` no tiene política, si su `config` (opcional) contradice la central o si está fuera del prefijo (solo `GET /health` exento). Detalle y matriz en `docs/PERMISOS.md`; pruebas en `backend/tests/integration/seguridad/` y `backend/tests/unit/politicas-contrato.test.ts`.
 - **Límites de entrada** (BE-01 paso 4 en adelante): `password` ≤ 128; largos máximos de `name`, `email`, `phone`, `zone`, `search` y `photoPath`; `heading` entero 0–359; `radiusMeters` entero; `:id` validado como UUID (inválido → `404 NOT_FOUND`); `.strict()` también en el query.
 - **Semilla** (paso 3 de BE-01): solo corre con `NODE_ENV` `development` o `test`; se niega con `production`.

@@ -51,6 +51,7 @@ const REALES = new Set([
   'GET /guard/me',
   'GET /guard/history',
   'GET /guard/metrics',
+  'PUT /guard/location',
   'GET /guard/alerts/:id',
 ]);
 const ROLES: readonly Role[] = ['protected_user', 'guard', 'admin'];
@@ -225,9 +226,9 @@ describe('rol x ruta: 2xx si está permitido, 403 FORBIDDEN si no', () => {
   });
 
   it('los stubs permitidos responden el envoltorio { data: { ruta } }', async () => {
-    // PUT /guard/location sigue siendo stub (BE-04 paso 2 lo implementa: entonces pasar a otro stub vigente).
-    const res = await enviar(app, 'PUT', `${API_PREFIX}/guard/location`, tokens.guard);
-    expect(res.body).toEqual({ data: { ruta: 'PUT /guard/location' } });
+    // GET /admin/metrics es BE-05 (aún stub): conserva la aserción del envoltorio de un stub permitido.
+    const res = await enviar(app, 'GET', `${API_PREFIX}/admin/metrics`, tokens.admin);
+    expect(res.body).toEqual({ data: { ruta: 'GET /admin/metrics' } });
   });
 
   it('cada ruta restringida tiene al menos un rol permitido y un rol rechazado salvo las de ALL_ROLES', () => {

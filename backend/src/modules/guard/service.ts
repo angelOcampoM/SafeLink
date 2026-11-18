@@ -8,7 +8,7 @@ import type { VisibilityGuard } from '../../domain/guard-visibility.js';
 import type { PrismaClient } from '../../db/prisma.js';
 import { AppError, notFound } from '../../errors/app-error.js';
 import type { Prisma } from '../../generated/prisma/client.js';
-import { Role } from '../../generated/prisma/enums.js';
+import { AlertStatus, Role } from '../../generated/prisma/enums.js';
 import { assertGuardCanSee } from '../../security/ownership.js';
 import { ALERT_NOT_FOUND } from '../alerts/service.js';
 import {
@@ -26,6 +26,8 @@ export interface GuardServiceDeps {
   timeZone: string;
   /** Reloj inyectable para las pruebas. */
   now?: () => Date;
+  /** Avisa al dueño de una alerta cuyo guardia se movió (su ETA cambia); lo cablea app.ts. */
+  onUserAlertChanged?: (userId: string) => void;
 }
 
 /**
@@ -84,6 +86,26 @@ export function createGuardService(deps: GuardServiceDeps) {
         },
       });
       return guardMetrics(guardId, alerts);
+    },
+
+    /**
+     * G-06: guarda la última ubicación del guardia con la hora del servidor (no exige turno).
+     * Sin perfil de guardia, NOT_FOUND. Si atiende una alerta en curso, avisa a su dueño.
+     */
+    async updateLocation(guardId: string, location: { lat: number; lng: number }): Promise<null> {
+      const { count } = await prisma.guardProfile.updateMany({
+        where: { userId: guardId, user: { role: Role.guard } },
+        data: { lastLocationLat: location.lat, lastLocationLng: location.lng, lastLocationAt: now() },
+      });
+      if (count === 0) throw notFound();
+      // Un aviso por dueño, no por alerta (D36 dejará como máximo una en curso).
+      const owners = await prisma.alert.findMany({
+        where: { guardId, status: AlertStatus.in_progress },
+        select: { userId: true },
+        distinct: ['userId'],
+      });
+      for (const { userId } of owners) deps.onUserAlertChanged?.(userId);
+      return null;
     },
 
     /**
