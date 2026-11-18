@@ -2,16 +2,25 @@
 // lib/datos/memoria_alerta_guardia_repository.dart (perfil, historial, métricas y detalle).
 // Un recurso que el guardia no puede ver responde NOT_FOUND con el mismo cuerpo que uno
 // inexistente (D22, D40): nada que permita enumerar alertas ajenas.
-import { ACTIVE_STATUSES } from '../../domain/alert-rules.js';
+import {
+  ACTIVE_STATUSES,
+  ATTENDED_STATUSES,
+  GUARD_ALREADY_ATTENDING,
+} from '../../domain/alert-rules.js';
 import { guardMetrics, type GuardMetrics } from '../../domain/metrics.js';
-import { isAlertAvailableToGuard, type VisibilityGuard } from '../../domain/guard-visibility.js';
+import {
+  isAlertAvailableToGuard,
+  isAlertVisibleToGuard,
+  type VisibilityGuard,
+} from '../../domain/guard-visibility.js';
 import { prioritizeAlerts, type PrioritizedAlert } from '../../domain/priority.js';
+import { esGuardiaOcupado } from '../../db/errores-prisma.js';
 import type { PrismaClient } from '../../db/prisma.js';
-import { AppError, notFound } from '../../errors/app-error.js';
+import { AppError, alertTaken, invalidState, notFound } from '../../errors/app-error.js';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { AlertStatus, Role } from '../../generated/prisma/enums.js';
 import { assertGuardCanSee } from '../../security/ownership.js';
-import { ALERT_NOT_FOUND } from '../alerts/service.js';
+import { ALERT_NOT_FOUND, type AlertChange } from '../alerts/service.js';
 import {
   ALERT_INCLUDE,
   serializeGuardAlert,
@@ -33,6 +42,8 @@ export interface GuardServiceDeps {
   onUserAlertChanged?: (userId: string) => void;
   /** Avisa que cambió algo propio del guardia (su ubicación): su listado se reordena (D34). */
   onGuardChanged?: (guardId: string) => void;
+  /** Avisa que cambió una alerta (la misma publicación que usa el servicio de alertas, D34). */
+  onAlertChanged?: (change: AlertChange) => void;
 }
 
 /**
@@ -233,6 +244,77 @@ export function createGuardService(deps: GuardServiceDeps) {
         throw error;
       }
       return serializeGuardAlert(alert, guardId, serialize);
+    },
+
+    /**
+     * G-05 (D22, D35, D36): el guardia acepta una alerta en `searching`. Orden de errores:
+     * 404 (no la ve) -> 409 ALERT_TAKEN (la ve pero ya no está disponible) -> 409 INVALID_STATE
+     * (ya atiende otra). Lo de atender otra va después de la visibilidad para que un guardia
+     * ocupado no pueda distinguir una alerta ajena de una inexistente por el tipo de error.
+     */
+    async accept(guardId: string, alertId: string): Promise<AlertJson> {
+      const found = await prisma.alert.findUnique({ where: { id: alertId }, include: ALERT_INCLUDE });
+      if (!found) throw notFound(ALERT_NOT_FOUND);
+      const { user, profile } = await loadGuardWithProfile(guardId, ALERT_NOT_FOUND);
+      // Como en getAlert: un guardia de baja no ve nada.
+      if (!user.isActive) throw notFound(ALERT_NOT_FOUND);
+      const ignored = await prisma.alertIgnore.findUnique({
+        where: { guardId_alertId: { guardId, alertId } },
+        select: { guardId: true },
+      });
+      const location =
+        found.lat !== null && found.lng !== null ? { lat: found.lat, lng: found.lng } : null;
+      // Sin la condición de estado (D22): la que ya tomó otro sigue siendo "visible" y da 409.
+      const visible = isAlertVisibleToGuard(
+        { guardId: found.guardId, status: found.status, location },
+        toVisibilityGuard(user, profile),
+        { now: now(), timeZone, ignoredByGuard: ignored !== null, skipStatusCheck: true },
+      );
+      if (!visible) throw notFound(ALERT_NOT_FOUND);
+      if (found.status !== AlertStatus.searching || found.guardId !== null) throw alertTaken();
+
+      const at = now();
+      let accepted;
+      try {
+        accepted = await prisma.$transaction(async (tx) => {
+          // Baja concurrente (BE-06): se bloquea la fila del guardia y se revisa que siga activo.
+          // Una baja que llegue después espera a este commit y luego libera sus alertas.
+          const active = await tx.$queryRaw<{ id: string }[]>`
+            SELECT id::text AS id FROM users WHERE id = ${guardId}::uuid AND is_active FOR SHARE`;
+          if (active.length === 0) throw notFound(ALERT_NOT_FOUND);
+
+          // D36: el índice único es la garantía; esta consulta da el mensaje claro antes.
+          const attending = await tx.alert.findFirst({
+            where: { guardId, status: { in: [...ATTENDED_STATUSES] } },
+            select: { id: true },
+          });
+          if (attending) throw invalidState(GUARD_ALREADY_ATTENDING);
+
+          // D35: la asignación atómica; si otro guardia ganó la carrera, no afecta filas.
+          const { count } = await tx.alert.updateMany({
+            where: { id: alertId, status: AlertStatus.searching, guardId: null },
+            data: { status: AlertStatus.in_progress, guardId, acceptedAt: at, statusChangedAt: at },
+          });
+          if (count === 0) throw alertTaken();
+          await tx.alertStatusHistory.create({
+            data: {
+              alertId,
+              fromStatus: AlertStatus.searching,
+              toStatus: AlertStatus.in_progress,
+              actorId: guardId,
+              at,
+            },
+          });
+          return tx.alert.findUniqueOrThrow({ where: { id: alertId }, include: ALERT_INCLUDE });
+        });
+      } catch (error) {
+        // Carrera entre dos aceptaciones del mismo guardia: gana el índice de D36.
+        if (esGuardiaOcupado(error)) throw invalidState(GUARD_ALREADY_ATTENDING);
+        throw error;
+      }
+      // Después del commit: el dueño la ve aceptada y a los demás guardias les sale del listado.
+      deps.onAlertChanged?.({ userId: accepted.userId, alertId, dispatch: true });
+      return serializeGuardAlert(accepted, guardId, serialize);
     },
   };
 }

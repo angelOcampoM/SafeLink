@@ -38,6 +38,14 @@ export function clampTriggeredAt(triggeredAt: Date, receivedAt: Date, toleranceS
 export const CONFIRM_ONLY_AFTER_ARRIVAL = 'Solo puedes confirmar cuando el guardia ya llegó';
 export const ALERT_NOT_ACTIVE = 'Tu alerta ya no está activa';
 export const ALREADY_HAS_ACTIVE_ALERT = 'Ya tienes una alerta activa';
+/** D36: un guardia con una alerta in_progress o guard_arrived no acepta otra. */
+export const GUARD_ALREADY_ATTENDING = 'Ya estás atendiendo otra alerta';
+
+/** Estados en los que la alerta está asignada y en atención por su guardia (D36). */
+export const ATTENDED_STATUSES: readonly AlertStatus[] = [
+  AlertStatus.in_progress,
+  AlertStatus.guard_arrived,
+];
 
 /** U-09: solo se confirma con el guardia en el lugar (regla_alerta.dart:34-37). */
 export function canUserConfirm(alert: { status: AlertStatus; guardId: string | null }): boolean {

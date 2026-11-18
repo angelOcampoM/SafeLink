@@ -96,6 +96,7 @@ El `message` de `OUTSIDE_GEOFENCE` es siempre ese (aunque falte la ubicación): 
 | Turno con formato inválido | `Usa el formato HH:mm` | 400 | `regla_turno.dart:31` |
 | Radio de cobertura fuera de rango | `El radio mínimo es de 500 m` / `El radio máximo es de 10000 m` | 400 | `regla_geocerca.dart:43-44` |
 | Zona vacía | `Escribe la zona de cobertura` | 400 | `regla_geocerca.dart:50` |
+| El guardia ya atiende otra alerta al aceptar (nuevo en el backend, D36) | `Ya estás atendiendo otra alerta` | 409 | `DECISIONES.md` D36 |
 
 Los valores 300, 500 y 10000 salen de configuración, no del código (`ADMIN_NOTE_MAX_LENGTH`, `COVERAGE_RADIUS_MIN_METERS`, `COVERAGE_RADIUS_MAX_METERS`).
 
@@ -244,7 +245,7 @@ Ninguna otra ruta devuelve `accessToken` ni `refreshToken`. Nunca se devuelve la
 | `id` | string | | |
 | `userId` | string | | Dueño de la alerta |
 | `userName` | string o `null` | **sí** | `users.name` del dueño |
-| `userPhone` | string o `null` | **sí** | `users.phone` del dueño. **Minimización (D23):** para el rol `guard` es `null` salvo para el guardia **asignado** mientras la alerta esté activa; en `/guard/history` siempre `null`; en `guard/alerts` (aún sin asignar) siempre `null`. El dueño y el admin lo ven completo |
+| `userPhone` | string o `null` | **sí** | `users.phone` del dueño. **Minimización (D23):** para el rol `guard` es `null` salvo para el guardia **asignado** mientras la alerta esté en `in_progress` o `guard_arrived`; en `/guard/history` siempre `null`; en `guard/alerts` (aún sin asignar) siempre `null`. El dueño y el admin lo ven completo |
 | `guardId` | string o `null` | | Guardia asignado |
 | `guardName` | string o `null` | **sí** | `users.name` del guardia |
 | `status` | enum `status` | | |
@@ -450,7 +451,7 @@ Evidencia: `safelink_service.dart:182-200`. Cliente: `nube_alerta_guardia_reposi
 | GET | `/guard/metrics` (`:186-187`) | — | GuardMetrics calculadas sobre la misma lista que `/guard/history` (`memoria_alerta_guardia_repository.dart:109-114`) | — | extra del front | BE-04 |
 | PUT | `/guard/location` (`:188-191`) | `{ "location": {lat,lng} }` | `null` (guarda `lastLocation` y `lastLocationAt` = hora del servidor, `memoria_alerta_guardia_repository.dart:77-81`). Rate limit por usuario acorde a `LOCATION_UPDATE_SECONDS`; `lat` −90..90 y `lng` −180..180, finitos | `INVALID_STATE` 400 (coordenadas inválidas) | G-06, G-07 | BE-04 |
 | GET | `/guard/alerts/:id` (`:192`) | — | Alert | `NOT_FOUND` si no existe, el `:id` no es un UUID válido **o el guardia no puede verla**. En alertas no activas `location` va `null`; `photoUrl` se conserva (D23) | G-04 | BE-04 |
-| POST | `/guard/alerts/:id/accept` (`:193-194`) | — | Alert (`in_progress`, `guardId`, `guardName`, `acceptedAt`, `etaSeconds`) | `NOT_FOUND` 404 si la alerta no es visible para el guardia (visibilidad **sin** la condición de estado); `ALERT_TAKEN` 409 si es visible pero ya no está en `searching`, o si el `UPDATE … WHERE status = 'searching'` afecta 0 filas | G-05 | BE-04 |
+| POST | `/guard/alerts/:id/accept` (`:193-194`) | — | Alert (`in_progress`, `guardId`, `guardName`, `acceptedAt`, `etaSeconds`) | `NOT_FOUND` 404 si la alerta no es visible para el guardia (visibilidad **sin** la condición de estado); `ALERT_TAKEN` 409 si es visible pero ya no está en `searching`, o si el `UPDATE … WHERE status = 'searching'` afecta 0 filas; `INVALID_STATE` 409 `Ya estás atendiendo otra alerta` si el guardia ya tiene una en `in_progress` o `guard_arrived` (D36) | G-05 | BE-04 |
 | POST | `/guard/alerts/:id/ignore` (`:195-198`) | — | `null` (la alerta deja de aparecer solo para ese guardia) | `NOT_FOUND` | G-03 (extra del front) | BE-04 |
 | POST | `/guard/alerts/:id/arrive` (`:199-200`) | — | Alert (`guard_arrived`, `arrivedAt`) | Orden de verificaciones: (1) existencia y propiedad: `NOT_FOUND` 404 si no existe o no es el guardia asignado; (2) estado: `INVALID_STATE` 409 si no está en `in_progress`; (3) geocerca: `OUTSIDE_GEOFENCE` 422 con `remainingMeters`. Un guardia ajeno nunca recibe `remainingMeters` | G-07 | BE-04 |
 
@@ -459,7 +460,7 @@ Evidencia: `safelink_service.dart:182-200`. Cliente: `nube_alerta_guardia_reposi
 - `arrive`: solo el **guardia asignado**. Orden: existencia y propiedad (404) → estado (409 `INVALID_STATE` si no está en `in_progress`) → geocerca (422 con `remainingMeters`). Un guardia ajeno nunca recibe `remainingMeters` **(decidido, D22)**.
 - **Visibilidad** (`GET /guard/alerts/:id` y canal `guard/alerts/:id`): el guardia ve una alerta si está **asignada a él**, o si está **disponible para él**: en `searching`, dentro de su cobertura (centro + radio), con turno vigente y no ignorada (`zone` es solo una etiqueta, no filtra). Cualquier otra: `404 NOT_FOUND` **(decidido, D22)**.
 - `accept`: evalúa la visibilidad **sin la condición de estado** (cobertura centro + radio, turno vigente, no ignorada). No visible: `404 NOT_FOUND`. Visible y ya no en `searching`: `409 ALERT_TAKEN` (G-05, `docs/HISTORIAS_DE_USUARIO.md:188`, `regla_alerta.dart:31`). La asignación es un solo `UPDATE … WHERE status = 'searching'` atómico; si afecta 0 filas, `409 ALERT_TAKEN` **(decidido, D22)**.
-- **Minimización de datos (D23):** antes de aceptar el guardia ve `userName`, `location` y `photoUrl` (G-04), pero `userPhone` es `null`; solo el guardia asignado lo recibe, mientras la alerta esté activa. Cuando la alerta ya no está activa, para el rol `guard` también `location` va `null`, pero `photoUrl` se conserva como evidencia (en `/guard/history` y en `GET /guard/alerts/:id` de alertas no activas, incluidas `no_response` y `escalated`). Aplica a REST y SSE; el admin ve todo.
+- **Minimización de datos (D23):** antes de aceptar el guardia ve `userName`, `location` y `photoUrl` (G-04), pero `userPhone` es `null`; solo el guardia asignado lo recibe, mientras la alerta esté en `in_progress` o `guard_arrived`. Cuando la alerta ya no está activa, para el rol `guard` también `location` va `null`, pero `photoUrl` se conserva como evidencia (en `/guard/history` y en `GET /guard/alerts/:id` de alertas no activas, incluidas `no_response` y `escalated`). Aplica a REST y SSE; el admin ve todo.
 - La geocerca: `arrive` solo procede si `distancia(lastLocation del guardia, alerta.location) <= GEOFENCE_METERS` (`regla_geocerca.dart:23-24`), con Haversine y radio de la Tierra 6 371 000 m (`regla_geocerca.dart:11`).
 
 ### 5.4 Administración
@@ -513,7 +514,7 @@ Decisión D3. El front escucha cuatro canales (`safelink_service.dart:76-91`). E
 |---|---|---|---|---|---|
 | `alerts/active` | `GET /events/alerts/active` | `protected_user` | La alerta activa del usuario (a lo más una, D15), o `null` si no tiene (estados `pending_location`, `searching`, `in_progress`, `guard_arrived`) | `safelink_service.dart:79-80`, `memoria_alerta_usuario_repository.dart:46-49` | BE-03 |
 | `guard/alerts` | `GET /events/guard/alerts` | `guard` | Lista **completa** de PrioritizedAlert: solo `searching`, con ubicación, dentro de la cobertura del guardia, no ignoradas; **lista vacía** si el guardia no está disponible (fuera de turno, sin cobertura o dado de baja). `userPhone` siempre `null` (D23) | `safelink_service.dart:81-82`, `memoria_alerta_guardia_repository.dart:22-43` | BE-04 |
-| `guard/alerts/:id` | `GET /events/guard/alerts/:id` | `guard` | Alert (cada cambio de la alerta). Misma visibilidad que `GET /guard/alerts/:id`; `userPhone` solo para el guardia asignado con la alerta activa (D23) | `safelink_service.dart:78,83-84`, `memoria_alerta_guardia_repository.dart:52` | BE-04 |
+| `guard/alerts/:id` | `GET /events/guard/alerts/:id` | `guard` | Alert (cada cambio de la alerta). Misma visibilidad que `GET /guard/alerts/:id`; `userPhone` solo para el guardia asignado con la alerta en `in_progress` o `guard_arrived` (D23) | `safelink_service.dart:78,83-84`, `memoria_alerta_guardia_repository.dart:52` | BE-04 |
 | `admin/alerts/escalated` | `GET /events/admin/alerts/escalated` | `admin` | Lista **completa** de Alert en `escalated`, la más antigua primero (por `receivedAt`; el front ordena por `triggeredAt`, `memoria_admin_repository.dart:113`) | `safelink_service.dart:85-86`, `memoria_admin_repository.dart:111-114` | BE-05 |
 
 Reglas del transporte:

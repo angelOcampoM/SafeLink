@@ -142,7 +142,11 @@ describe('serializeGuardAlert: minimización de datos (D23)', () => {
     for (const [etiqueta, estados] of [['activo', ACTIVOS], ['no activo', NO_ACTIVOS]] as const) {
       for (const estado of estados) {
         const activo = etiqueta === 'activo';
-        casos.push([estado, asignado, etiqueta, asignado && activo, activo]);
+        // D36: el teléfono solo llega con la alerta en atención (in_progress/guard_arrived) y asignada a mí.
+        // En el resto de estados (también los activos pending_location y searching, que el CHECK de D35
+        // ya no deja tener guardia) debe ser null: el serializador es defensivo aunque la base lo impida.
+        const enAtencion = estado === 'in_progress' || estado === 'guard_arrived';
+        casos.push([estado, asignado, etiqueta, asignado && enAtencion, activo]);
       }
     }
   }

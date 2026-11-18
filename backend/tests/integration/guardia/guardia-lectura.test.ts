@@ -313,7 +313,9 @@ describe('GET /guard/history', () => {
     // Fuera del historial. Cada activa es de un usuario distinto: solo cabe una activa por usuario
     // (alerts_one_active_per_user_idx).
     await crearAlerta(env.prisma, usuarioId(), { status: 'in_progress', guardId: guardiaId(), lat: CENTRO.lat, lng: CENTRO.lng });
-    await crearAlerta(env.prisma, (await crearUsuario(env.prisma)).id, { status: 'guard_arrived', guardId: guardiaId(), lat: CENTRO.lat, lng: CENTRO.lng });
+    // D36 (un guardia, una alerta en atención): la segunda activa es de otro guardia; no entra al historial
+    // ni por activa ni por ajena. La activa propia in_progress ya cubre la exclusión de activas del guardia.
+    await crearAlerta(env.prisma, (await crearUsuario(env.prisma)).id, { status: 'guard_arrived', guardId: otroGuardiaId, lat: CENTRO.lat, lng: CENTRO.lng });
     await crearAlerta(env.prisma, usuarioId(), { status: 'closed', guardId: otroGuardiaId });
     await crearAlerta(env.prisma, usuarioId(), { status: 'no_response' });
     await crearAlerta(env.prisma, (await crearUsuario(env.prisma)).id, { status: 'searching', lat: CENTRO.lat, lng: CENTRO.lng });

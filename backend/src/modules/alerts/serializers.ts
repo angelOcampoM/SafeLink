@@ -1,7 +1,7 @@
 // Forma `AlertaJson` del front (nube_mapeadores.dart:117-165, contrato 4.4). Se envían
 // SIEMPRE todas las claves (con null si no aplican). Campo por campo: jamás spread del
 // registro, para que un campo interno (receivedAt, photoKey, statusChangedAt) no se filtre.
-import { etaSeconds, isActiveStatus } from '../../domain/alert-rules.js';
+import { ATTENDED_STATUSES, etaSeconds, isActiveStatus } from '../../domain/alert-rules.js';
 import { isAssignedTo } from '../../domain/guard-visibility.js';
 import type {
   AlertStatus,
@@ -119,7 +119,7 @@ export function serializeOwnAlert(alert: AlertRecord, options: SerializeOptions)
 
 /**
  * Vista del GUARDIA (D23, minimización de datos). `userPhone` solo lo recibe el guardia
- * asignado mientras la alerta sigue activa; `location` solo existe con la alerta activa
+ * asignado mientras la atiende (in_progress o guard_arrived, D36); `location` solo existe con la alerta activa
  * (después es dato personal sin función operativa); `photoUrl` se conserva como evidencia.
  * El ETA se calcula con la ubicación real, antes de ocultarla.
  */
@@ -129,6 +129,8 @@ export function serializeGuardAlert(
   options: SerializeOptions,
 ): AlertJson {
   const active = isActiveStatus(alert.status);
+  // El teléfono solo llega mientras el guardia asignado la atiende (D23, D36), no en cualquier activa.
+  const attended = ATTENDED_STATUSES.includes(alert.status);
   const location = point(alert.lat, alert.lng);
   const guardLocation = alert.guard?.guardProfile
     ? point(alert.guard.guardProfile.lastLocationLat, alert.guard.guardProfile.lastLocationLng)
@@ -137,7 +139,7 @@ export function serializeGuardAlert(
     id: alert.id,
     userId: alert.userId,
     userName: alert.user.name,
-    userPhone: active && isAssignedTo(alert, viewerGuardId) ? alert.user.phone : null,
+    userPhone: attended && isAssignedTo(alert, viewerGuardId) ? alert.user.phone : null,
     guardId: alert.guardId,
     guardName: alert.guard?.name ?? null,
     status: alert.status,

@@ -292,7 +292,7 @@ G-03 **ya dice** "doble clic de volumen" (`docs/HISTORIAS_DE_USUARIO.md:167`). L
 
 ## D34 · Tiempo real del guardia
 
-- **Estado:** implementada en parte (paso 3: varios temas, `refreshOnPing`, límite por (usuario, canal), log `info` de `AppError`, canal `guard/alerts` y temas `dispatchTopic`/`guardTopic`/`alertTopic`; paso 4: canal `guard/alerts/:id` con `alertTopic` + `guardTopic` y `refreshOnPing`, para cerrarse si una alerta solo disponible deja de serlo por turno o cobertura). Falta que `accept`/`ignore`/`arrive` publiquen (pasos 5 a 7). Hoy `dispatchTopic` solo se publica al **entrar** a `searching` o al moverse en él; la salida llega con `accept` (paso 5) y la escalada (BE-05), y mientras tanto la cubre el refresco del ping.
+- **Estado:** implementada en parte (paso 3: varios temas, `refreshOnPing`, límite por (usuario, canal), log `info` de `AppError`, canal `guard/alerts` y temas `dispatchTopic`/`guardTopic`/`alertTopic`; paso 4: canal `guard/alerts/:id` con `alertTopic` + `guardTopic` y `refreshOnPing`, para cerrarse si una alerta solo disponible deja de serlo por turno o cobertura). Paso 5: `accept` publica `alertsTopicForUser(dueño)`, `alertTopic` y `dispatchTopic` (la alerta desaparece al instante del listado de los demás). Falta que `ignore` y `arrive` publiquen (pasos 6 y 7); la salida de `searching` por escalada llega en BE-05 y mientras tanto la cubre el ping.
 - **Contexto:** a diferencia de `alerts/active` (un tema por dueño, D31), lo que ve cada guardia depende de su cobertura, turno e ignoradas, y cambia con el paso del tiempo.
 - **Decisión:**
   - `SseChannel` admite **varios topics** (compatible con el `topic` actual). Temas nuevos: `dispatchTopic` (global: una alerta entra o sale de `searching`, o cambia su ubicación estando en `searching`), `guardTopic(guardId)` (su ubicación e ignorar; BE-06 agrega cobertura y baja) y `alertTopic(alertId)` (cualquier cambio de esa alerta).
@@ -307,13 +307,15 @@ G-03 **ya dice** "doble clic de volumen" (`docs/HISTORIAS_DE_USUARIO.md:167`). L
 
 ## D35 · Aceptación atómica
 
-- **Estado:** aprobada, se implementa en BE-04 (paso 5).
+- **Estado:** implementada (paso 5; migración `20261118170000_guard_assignment` con `alerts_guard_absent_chk`, y `accept` en `backend/src/modules/guard/service.ts`). Una alerta ya tomada dentro de mi cobertura (o la mía propia) responde `409 ALERT_TAKEN`; solo lo no visible es `404`.
 - **Decisión:** `updateMany` con `where { id, status: 'searching', guardId: null }`, dentro de una transacción que escribe también el historial (`alert_status_history`, actor = el guardia). Si afecta 0 filas: `409 ALERT_TAKEN`. Antes se evalúa la visibilidad con `skipStatusCheck` (D22): no visible, `404`. Migración nueva con el `CHECK` `alerts_guard_absent_chk`: `guard_id IS NULL` en `pending_location`, `searching` y `no_response`. Las pruebas de concurrencia se repiten varias veces con Postgres real.
 - **Consecuencias:** cierra en la base el pendiente "`guard_id` en estados sin guardia" (hoy solo lo cuida la API). Concreta D22 y D6 punto 16.
+- **Baja concurrente:** dentro de la transacción se bloquea la fila del guardia (`FOR SHARE`) y se revisa `is_active`; una baja que llegue durante la aceptación espera al commit (ver pendiente de BE-06).
+- **Riesgo aceptado (revisión de seguridad, paso 5):** como la visibilidad se evalúa sin la condición de estado, una alerta histórica (cerrada, escalada, resuelta) **dentro de la cobertura y el turno** del guardia responde `409 ALERT_TAKEN` y no `404`. Revela que ese UUID existe en su zona, sin ningún dato; los UUID v4 no se pueden adivinar y el guardia solo los conoce si ya vio la alerta. Lo mismo para el canal lateral de tiempo (1 consulta si no existe, 3 si existe).
 
 ## D36 · Un guardia, una alerta en atención
 
-- **Estado:** aprobada, se implementa en BE-04 (paso 5).
+- **Estado:** implementada (paso 5; índice `alerts_one_active_per_guard_idx`; la regla se revisa después de la visibilidad para no distinguir ajena de inexistente, y un `P2002` del índice en una carrera se traduce al mismo `409`). Además, el guardia asignado solo ve `userPhone` en `in_progress` y `guard_arrived`.
 - **Contexto:** desde `in_progress` no se escala (D14); una alerta acaparada por un guardia que ya atiende otra quedaría atascada.
 - **Decisión:** un guardia con una alerta `in_progress` o `guard_arrived` no puede aceptar otra: `409 INVALID_STATE` con el mensaje «Ya estás atendiendo otra alerta». Se garantiza con un índice único parcial `alerts (guard_id) WHERE status IN ('in_progress', 'guard_arrived')`.
 - **Consecuencias:** el front lo muestra vía `EstadoInvalidoError(mensaje)`. Si el índice falla en una carrera, la API lo traduce al mismo `409`.
@@ -338,7 +340,7 @@ G-03 **ya dice** "doble clic de volumen" (`docs/HISTORIAS_DE_USUARIO.md:167`). L
 
 ## D40 · Mensajes y respuestas del guardia
 
-- **Estado:** el `404` está **implementado (paso 1)**; el `409` de `arrive` y el mensaje de D36 quedan aprobados, se implementan en BE-04 (pasos 5 y 7).
+- **Estado:** el `404` (paso 1) y el mensaje de D36 (paso 5) están **implementados**; el `409` de `arrive` se implementa en el paso 7.
 - **Decisión:**
   - `404 NOT_FOUND` «La alerta ya no existe», con **cuerpo idéntico** para alerta inexistente, no visible, ajena, UUID mal formado y guardia sin perfil. No hay `403` ni `409` que permitan enumerar (pendiente "Recurso ajeno = 404").
   - `409 INVALID_STATE` de `arrive` fuera de `in_progress`: «Esta alerta ya no está en atención».
@@ -393,6 +395,12 @@ G-03 **ya dice** "doble clic de volumen" (`docs/HISTORIAS_DE_USUARIO.md:167`). L
 
 Cosas que no se cierran en el paso 2 pero que el backend **debe** resolver. Cada una se atiende en la tarjeta indicada.
 
+**Asignación de guardias (de BE-04 paso 5 para BE-05 y BE-06)**
+
+- **Baja de un guardia (BE-06):** en este orden, `is_active = false` y después liberar o reasignar sus alertas `in_progress`/`guard_arrived` (con `guard_id = null` si vuelven a `searching`, o el `CHECK` de D35 falla). Así una aceptación que gane la carrera (ver D35, "Baja concurrente") queda cubierta. Debe llamar al mismo despachador del push (D44) y publicar `guardTopic`.
+- **Reasignar desde admin (BE-06):** si el guardia destino ya atiende otra, el índice de D36 lanza `P2002`; dar un mensaje claro en vez del `INVALID_STATE` genérico.
+- **Escalar o resolver (BE-05):** escalar desde `guard_arrived` deja `guard_id` (el índice libera al guardia); comprobar que `escalated` y `resolved_by_admin` no le muestran `userPhone` ni `location` (D23). Cualquier vuelta a `searching` o paso a `no_response` pone `guard_id = null` en la misma sentencia. Revisar que un `23514` (violación de `CHECK`) caiga en un 4xx o 5xx genérico sin mensaje interno.
+
 **Plataforma (BE-01, paso 4 en adelante)**
 
 - **Manejador global de errores**: **atendido** en BE-01 paso 4. Ningún error inesperado filtra la traza ni detalles internos; siempre `500 SERVICE_UNAVAILABLE` con el mensaje fijo. El 404 de ruta inexistente refleja solo el path, sin query string y truncado a 100 caracteres. Fuera de production el log incluye solo los marcos de la pila (sin el mensaje original).
@@ -412,7 +420,7 @@ Cosas que no se cierran en el paso 2 pero que el backend **debe** resolver. Cada
 - **`JWT_SECRET` de baja entropía** (antes de cualquier despliegue): hoy solo se exigen 32 caracteres. En `production`, rechazar valores de ejemplo o triviales y exigir al menos 32 bytes aleatorios (43+ caracteres base64url) con el comando del README.
 - **Regla ESLint de `passwordHash`**: es una capa extra que se puede saltar (clave computada `{[k]: false}`, `$queryRaw` que seleccione `password_hash`, o desde `tests/**`). El control real es el `omit` global de `backend/src/db/prisma.ts` y la prueba "ninguna respuesta contiene passwordHash"; mantener esa prueba en cada tarjeta nueva.
 - **Baja de usuarios** (BE-06): poner primero `is_active=false` y después `revokeAllUserFamilies`; así una familia creada por un login concurrente entre la lectura y el bloqueo ya no sirve (`authenticate` y la rotación rechazan inactivos).
-- **`guard_id` en estados sin guardia** (BE-04): la base acepta una alerta `searching` con `guard_id`; la API debe dejarlo en `null` en `pending_location`, `searching` y `no_response` para que la visibilidad por `guard_id` no se abra de más. Se resuelve con el `CHECK` de D35.
+- **`guard_id` en estados sin guardia** (BE-04): la base acepta una alerta `searching` con `guard_id`; la API debe dejarlo en `null` en `pending_location`, `searching` y `no_response` para que la visibilidad por `guard_id` no se abra de más. **Atendido en BE-04 paso 5** con el `CHECK` de D35 (`alerts_guard_absent_chk`).
 - **JWT con algoritmo fijo `HS256`** en firma y verificación: **atendido en BE-01 paso 5** (`backend/src/plugins/auth.ts`: `sign.algorithm` y `verify.algorithms` = `HS256`).
 - Contraseñas con **argon2** (argon2id con parámetros por entorno `ARGON2_*`, por defecto los de la librería, y `needsRehash` en el login, `backend/src/auth/password.ts`): **atendido en BE-01 paso 5**; el mock las guarda en claro (`datos/memoria_base_datos.dart:43`, `datos/memoria_auth_repository.dart:23`).
 - **Login**: hash ficticio para igualar tiempos con correo inexistente: **atendido en BE-01 paso 5** (se precalienta en `onReady`). Con usuario inactivo se verifica contra su hash real (D25).

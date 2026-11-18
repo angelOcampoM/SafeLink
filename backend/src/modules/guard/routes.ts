@@ -38,16 +38,23 @@ export async function guardRoutes(app: FastifyInstance, options: GuardRoutesOpti
     return ok(await service.updateLocation(request.user.id, body.location));
   });
 
-  // G-04
-  app.get('/guard/alerts/:id', async (request) => {
-    let id: string;
+  /** `:id` de la alerta; un UUID mal formado responde igual que una inexistente (D40). */
+  function alertId(request: FastifyRequest): string {
     try {
-      id = parseIdParam((request.params as { id?: unknown }).id);
+      return parseIdParam((request.params as { id?: unknown }).id);
     } catch (error) {
-      // Un UUID mal formado responde igual que una alerta inexistente (D40).
       if (error instanceof AppError && error.code === 'NOT_FOUND') throw notFound(ALERT_NOT_FOUND);
       throw error;
     }
-    return ok(await service.getAlert(request.user.id, id));
-  });
+  }
+
+  // G-04
+  app.get('/guard/alerts/:id', async (request) =>
+    ok(await service.getAlert(request.user.id, alertId(request))),
+  );
+
+  // G-05: sin cuerpo; 200 (no crea un recurso, D22).
+  app.post('/guard/alerts/:id/accept', async (request) =>
+    ok(await service.accept(request.user.id, alertId(request))),
+  );
 }

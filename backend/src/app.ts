@@ -6,7 +6,7 @@ import { tooManyRequests } from './errors/app-error.js';
 import { createFrameworkErrorHandler, registerErrorHandling } from './http/error-handler.js';
 import { adminRoutes } from './modules/admin/routes.js';
 import { alertsRoutes } from './modules/alerts/routes.js';
-import { createAlertsService } from './modules/alerts/service.js';
+import { createAlertsService, type AlertChange } from './modules/alerts/service.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { eventsRoutes } from './modules/events/routes.js';
 import { guardRoutes } from './modules/guard/routes.js';
@@ -105,15 +105,17 @@ export function buildApp(config: Config, deps: AppDependencies = {}): FastifyIns
         photoKey ? photoUrls.url(alertId, photoKey) : null,
       guardMetersPerMinute: config.GUARD_METERS_PER_MINUTE,
     };
+    // Un solo cableado de avisos de alerta para los servicios del usuario y del guardia.
+    const onAlertChanged = ({ userId, alertId, dispatch }: AlertChange): void => {
+      bus.publish(alertsTopicForUser(userId));
+      bus.publish(alertTopic(alertId));
+      if (dispatch) bus.publish(dispatchTopic);
+    };
     const alerts = createAlertsService({
       prisma,
       serialize,
       triggeredAtToleranceSeconds: config.TRIGGERED_AT_TOLERANCE_SECONDS,
-      onAlertChanged: ({ userId, alertId, dispatch }) => {
-        bus.publish(alertsTopicForUser(userId));
-        bus.publish(alertTopic(alertId));
-        if (dispatch) bus.publish(dispatchTopic);
-      },
+      onAlertChanged,
     });
     const guard = createGuardService({
       prisma,
@@ -122,6 +124,7 @@ export function buildApp(config: Config, deps: AppDependencies = {}): FastifyIns
       waitMetersPerMinute: config.WAIT_METERS_PER_MINUTE,
       onUserAlertChanged: (userId) => bus.publish(alertsTopicForUser(userId)),
       onGuardChanged: (guardId) => bus.publish(guardTopic(guardId)),
+      onAlertChanged,
     });
     // Los streams abiertos no deben impedir que la API se apague.
     app.addHook('preClose', async () => {

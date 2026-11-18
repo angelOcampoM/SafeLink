@@ -1,7 +1,9 @@
 // Modelo de datos de SafeLink (BE-01, paso 3).
 // Tablas y columnas en snake_case (@@map / @map); modelos y campos en camelCase.
 // Los CHECK y el índice único parcial de alerts NO se pueden expresar aquí: viven
-// en el SQL de la migración inicial (prisma/migrations/*_init/migration.sql).
+// en el SQL de la migración inicial (prisma/migrations/*_init/migration.sql) y, para la
+// asignación de guardia (CHECK alerts_guard_absent_chk e índice alerts_one_active_per_guard_idx,
+// D35 y D36), en prisma/migrations/*_guard_assignment/migration.sql.
 // Todas las fechas son timestamptz (UTC). Los IDs son UUID generados por la base.
 
 generator client {
