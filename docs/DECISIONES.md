@@ -269,10 +269,10 @@ G-03 **ya dice** "doble clic de volumen" (`docs/HISTORIAS_DE_USUARIO.md:167`). L
 
 ## D31 · Transporte SSE (BE-03)
 
-- **Decisión:** `backend/src/realtime/sse.ts` (`SseHub`) es común a los cuatro canales; cada canal solo da su snapshot y su tema del `EventBus` (`backend/src/realtime/event-bus.ts`, en memoria). BE-03 implementa `alerts/active`; BE-04 y BE-05 agregan los suyos en `backend/src/modules/events/routes.ts`.
+- **Decisión:** `backend/src/realtime/sse.ts` (`SseHub`) es común a los cuatro canales; cada canal solo da su nombre, su snapshot, uno o varios temas del `EventBus` (`topic`/`topics`) y, opcionalmente, `refreshOnPing` (D34) (`backend/src/realtime/event-bus.ts`, en memoria). BE-03 implementa `alerts/active`; BE-04 y BE-05 agregan los suyos en `backend/src/modules/events/routes.ts`.
 - **Ping y revocación:** cada `SSE_PING_SECONDS` (25) se manda `: ping` y se revisa en la base que la sesión siga viva (`findLiveSessionUser`). Así un `logout` o una baja cierran el stream con `UNAUTHORIZED` **a más tardar en el siguiente ping**, sin que el módulo de auth tenga que conocer los streams. Es una variante de D25 ("cierran los streams vía `EventBus`"): el retraso máximo es `SSE_PING_SECONDS`.
 - **Vencimiento (D26):** el stream se cierra al llegar el `exp` del access token, avisando antes `UNAUTHORIZED`.
-- **Máximo por usuario (D26):** `SSE_MAX_CONNECTIONS_PER_USER` (3); al pasarse se cierra la conexión **más antigua**.
+- **Máximo por (usuario, canal) (D26, D34):** `SSE_MAX_CONNECTIONS_PER_USER` (3) por cada canal; al pasarse se cierra la conexión **más antigua de ese canal**. Hasta BE-03 se contaba por usuario.
 - **Snapshots:** un aviso del bus vuelve a leer el snapshot de la base; varios avisos seguidos producen a lo más una lectura extra. Quien cambie una alerta debe publicar `alertsTopicForUser(userId)` (BE-03 lo hace al crear, mover y confirmar; **BE-04 y BE-05 deben hacerlo** al aceptar, marcar llegada, escalar y resolver, o el usuario no verá el cambio; `PUT /guard/location` también lo hace si el guardia tiene una alerta `in_progress`, para refrescar el ETA).
 - **Apagado:** un hook `preClose` cierra todos los streams para que la API no se quede esperando.
 
@@ -292,7 +292,7 @@ G-03 **ya dice** "doble clic de volumen" (`docs/HISTORIAS_DE_USUARIO.md:167`). L
 
 ## D34 · Tiempo real del guardia
 
-- **Estado:** aprobada, se implementa en BE-04 (pasos 3 y 4).
+- **Estado:** implementada en parte (paso 3: varios temas, `refreshOnPing`, límite por (usuario, canal), log `info` de `AppError`, canal `guard/alerts` y temas `dispatchTopic`/`guardTopic`/`alertTopic`). Falta `guard/alerts/:id` (paso 4) y que `accept`/`ignore`/`arrive` publiquen (pasos 5 a 7). Hoy `dispatchTopic` solo se publica al **entrar** a `searching` o al moverse en él; la salida llega con `accept` (paso 5) y la escalada (BE-05), y mientras tanto la cubre el refresco del ping.
 - **Contexto:** a diferencia de `alerts/active` (un tema por dueño, D31), lo que ve cada guardia depende de su cobertura, turno e ignoradas, y cambia con el paso del tiempo.
 - **Decisión:**
   - `SseChannel` admite **varios topics** (compatible con el `topic` actual). Temas nuevos: `dispatchTopic` (global: una alerta entra o sale de `searching`, o cambia su ubicación estando en `searching`), `guardTopic(guardId)` (su ubicación e ignorar; BE-06 agrega cobertura y baja) y `alertTopic(alertId)` (cualquier cambio de esa alerta).
@@ -301,7 +301,9 @@ G-03 **ya dice** "doble clic de volumen" (`docs/HISTORIAS_DE_USUARIO.md:167`). L
   - Los `AppError` esperados del snapshot se registran en nivel `info`.
   - El límite de streams (D26) pasa a ser por **(usuario, canal)** y no por usuario, para que abrir el listado y el detalle a la vez no se expulsen entre sí.
   - `accept`, `arrive` e `ignore` publican también `alertsTopicForUser(dueño)` (D31), para que el usuario vea el cambio.
+- **Detalle:** el nombre del canal es obligatorio y fijo (no uno por alerta), para que el límite no se multiplique. Un guardia sin perfil recibe una lista vacía, no un error (un error cerraría el stream y el cliente reconectaría en bucle).
 - **Consecuencias:** cada evento de `dispatchTopic` provoca una lectura por guardia conectado; con pocos guardias es aceptable (misma lógica que D17). Complementa D3, D26 y D31.
+- **Riesgo aceptado para el prototipo (revisión de seguridad, paso 3):** el costo crece como avisos × streams abiertos × alertas en `searching` (la consulta trae todas y filtra en memoria), y `refreshOnPing` hace unas 3 consultas por stream en cada ping aunque nada cambie; con el límite por canal un usuario puede tener más streams que antes y no hay tope total. Antes de un despliegue real: intervalo mínimo entre snapshots por stream, una sola consulta de `searching` por ventana compartida entre guardias, recorte por *bounding box* de la cobertura con `take` configurable, y tope total de streams por usuario y global.
 
 ## D35 · Aceptación atómica
 
@@ -318,7 +320,7 @@ G-03 **ya dice** "doble clic de volumen" (`docs/HISTORIAS_DE_USUARIO.md:167`). L
 
 ## D37 · Guardia sin última ubicación
 
-- **Estado:** aprobada, se implementa en BE-04 (pasos 3 y 7).
+- **Estado:** implementada en parte (paso 3: listado, `backend/src/modules/guard/service.ts`); `arrive` en el paso 7.
 - **Decisión:** en el listado, `distanceMeters` usa `lastLocation ?? centro de cobertura` (`docs/API_CONTRATO.md:301`); `etaSeconds` queda `null` (D27, que no usa el centro de cobertura). `arrive` responde `422 OUTSIDE_GEOFENCE` con `remainingMeters: null` si no hay última ubicación.
 - **Consecuencias:** una `lastLocation` vieja o falsificada que permita marcar llegada se **acepta como riesgo documentado**: la reporta el cliente y el backend no puede verificarla.
 

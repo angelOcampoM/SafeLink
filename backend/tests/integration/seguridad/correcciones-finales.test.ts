@@ -43,6 +43,7 @@ const REALES = new Set([
   'GET /guard/metrics',
   'PUT /guard/location',
   'GET /guard/alerts/:id',
+  'GET /events/guard/alerts',
 ]);
 
 describe('guards: ruta con roles sin authenticate decorado', () => {

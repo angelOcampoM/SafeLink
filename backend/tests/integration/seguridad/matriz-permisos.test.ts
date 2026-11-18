@@ -53,6 +53,7 @@ const REALES = new Set([
   'GET /guard/metrics',
   'PUT /guard/location',
   'GET /guard/alerts/:id',
+  'GET /events/guard/alerts',
 ]);
 const ROLES: readonly Role[] = ['protected_user', 'guard', 'admin'];
 

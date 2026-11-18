@@ -12,7 +12,14 @@ import { eventsRoutes } from './modules/events/routes.js';
 import { guardRoutes } from './modules/guard/routes.js';
 import { createGuardService } from './modules/guard/service.js';
 import { authPluginRoot } from './plugins/auth.js';
-import { alertsTopicForUser, createMemoryEventBus, type EventBus } from './realtime/event-bus.js';
+import {
+  alertTopic,
+  alertsTopicForUser,
+  createMemoryEventBus,
+  dispatchTopic,
+  guardTopic,
+  type EventBus,
+} from './realtime/event-bus.js';
 import { createSseHub } from './realtime/sse.js';
 import { healthRoutes } from './routes/health.js';
 import { registerRouteGuards } from './security/guards.js';
@@ -102,13 +109,19 @@ export function buildApp(config: Config, deps: AppDependencies = {}): FastifyIns
       prisma,
       serialize,
       triggeredAtToleranceSeconds: config.TRIGGERED_AT_TOLERANCE_SECONDS,
-      onUserAlertChanged: (userId) => bus.publish(alertsTopicForUser(userId)),
+      onAlertChanged: ({ userId, alertId, dispatch }) => {
+        bus.publish(alertsTopicForUser(userId));
+        bus.publish(alertTopic(alertId));
+        if (dispatch) bus.publish(dispatchTopic);
+      },
     });
     const guard = createGuardService({
       prisma,
       serialize,
       timeZone: config.TZ_SHIFTS,
+      waitMetersPerMinute: config.WAIT_METERS_PER_MINUTE,
       onUserAlertChanged: (userId) => bus.publish(alertsTopicForUser(userId)),
+      onGuardChanged: (guardId) => bus.publish(guardTopic(guardId)),
     });
     // Los streams abiertos no deben impedir que la API se apague.
     app.addHook('preClose', async () => {
@@ -138,7 +151,7 @@ export function buildApp(config: Config, deps: AppDependencies = {}): FastifyIns
         await api.register(adminRoutes, { prisma });
         await api.register(alertsRoutes, { prisma, service: alerts, photos, photoUrls });
         await api.register(guardRoutes, { service: guard });
-        await api.register(eventsRoutes, { prisma, hub, alerts });
+        await api.register(eventsRoutes, { prisma, hub, alerts, guard });
       },
       { prefix: API_PREFIX },
     );

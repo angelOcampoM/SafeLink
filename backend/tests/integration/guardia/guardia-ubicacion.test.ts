@@ -7,7 +7,14 @@ import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../../../src/app.js';
 import { etaSeconds } from '../../../src/domain/alert-rules.js';
-import { alertsTopicForUser, createMemoryEventBus, type EventBus } from '../../../src/realtime/event-bus.js';
+import {
+  alertTopic,
+  alertsTopicForUser,
+  createMemoryEventBus,
+  dispatchTopic,
+  guardTopic,
+  type EventBus,
+} from '../../../src/realtime/event-bus.js';
 import { MSG_UNAUTHORIZED, PASSWORD, configPrueba, crearEntorno, hasherPrueba, login, type Entorno } from '../auth/helpers.js';
 import { correoUnico, crearAlerta, crearUsuario } from '../db/helpers.js';
 import { abrirSse, type ConexionSse } from '../sse-helpers.js';
@@ -288,36 +295,53 @@ describe('PUT /guard/location: D31, el dueño de la alerta en curso recibe el ET
     const putEspia = (cuerpo: unknown) =>
       request(espia.server).put(`${API}/guard/location`).set('Authorization', `Bearer ${tokenEspia}`).send(cuerpo as object);
 
-    it('sin alertas -> no publica nada', async () => {
+    // Desde BE-04 paso 3, PUT /guard/location publica SIEMPRE guardTopic(guardId): el propio guardia
+    // reordena su listado (D34). Lo que no debe pasar es avisar a un dueño, al despacho global ni
+    // a un tema de alerta.
+    const soloElGuardia = (): string[] => [guardTopic(env.usuarios.guardia.id)];
+    const sinAvisosAjenos = (): void => {
+      expect(publicados.filter((t) => t.startsWith('alerts:user:'))).toEqual([]);
+      expect(publicados).not.toContain(dispatchTopic);
+      expect(publicados.filter((t) => t.startsWith('alert:'))).toEqual([]);
+      expect(publicados).toEqual(soloElGuardia());
+    };
+
+    it('sin alertas -> no avisa a ningún dueño ni al despacho; solo publica el tema del guardia', async () => {
       expect((await putEspia({ location: NUEVA })).status).toBe(200);
-      expect(publicados).toEqual([]);
+      sinAvisosAjenos();
     });
 
     it.each(['searching', 'guard_arrived', 'closed', 'no_response', 'escalated', 'pending_location'] as const)(
-      'alerta en %s (no in_progress) -> no publica',
+      'alerta en %s (no in_progress) -> no avisa a ningún dueño; solo publica el tema del guardia',
       async (status) => {
-        await crearAlerta(env.prisma, env.usuarios.protegido.id, {
+        const alerta = await crearAlerta(env.prisma, env.usuarios.protegido.id, {
           status,
           guardId: ['guard_arrived', 'closed', 'escalated'].includes(status) ? env.usuarios.guardia.id : null,
         });
         expect((await putEspia({ location: NUEVA })).status).toBe(200);
-        expect(publicados).toEqual([]);
+        sinAvisosAjenos();
+        expect(publicados).not.toContain(alertsTopicForUser(env.usuarios.protegido.id));
+        expect(publicados).not.toContain(alertTopic(alerta.id));
       },
     );
 
-    it('una alerta in_progress de OTRO guardia no publica', async () => {
+    it('una alerta in_progress de OTRO guardia -> no avisa a ningún dueño; solo publica el tema del guardia', async () => {
       const otro = await crearUsuario(env.prisma, { role: 'guard' });
       await crearAlerta(env.prisma, env.usuarios.protegido.id, { status: 'in_progress', guardId: otro.id, acceptedAt: new Date() });
       expect((await putEspia({ location: NUEVA })).status).toBe(200);
-      expect(publicados).toEqual([]);
+      sinAvisosAjenos();
+      expect(publicados).not.toContain(guardTopic(otro.id));
     });
 
-    it('una alerta in_progress propia publica una vez, solo al tópico de su dueño', async () => {
+    it('una alerta in_progress propia publica una vez al dueño y una vez el tema del guardia, nada más', async () => {
       await crearAlerta(env.prisma, env.usuarios.protegido.id, {
         status: 'in_progress', guardId: env.usuarios.guardia.id, acceptedAt: new Date(),
       });
       expect((await putEspia({ location: NUEVA })).status).toBe(200);
-      expect(publicados).toEqual([alertsTopicForUser(env.usuarios.protegido.id)]);
+      expect(publicados).toHaveLength(2);
+      expect(publicados.filter((t) => t === alertsTopicForUser(env.usuarios.protegido.id))).toHaveLength(1);
+      expect(publicados.filter((t) => t === guardTopic(env.usuarios.guardia.id))).toHaveLength(1);
+      expect(publicados).not.toContain(dispatchTopic);
     });
 
     it('si el cuerpo es inválido, no se publica ni se guarda', async () => {

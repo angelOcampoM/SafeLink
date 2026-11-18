@@ -33,6 +33,7 @@ beforeEach(async () => {
   });
   app.get('/canal', async (request, reply) => {
     hub.open(request, reply, {
+      name: 'canal',
       topic: `t:${request.user.id}`,
       snapshot: async () => {
         consultas += 1;
