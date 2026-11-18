@@ -9,6 +9,8 @@ import { alertsRoutes } from './modules/alerts/routes.js';
 import { createAlertsService } from './modules/alerts/service.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { eventsRoutes } from './modules/events/routes.js';
+import { guardRoutes } from './modules/guard/routes.js';
+import { createGuardService } from './modules/guard/service.js';
 import { authPluginRoot } from './plugins/auth.js';
 import { alertsTopicForUser, createMemoryEventBus, type EventBus } from './realtime/event-bus.js';
 import { createSseHub } from './realtime/sse.js';
@@ -91,15 +93,18 @@ export function buildApp(config: Config, deps: AppDependencies = {}): FastifyIns
       publicApiUrl: config.PUBLIC_API_URL ?? `http://127.0.0.1:${String(config.PORT)}/api/v1`,
       ttlSeconds: config.PHOTO_URL_TTL_SECONDS,
     });
+    const serialize = {
+      photoUrl: (alertId: string, photoKey: string | null) =>
+        photoKey ? photoUrls.url(alertId, photoKey) : null,
+      guardMetersPerMinute: config.GUARD_METERS_PER_MINUTE,
+    };
     const alerts = createAlertsService({
       prisma,
-      serialize: {
-        photoUrl: (alertId, photoKey) => (photoKey ? photoUrls.url(alertId, photoKey) : null),
-        guardMetersPerMinute: config.GUARD_METERS_PER_MINUTE,
-      },
+      serialize,
       triggeredAtToleranceSeconds: config.TRIGGERED_AT_TOLERANCE_SECONDS,
       onUserAlertChanged: (userId) => bus.publish(alertsTopicForUser(userId)),
     });
+    const guard = createGuardService({ prisma, serialize, timeZone: config.TZ_SHIFTS });
     // Los streams abiertos no deben impedir que la API se apague.
     app.addHook('preClose', async () => {
       hub.closeAll();
@@ -127,6 +132,7 @@ export function buildApp(config: Config, deps: AppDependencies = {}): FastifyIns
         await api.register(authRoutes, { prisma });
         await api.register(adminRoutes, { prisma });
         await api.register(alertsRoutes, { prisma, service: alerts, photos, photoUrls });
+        await api.register(guardRoutes, { service: guard });
         await api.register(eventsRoutes, { prisma, hub, alerts });
       },
       { prefix: API_PREFIX },

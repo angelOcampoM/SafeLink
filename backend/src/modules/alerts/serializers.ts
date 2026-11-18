@@ -1,7 +1,8 @@
 // Forma `AlertaJson` del front (nube_mapeadores.dart:117-165, contrato 4.4). Se envían
 // SIEMPRE todas las claves (con null si no aplican). Campo por campo: jamás spread del
 // registro, para que un campo interno (receivedAt, photoKey, statusChangedAt) no se filtre.
-import { etaSeconds } from '../../domain/alert-rules.js';
+import { etaSeconds, isActiveStatus } from '../../domain/alert-rules.js';
+import { isAssignedTo } from '../../domain/guard-visibility.js';
 import type {
   AlertStatus,
   EscalationReason,
@@ -84,8 +85,8 @@ function point(lat: number | null, lng: number | null): PointJson | null {
 }
 
 /**
- * Vista del DUEÑO de la alerta: la ve completa (D23). El guardia y el admin tendrán
- * sus propias vistas en BE-04 y BE-05 (minimización de datos).
+ * Vista del DUEÑO de la alerta: la ve completa (D23). El admin tendrá su propia vista
+ * en BE-05 (minimización de datos); la del guardia es `serializeGuardAlert`.
  */
 export function serializeOwnAlert(alert: AlertRecord, options: SerializeOptions): AlertJson {
   const location = point(alert.lat, alert.lng);
@@ -104,6 +105,46 @@ export function serializeOwnAlert(alert: AlertRecord, options: SerializeOptions)
     photoUrl: options.photoUrl(alert.id, alert.photoKey),
     evidenceIncomplete: alert.evidenceIncomplete,
     location,
+    heading: alert.heading,
+    triggeredAt: alert.triggeredAt.toISOString(),
+    acceptedAt: iso(alert.acceptedAt),
+    arrivedAt: iso(alert.arrivedAt),
+    closedAt: iso(alert.closedAt),
+    escalationReason: alert.escalationReason,
+    resolution: alert.resolution,
+    adminNote: alert.adminNote,
+    etaSeconds: etaSeconds(alert.status, guardLocation, location, options.guardMetersPerMinute),
+  };
+}
+
+/**
+ * Vista del GUARDIA (D23, minimización de datos). `userPhone` solo lo recibe el guardia
+ * asignado mientras la alerta sigue activa; `location` solo existe con la alerta activa
+ * (después es dato personal sin función operativa); `photoUrl` se conserva como evidencia.
+ * El ETA se calcula con la ubicación real, antes de ocultarla.
+ */
+export function serializeGuardAlert(
+  alert: AlertRecord,
+  viewerGuardId: string,
+  options: SerializeOptions,
+): AlertJson {
+  const active = isActiveStatus(alert.status);
+  const location = point(alert.lat, alert.lng);
+  const guardLocation = alert.guard?.guardProfile
+    ? point(alert.guard.guardProfile.lastLocationLat, alert.guard.guardProfile.lastLocationLng)
+    : null;
+  return {
+    id: alert.id,
+    userId: alert.userId,
+    userName: alert.user.name,
+    userPhone: active && isAssignedTo(alert, viewerGuardId) ? alert.user.phone : null,
+    guardId: alert.guardId,
+    guardName: alert.guard?.name ?? null,
+    status: alert.status,
+    triggerMethod: alert.triggerMethod,
+    photoUrl: options.photoUrl(alert.id, alert.photoKey),
+    evidenceIncomplete: alert.evidenceIncomplete,
+    location: active ? location : null,
     heading: alert.heading,
     triggeredAt: alert.triggeredAt.toISOString(),
     acceptedAt: iso(alert.acceptedAt),

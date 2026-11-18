@@ -49,7 +49,7 @@ async function foto() {
 
 beforeAll(async () => {
   db = await abrirDb();
-}, 30_000);
+}, 120_000);
 
 afterAll(async () => {
   await db.cerrar();

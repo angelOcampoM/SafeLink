@@ -37,6 +37,11 @@ const REALES = new Set([
   'POST /alerts/:id/confirm',
   'GET /alerts/:id/photo',
   'GET /events/alerts/active',
+  // BE-04
+  'GET /guard/me',
+  'GET /guard/history',
+  'GET /guard/metrics',
+  'GET /guard/alerts/:id',
 ]);
 
 describe('guards: ruta con roles sin authenticate decorado', () => {
@@ -112,7 +117,7 @@ beforeAll(async () => {
           method: metodo as 'GET',
           url: ruta,
           handler: async () => {
-            if (clave === 'GET /guard/me') ejecuciones += 1;
+            if (clave === 'POST /guard/alerts/:id/arrive') ejecuciones += 1;
             return ok({ ruta: clave });
           },
         });
@@ -149,20 +154,25 @@ describe('POST /auth/session con rate limit (comparte el límite de refresh)', (
   });
 });
 
-describe('normalización de rutas: nada de lo que parezca /api/v1/guard/me llega al handler', () => {
+// Stub de larga vida: POST /guard/alerts/:id/arrive (G-07) es la última ruta del guardia en
+// implementarse. GET /guard/me dejó de ser stub en BE-04 paso 1, por eso cambió la ruta de control.
+const ID_ALERTA = '3f2b8c1e-9a4d-4e6b-8f10-2c7d5a9b0e11';
+const ARRIVE = `guard/alerts/${ID_ALERTA}/arrive`;
+
+describe('normalización de rutas: nada de lo que parezca /api/v1/guard/alerts/:id/arrive llega al handler', () => {
   const variantes = [
-    '/API/V1/guard/me',
-    '/api/v1//guard/me',
-    '/api/v1/guard/me/',
-    '/api/v1/guard%2Fme',
-    '/api/v1/GUARD/me',
-    '/api/v1/guard/me/%2e',
-    '/api/v1/./guard/me',
+    `/API/V1/${ARRIVE}`,
+    `/api/v1//${ARRIVE}`,
+    `/api/v1/${ARRIVE}/`,
+    `/api/v1/guard%2Falerts/${ID_ALERTA}/arrive`,
+    `/api/v1/GUARD/alerts/${ID_ALERTA}/arrive`,
+    `/api/v1/${ARRIVE}/%2e`,
+    `/api/v1/./${ARRIVE}`,
   ];
 
-  it.each(variantes)('GET %s con token de guard -> 404 y el stub no se ejecuta', async (ruta) => {
+  it.each(variantes)('POST %s con token de guard -> 404 y el stub no se ejecuta', async (ruta) => {
     const antes = ejecuciones;
-    const res = await request(app.server).get(ruta).set('Authorization', `Bearer ${guardToken}`);
+    const res = await request(app.server).post(ruta).set('Authorization', `Bearer ${guardToken}`).send({});
     expect(res.status).toBe(404);
     expect(res.body.error.code).toBe('NOT_FOUND');
     expect(ejecuciones).toBe(antes);
@@ -171,22 +181,23 @@ describe('normalización de rutas: nada de lo que parezca /api/v1/guard/me llega
   it('control: la ruta exacta sí ejecuta el stub', async () => {
     const antes = ejecuciones;
     const res = await request(app.server)
-      .get(`${API_PREFIX}/guard/me`)
-      .set('Authorization', `Bearer ${guardToken}`);
+      .post(`${API_PREFIX}/${ARRIVE}`)
+      .set('Authorization', `Bearer ${guardToken}`)
+      .send({});
     expect(res.status).toBe(200);
     expect(ejecuciones).toBe(antes + 1);
   });
 
   it('OPTIONS anónimo sobre una ruta con roles -> 404 (nunca 200)', async () => {
     const antes = ejecuciones;
-    const res = await request(app.server).options(`${API_PREFIX}/guard/me`);
+    const res = await request(app.server).options(`${API_PREFIX}/${ARRIVE}`);
     expect(res.status).toBe(404);
     expect(ejecuciones).toBe(antes);
   });
 
   it('OPTIONS con token de guard también -> 404', async () => {
     const res = await request(app.server)
-      .options(`${API_PREFIX}/guard/me`)
+      .options(`${API_PREFIX}/${ARRIVE}`)
       .set('Authorization', `Bearer ${guardToken}`);
     expect(res.status).toBe(404);
   });

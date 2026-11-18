@@ -1,5 +1,5 @@
 // BE-01 paso 6: matriz de permisos rol x ruta contra PostgreSQL real y el mecanismo deny-by-default
-// de buildApp. Las rutas que aún no existen (todas menos las 5 de auth) se registran como stubs
+// de buildApp. Las rutas que aún no existen (las que no están en REALES) se registran como stubs
 // dentro de /api/v1 ANTES de ready(); así la matriz se ejecuta contra los hooks reales
 // (authenticate + requireRole) y no contra una copia.
 import type { FastifyInstance } from 'fastify';
@@ -47,6 +47,11 @@ const REALES = new Set([
   'POST /alerts/:id/confirm',
   'GET /alerts/:id/photo',
   'GET /events/alerts/active',
+  // BE-04
+  'GET /guard/me',
+  'GET /guard/history',
+  'GET /guard/metrics',
+  'GET /guard/alerts/:id',
 ]);
 const ROLES: readonly Role[] = ['protected_user', 'guard', 'admin'];
 
@@ -135,6 +140,10 @@ beforeAll(async () => {
   await crear('admin', 'admin');
   await crear('inactivo', 'protected_user');
   await crear('promovible', 'protected_user');
+  // GET /guard/me es real desde BE-04: sin perfil de guardia responde 404, así que estos dos lo tienen.
+  for (const clave of ['guard', 'promovible'] as const) {
+    await db.prisma.guardProfile.create({ data: { userId: ids[clave], shiftStart: '00:00', shiftEnd: '00:00' } });
+  }
 
   app = buildApp(configPrueba(), { prisma: db.prisma });
   // Stubs para todas las rutas de la política que aún no se implementan.
@@ -216,8 +225,9 @@ describe('rol x ruta: 2xx si está permitido, 403 FORBIDDEN si no', () => {
   });
 
   it('los stubs permitidos responden el envoltorio { data: { ruta } }', async () => {
-    const res = await enviar(app, 'GET', `${API_PREFIX}/guard/me`, tokens.guard);
-    expect(res.body).toEqual({ data: { ruta: 'GET /guard/me' } });
+    // PUT /guard/location sigue siendo stub (BE-04 paso 2 lo implementa: entonces pasar a otro stub vigente).
+    const res = await enviar(app, 'PUT', `${API_PREFIX}/guard/location`, tokens.guard);
+    expect(res.body).toEqual({ data: { ruta: 'PUT /guard/location' } });
   });
 
   it('cada ruta restringida tiene al menos un rol permitido y un rol rechazado salvo las de ALL_ROLES', () => {

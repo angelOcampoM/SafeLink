@@ -1,7 +1,7 @@
 # SafeLink — Registro de decisiones
 
 **Historias que cubre:** U-01 a U-09, G-01 a G-07, A-01 a A-08 (decisiones transversales del backend).
-**Tarjeta:** BE-01 (paso 2; actualizado en el paso 5: D25, D28 y D29). Varias decisiones se implementan en BE-02 a BE-07; se indica en cada una.
+**Tarjeta:** BE-01 (paso 2; actualizado en el paso 5: D25, D28 y D29); BE-03 (D30, D31); BE-04 (D32 a D46, paso 1). Varias decisiones se implementan en BE-02 a BE-07; se indica en cada una.
 **Fecha de todas las decisiones:** 2026-11-10. **Decidido por:** el equipo / la responsable del backend.
 
 Formato de cada decisión: contexto, opciones, decisión, consecuencias. Las rutas de archivo del front son relativas a `lib/`. Si el código y este documento discrepan, se reporta; no se corrige a ciegas.
@@ -276,6 +276,117 @@ G-03 **ya dice** "doble clic de volumen" (`docs/HISTORIAS_DE_USUARIO.md:167`). L
 - **Snapshots:** un aviso del bus vuelve a leer el snapshot de la base; varios avisos seguidos producen a lo más una lectura extra. Quien cambie una alerta debe publicar `alertsTopicForUser(userId)` (BE-03 lo hace al crear, mover y confirmar; **BE-04 y BE-05 deben hacerlo** al aceptar, marcar llegada, escalar y resolver, o el usuario no verá el cambio).
 - **Apagado:** un hook `preClose` cierra todos los streams para que la API no se quede esperando.
 
+---
+
+## D32 · Alcance de BE-04
+
+- **Estado:** aprobada, se implementa en BE-04 (pasos 2 a 11; el paso 1 ya dejó D40 en lo relativo al 404 y D41).
+- **Decisión:** BE-04 cubre todo lo que `docs/API_CONTRATO.md` le asigna: las 8 rutas `/guard/*` (`me`, `history`, `metrics`, `location`, `alerts/:id`, `accept`, `ignore`, `arrive`), los canales `GET /events/guard/alerts` y `GET /events/guard/alerts/:id`, `PUT /users/me/device-token` y la notificación push.
+- **Consecuencias:** la documentación de rutas, permisos y modelo se actualiza en el paso 12.
+
+## D33 · Equivalencia de historias del issue #54
+
+- **Estado:** aprobada (solo documental).
+- **Decisión:** HU-11 = G-02 (recepción), HU-12 = G-03 (listado), HU-24 = G-05 (aceptación); G-04, G-06 y G-07 entran como soporte.
+- **Consecuencias:** con numeración consecutiva HU-24 sería A-08, que no encaja con el issue; la numeración del Project es otra. Los documentos citan las historias como `G-0X`.
+
+## D34 · Tiempo real del guardia
+
+- **Estado:** aprobada, se implementa en BE-04 (pasos 3 y 4).
+- **Contexto:** a diferencia de `alerts/active` (un tema por dueño, D31), lo que ve cada guardia depende de su cobertura, turno e ignoradas, y cambia con el paso del tiempo.
+- **Decisión:**
+  - `SseChannel` admite **varios topics** (compatible con el `topic` actual). Temas nuevos: `dispatchTopic` (global: una alerta entra o sale de `searching`, o cambia su ubicación estando en `searching`), `guardTopic(guardId)` (su ubicación e ignorar; BE-06 agrega cobertura y baja) y `alertTopic(alertId)` (cualquier cambio de esa alerta).
+  - El snapshot se **recalcula por guardia** desde la base en cada emisión (D22), nunca uno global. El listado se refresca además en cada ping (`SSE_PING_SECONDS`) para reflejar el paso del tiempo (espera, turnos).
+  - Si `guard/alerts/:id` deja de ser visible: evento `NOT_FOUND` y cierre. Un `:id` que no sea UUID también se responde con evento `NOT_FOUND`; los `401`/`403` siguen respondiéndose por HTTP antes de abrir el stream.
+  - Los `AppError` esperados del snapshot se registran en nivel `info`.
+  - El límite de streams (D26) pasa a ser por **(usuario, canal)** y no por usuario, para que abrir el listado y el detalle a la vez no se expulsen entre sí.
+  - `accept`, `arrive` e `ignore` publican también `alertsTopicForUser(dueño)` (D31), para que el usuario vea el cambio.
+- **Consecuencias:** cada evento de `dispatchTopic` provoca una lectura por guardia conectado; con pocos guardias es aceptable (misma lógica que D17). Complementa D3, D26 y D31.
+
+## D35 · Aceptación atómica
+
+- **Estado:** aprobada, se implementa en BE-04 (paso 5).
+- **Decisión:** `updateMany` con `where { id, status: 'searching', guardId: null }`, dentro de una transacción que escribe también el historial (`alert_status_history`, actor = el guardia). Si afecta 0 filas: `409 ALERT_TAKEN`. Antes se evalúa la visibilidad con `skipStatusCheck` (D22): no visible, `404`. Migración nueva con el `CHECK` `alerts_guard_absent_chk`: `guard_id IS NULL` en `pending_location`, `searching` y `no_response`. Las pruebas de concurrencia se repiten varias veces con Postgres real.
+- **Consecuencias:** cierra en la base el pendiente "`guard_id` en estados sin guardia" (hoy solo lo cuida la API). Concreta D22 y D6 punto 16.
+
+## D36 · Un guardia, una alerta en atención
+
+- **Estado:** aprobada, se implementa en BE-04 (paso 5).
+- **Contexto:** desde `in_progress` no se escala (D14); una alerta acaparada por un guardia que ya atiende otra quedaría atascada.
+- **Decisión:** un guardia con una alerta `in_progress` o `guard_arrived` no puede aceptar otra: `409 INVALID_STATE` con el mensaje «Ya estás atendiendo otra alerta». Se garantiza con un índice único parcial `alerts (guard_id) WHERE status IN ('in_progress', 'guard_arrived')`.
+- **Consecuencias:** el front lo muestra vía `EstadoInvalidoError(mensaje)`. Si el índice falla en una carrera, la API lo traduce al mismo `409`.
+
+## D37 · Guardia sin última ubicación
+
+- **Estado:** aprobada, se implementa en BE-04 (pasos 3 y 7).
+- **Decisión:** en el listado, `distanceMeters` usa `lastLocation ?? centro de cobertura` (`docs/API_CONTRATO.md:301`); `etaSeconds` queda `null` (D27, que no usa el centro de cobertura). `arrive` responde `422 OUTSIDE_GEOFENCE` con `remainingMeters: null` si no hay última ubicación.
+- **Consecuencias:** una `lastLocation` vieja o falsificada que permita marcar llegada se **acepta como riesgo documentado**: la reporta el cliente y el backend no puede verificarla.
+
+## D38 · `PUT /guard/location`
+
+- **Estado:** aprobada, se implementa en BE-04 (paso 2).
+- **Decisión:** límite por usuario, en `preHandler` (después de autenticar), con ventana `LOCATION_UPDATE_SECONDS` y tope `RATE_LIMIT_LOCATIONS_PER_WINDOW` (los mismos de `POST /alerts/:id/locations`, D29 y pendientes de seguridad). Validación: `lat` −90..90 y `lng` −180..180, finitos, `.strict()`. **No exige turno vigente**: el guardia puede reportar su posición fuera de turno.
+- **Consecuencias:** cierra el pendiente de rate limit de `PUT /guard/location`.
+
+## D39 · Ignorar es idempotente
+
+- **Estado:** aprobada, se implementa en BE-04 (paso 6).
+- **Decisión:** la visibilidad se evalúa **sin** el filtro de "ignorada"; la inserción en `alert_ignores` usa `skipDuplicates`. Un segundo `ignore` responde `200`. Si la alerta está asignada al guardia, el registro no cambia su visibilidad (la asignación manda, D22).
+- **Consecuencias:** reintentos de red del cliente no producen error ni duplicados.
+
+## D40 · Mensajes y respuestas del guardia
+
+- **Estado:** el `404` está **implementado (paso 1)**; el `409` de `arrive` y el mensaje de D36 quedan aprobados, se implementan en BE-04 (pasos 5 y 7).
+- **Decisión:**
+  - `404 NOT_FOUND` «La alerta ya no existe», con **cuerpo idéntico** para alerta inexistente, no visible, ajena, UUID mal formado y guardia sin perfil. No hay `403` ni `409` que permitan enumerar (pendiente "Recurso ajeno = 404").
+  - `409 INVALID_STATE` de `arrive` fuera de `in_progress`: «Esta alerta ya no está en atención».
+  - `409 INVALID_STATE` de D36: «Ya estás atendiendo otra alerta».
+- **Consecuencias:** el front usa su propio texto para los códigos conocidos (D9); estos mensajes sirven al cliente HTTP y a las pruebas.
+
+## D41 · Historial y métricas del guardia
+
+- **Estado:** implementada (paso 1; `backend/src/domain/metrics.ts` y `backend/src/modules/guard/`).
+- **Decisión:**
+  - `/guard/history`: alertas **no activas** con `guard_id` propio, orden `received_at` descendente y luego `id` ascendente, **sin paginación** (el front no la manda; el crecimiento queda como riesgo).
+  - `/guard/metrics` se calcula sobre la misma lista con `received_at` (D24). Cada duración se **trunca a segundos enteros antes de promediar** (como `Duration.inSeconds` del front); la llegada se mide desde `acceptedAt ?? receivedAt`; sin datos, `0`.
+  - Función pura en `backend/src/domain/metrics.ts`, reutilizable por BE-07.
+  - El guardia recibe `adminNote` tal cual (decisión del usuario).
+- **Consecuencias:** `adminNote` es visible para el guardia en su historial; no se aplica la minimización de D23 a ese campo. Se aplican igual `userPhone` y `location` nulos de D23.
+
+## D42 · Token de dispositivo
+
+- **Estado:** aprobada, se implementa en BE-04 (paso 9).
+- **Contexto:** `PUT /users/me/device-token` existe en `CTX:273` pero no en el front (D6 punto 3).
+- **Decisión:** **EXCEPCIÓN de contrato aprobada**, solo para el rol `guard` (minimización; agregar `protected_user` después no rompe nada). Tabla `device_tokens`: `id`, `user_id` (FK con cascada), `token` (texto único, máximo 512), `family_id` (el `sid` de la sesión que lo registró), `created_at`, `last_seen_at`; sin `platform` (CTX solo manda `{token}`). Upsert idempotente por `token`; si era de otro usuario se **reasigna**. Responde `null`. `logout` borra los tokens con `family_id = sid`; la baja (BE-06) borra todos; solo se envía a tokens cuya familia sigue viva.
+- **Consecuencias:** es la tercera ruta extra (junto a `POST /auth/refresh` y la foto, D30); `tests/unit/politicas-contrato.test.ts` deberá listarla en `EXTRAS`. Atiende el pendiente "`PUT /users/me/device-token`: no permitido para `admin`".
+
+## D43 · `PushNotifier` y adaptador FCM
+
+- **Estado:** aprobada, se implementa en BE-04 (paso 10). **No verificado contra FCM real.**
+- **Decisión:** interfaz `PushNotifier` con una implementación **no-op** (solo log, sin datos personales), un doble para pruebas y un adaptador **FCM HTTP v1 sin dependencias nuevas** (`fetch` nativo y `node:crypto` con RS256 para el JWT de la cuenta de servicio; caché del access token hasta `exp − 60 s`). Apagado por defecto. Variables: `PUSH_PROVIDER` (`none` | `fcm`, por defecto `none`), `FCM_PROJECT_ID`, `FCM_SERVICE_ACCOUNT_FILE` (ruta a un JSON **fuera del repo**) y `PUSH_MAX_ATTEMPTS` (2).
+  - **Payload** solo de datos: `{ "type": "alert", "alertId": "...", "urgent": ... }`. Android: prioridad `HIGH` y `ttl = ACCEPT_TIMEOUT_SECONDS` (la app arma la notificación con canal de alarma y pantalla completa). iOS: `apns-priority 10` con `aps.alert` genérico.
+  - **Errores:** `UNREGISTERED` o `INVALID_ARGUMENT` borran el token; `429`/`5xx` un reintento respetando `Retry-After` con tope; `401` renueva el OAuth una vez.
+  - **Entrega:** mejor esfuerzo y asíncrona, después del commit; una notificación por alerta y guardia.
+- **Consecuencias:** el payload no lleva nombre, teléfono ni ubicación (D23). Sin credenciales reales no se puede probar la entrega; las pruebas usan el doble y un `fetch` simulado. La llave de la cuenta de servicio nunca se versiona.
+
+## D44 · Quién y cuándo se notifica
+
+- **Estado:** aprobada, se implementa en BE-04 (paso 11).
+- **Decisión:** se notifica cuando una alerta **nace** con ubicación (entra en `searching`) y cuando una `pending_location` recibe coordenadas y pasa a `searching`. Destinatarios: los que devuelve **la misma función** que arma el snapshot de `guard/alerts` (activo, con cobertura, en radio, en turno, sin ignorar) y que además tienen un token de sesión viva (D42). **No** se renotifica por movimiento en `searching`. Un guardia que entra en turno con alertas ya en `searching` no recibe push: las ve por el canal (al conectar o en el refresco del ping, D34).
+- **Consecuencias:** BE-06 debe llamar al mismo despachador cuando una alerta vuelva a `searching` (baja de un guardia con alerta `in_progress`).
+
+## D45 · Parte del front
+
+- **Estado:** aprobada; fuera de BE-04.
+- **Decisión:** el cliente HTTP de `/guard/*`, el `escuchar()` real con reconexión (D26), Firebase/FCM, el canal de alarma con pantalla completa en Android y los permisos van en **una tarjeta aparte del front**. En BE-04 solo se documentan en `docs/CONEXION_DISPOSITIVO.md`.
+- **Consecuencias:** hasta esa tarjeta, el guardia solo se prueba con el backend vía pruebas y herramientas HTTP. No se toca `lib/` en BE-04.
+
+## D46 · Migración de las pruebas de BE-03
+
+- **Estado:** aprobada, se implementa en BE-04 (paso 8).
+- **Decisión:** las pruebas de BE-03 que simulaban al guardia escribiendo directo en la base (`alertas-usuario.test.ts`) se migran a las **rutas reales** del guardia, **sin debilitar ninguna aserción**.
+- **Consecuencias:** si alguna aserción no se puede conservar con la ruta real, se reporta en lugar de relajarla.
+
 ## Pendientes de seguridad para tarjetas siguientes
 
 Cosas que no se cierran en el paso 2 pero que el backend **debe** resolver. Cada una se atiende en la tarjeta indicada.
@@ -288,7 +399,7 @@ Cosas que no se cierran en el paso 2 pero que el backend **debe** resolver. Cada
 - **Recurso ajeno = 404, no 403** (BE-02 en adelante): `forbidden()` solo cuando el rol no tiene permiso para la ruta. La propiedad se valida antes de escribir (`where: { id, ownerId }`); no depender de que una violación de FK (400) o de unicidad (409) dé la respuesta, porque 400/409 frente a 404 permite enumerar.
 - **Errores de plugins**: traducción de `FST_JWT_*` (y `FAST_JWT_*`) a `UNAUTHORIZED` con mensaje fijo: **atendido en BE-01 paso 5** (`backend/src/http/error-handler.ts`). El 429 con su propio error: **atendido** (D29).
 - **`Cache-Control: no-store`** en todas las respuestas bajo `/api/v1`: **atendido en BE-01 paso 5** (`backend/src/app.ts`).
-- **Rate limit**: `POST /auth/login` y `/auth/refresh`: **atendido** (D29). **Sigue pendiente en BE-02:** `POST /auth/register`. **Atendido en BE-03**, por usuario (no por IP) y después de autenticar: `POST /alerts` (`RATE_LIMIT_ALERTS_PER_MINUTE`, 5 por minuto) y `POST /alerts/:id/locations` (`RATE_LIMIT_LOCATIONS_PER_WINDOW`, 3 por ventana de `LOCATION_UPDATE_SECONDS`). Sigue pendiente `PUT /guard/location` (BE-04).
+- **Rate limit**: `POST /auth/login` y `/auth/refresh`: **atendido** (D29). **Sigue pendiente en BE-02:** `POST /auth/register`. **Atendido en BE-03**, por usuario (no por IP) y después de autenticar: `POST /alerts` (`RATE_LIMIT_ALERTS_PER_MINUTE`, 5 por minuto) y `POST /alerts/:id/locations` (`RATE_LIMIT_LOCATIONS_PER_WINDOW`, 3 por ventana de `LOCATION_UPDATE_SECONDS`). Sigue pendiente `PUT /guard/location` (BE-04; se resuelve con D38).
 - **Deny-by-default**: **atendido en BE-01 paso 6**. Registro central único `ROUTE_POLICIES` (`backend/src/security/policies.ts`) con las 37 entradas (36 de BE-01 más la foto de BE-03, D30); un hook `onRoute` aborta el arranque si una ruta bajo `/api/v1` no tiene política, si su `config` (opcional) contradice la central o si está fuera del prefijo (solo `GET /health` exento). Detalle y matriz en `docs/PERMISOS.md`; pruebas en `backend/tests/integration/seguridad/` y `backend/tests/unit/politicas-contrato.test.ts`.
 - **Límites de entrada** (BE-01 paso 4 en adelante): `password` ≤ 128; largos máximos de `name`, `email`, `phone`, `zone`, `search` y `photoPath`; `heading` entero 0–359; `radiusMeters` entero; `:id` validado como UUID (inválido → `404 NOT_FOUND`); `.strict()` también en el query.
 - **Semilla** (paso 3 de BE-01): solo corre con `NODE_ENV` `development` o `test`; se niega con `production`.
@@ -299,7 +410,7 @@ Cosas que no se cierran en el paso 2 pero que el backend **debe** resolver. Cada
 - **`JWT_SECRET` de baja entropía** (antes de cualquier despliegue): hoy solo se exigen 32 caracteres. En `production`, rechazar valores de ejemplo o triviales y exigir al menos 32 bytes aleatorios (43+ caracteres base64url) con el comando del README.
 - **Regla ESLint de `passwordHash`**: es una capa extra que se puede saltar (clave computada `{[k]: false}`, `$queryRaw` que seleccione `password_hash`, o desde `tests/**`). El control real es el `omit` global de `backend/src/db/prisma.ts` y la prueba "ninguna respuesta contiene passwordHash"; mantener esa prueba en cada tarjeta nueva.
 - **Baja de usuarios** (BE-06): poner primero `is_active=false` y después `revokeAllUserFamilies`; así una familia creada por un login concurrente entre la lectura y el bloqueo ya no sirve (`authenticate` y la rotación rechazan inactivos).
-- **`guard_id` en estados sin guardia** (BE-04): la base acepta una alerta `searching` con `guard_id`; la API debe dejarlo en `null` en `pending_location`, `searching` y `no_response` para que la visibilidad por `guard_id` no se abra de más.
+- **`guard_id` en estados sin guardia** (BE-04): la base acepta una alerta `searching` con `guard_id`; la API debe dejarlo en `null` en `pending_location`, `searching` y `no_response` para que la visibilidad por `guard_id` no se abra de más. Se resuelve con el `CHECK` de D35.
 - **JWT con algoritmo fijo `HS256`** en firma y verificación: **atendido en BE-01 paso 5** (`backend/src/plugins/auth.ts`: `sign.algorithm` y `verify.algorithms` = `HS256`).
 - Contraseñas con **argon2** (argon2id con parámetros por entorno `ARGON2_*`, por defecto los de la librería, y `needsRehash` en el login, `backend/src/auth/password.ts`): **atendido en BE-01 paso 5**; el mock las guarda en claro (`datos/memoria_base_datos.dart:43`, `datos/memoria_auth_repository.dart:23`).
 - **Login**: hash ficticio para igualar tiempos con correo inexistente: **atendido en BE-01 paso 5** (se precalienta en `onReady`). Con usuario inactivo se verifica contra su hash real (D25).
@@ -307,7 +418,7 @@ Cosas que no se cierran en el paso 2 pero que el backend **debe** resolver. Cada
 - **Esquemas zod `.strict()`** en todos los cuerpos y queries: una clave extra (`role`, `isActive`, `falseAlarmCount`…) devuelve `400 INVALID_STATE`.
 - **Validaciones de entrada**: `lat` −90..90 y `lng` −180..180, finitos.
 - **`GET /health`** solo responde `status`.
-- **`PUT /users/me/device-token`** (contexto, BE-04): no permitido para `admin`.
+- **`PUT /users/me/device-token`** (contexto, BE-04): no permitido para `admin` (ver D42: solo `guard`).
 
 **Foto (BE-03)** — **atendido en BE-03** (D2, D30)
 
