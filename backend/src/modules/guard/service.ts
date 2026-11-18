@@ -215,6 +215,9 @@ export function createGuardService(deps: GuardServiceDeps) {
         select: { guardId: true },
       });
 
+      // Un guardia dado de baja no ve nada, ni lo asignado: el canal guard/alerts/:id solo revisa
+      // la sesión en cada ping y, mientras tanto, un aviso del bus le mandaría teléfono y ubicación.
+      if (!user.isActive) throw notFound(ALERT_NOT_FOUND);
       const guard = toVisibilityGuard(user, profile);
       const location =
         alert.lat !== null && alert.lng !== null ? { lat: alert.lat, lng: alert.lng } : null;

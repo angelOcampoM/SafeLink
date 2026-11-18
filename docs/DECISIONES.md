@@ -292,7 +292,7 @@ G-03 **ya dice** "doble clic de volumen" (`docs/HISTORIAS_DE_USUARIO.md:167`). L
 
 ## D34 · Tiempo real del guardia
 
-- **Estado:** implementada en parte (paso 3: varios temas, `refreshOnPing`, límite por (usuario, canal), log `info` de `AppError`, canal `guard/alerts` y temas `dispatchTopic`/`guardTopic`/`alertTopic`). Falta `guard/alerts/:id` (paso 4) y que `accept`/`ignore`/`arrive` publiquen (pasos 5 a 7). Hoy `dispatchTopic` solo se publica al **entrar** a `searching` o al moverse en él; la salida llega con `accept` (paso 5) y la escalada (BE-05), y mientras tanto la cubre el refresco del ping.
+- **Estado:** implementada en parte (paso 3: varios temas, `refreshOnPing`, límite por (usuario, canal), log `info` de `AppError`, canal `guard/alerts` y temas `dispatchTopic`/`guardTopic`/`alertTopic`; paso 4: canal `guard/alerts/:id` con `alertTopic` + `guardTopic` y `refreshOnPing`, para cerrarse si una alerta solo disponible deja de serlo por turno o cobertura). Falta que `accept`/`ignore`/`arrive` publiquen (pasos 5 a 7). Hoy `dispatchTopic` solo se publica al **entrar** a `searching` o al moverse en él; la salida llega con `accept` (paso 5) y la escalada (BE-05), y mientras tanto la cubre el refresco del ping.
 - **Contexto:** a diferencia de `alerts/active` (un tema por dueño, D31), lo que ve cada guardia depende de su cobertura, turno e ignoradas, y cambia con el paso del tiempo.
 - **Decisión:**
   - `SseChannel` admite **varios topics** (compatible con el `topic` actual). Temas nuevos: `dispatchTopic` (global: una alerta entra o sale de `searching`, o cambia su ubicación estando en `searching`), `guardTopic(guardId)` (su ubicación e ignorar; BE-06 agrega cobertura y baja) y `alertTopic(alertId)` (cualquier cambio de esa alerta).
