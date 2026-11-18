@@ -10,6 +10,7 @@ import {
 import { guardMetrics, type GuardMetrics } from '../../domain/metrics.js';
 import {
   isAlertAvailableToGuard,
+  isAssignedTo,
   isAlertVisibleToGuard,
   type VisibilityGuard,
 } from '../../domain/guard-visibility.js';
@@ -40,7 +41,7 @@ export interface GuardServiceDeps {
   now?: () => Date;
   /** Avisa al dueño de una alerta cuyo guardia se movió (su ETA cambia); lo cablea app.ts. */
   onUserAlertChanged?: (userId: string) => void;
-  /** Avisa que cambió algo propio del guardia (su ubicación): su listado se reordena (D34). */
+  /** Avisa que cambió algo propio del guardia (su ubicación, una alerta ignorada): se recalcula su listado (D34). */
   onGuardChanged?: (guardId: string) => void;
   /** Avisa que cambió una alerta (la misma publicación que usa el servicio de alertas, D34). */
   onAlertChanged?: (change: AlertChange) => void;
@@ -98,6 +99,28 @@ export function createGuardService(deps: GuardServiceDeps) {
             }
           : null,
     };
+  }
+
+  /**
+   * Lo que hace falta para decidir si el guardia ve una alerta (getAlert, accept, ignore): la
+   * alerta, el guardia con su perfil, si la ignoró y su ubicación. Alerta inexistente, guardia sin
+   * perfil o de baja son NOT_FOUND con el mismo mensaje (D40). Un guardia de baja no ve nada, ni
+   * lo asignado: el canal guard/alerts/:id solo revisa la sesión en cada ping y, mientras tanto,
+   * un aviso del bus le mandaría teléfono y ubicación.
+   */
+  async function loadVisibilityContext(guardId: string, alertId: string) {
+    const alert = await prisma.alert.findUnique({ where: { id: alertId }, include: ALERT_INCLUDE });
+    if (!alert) throw notFound(ALERT_NOT_FOUND);
+    const { user, profile } = await loadGuardWithProfile(guardId, ALERT_NOT_FOUND);
+    if (!user.isActive) throw notFound(ALERT_NOT_FOUND);
+    const ignored =
+      (await prisma.alertIgnore.findUnique({
+        where: { guardId_alertId: { guardId, alertId } },
+        select: { guardId: true },
+      })) !== null;
+    const location =
+      alert.lat !== null && alert.lng !== null ? { lat: alert.lat, lng: alert.lng } : null;
+    return { alert, guard: toVisibilityGuard(user, profile), ignored, location };
   }
 
   return {
@@ -218,25 +241,12 @@ export function createGuardService(deps: GuardServiceDeps) {
      * otra (ajena, no visible, inexistente) es NOT_FOUND con el mismo mensaje (D40).
      */
     async getAlert(guardId: string, alertId: string): Promise<AlertJson> {
-      const alert = await prisma.alert.findUnique({ where: { id: alertId }, include: ALERT_INCLUDE });
-      if (!alert) throw notFound(ALERT_NOT_FOUND);
-      const { user, profile } = await loadGuardWithProfile(guardId, ALERT_NOT_FOUND);
-      const ignored = await prisma.alertIgnore.findUnique({
-        where: { guardId_alertId: { guardId, alertId } },
-        select: { guardId: true },
-      });
-
-      // Un guardia dado de baja no ve nada, ni lo asignado: el canal guard/alerts/:id solo revisa
-      // la sesión en cada ping y, mientras tanto, un aviso del bus le mandaría teléfono y ubicación.
-      if (!user.isActive) throw notFound(ALERT_NOT_FOUND);
-      const guard = toVisibilityGuard(user, profile);
-      const location =
-        alert.lat !== null && alert.lng !== null ? { lat: alert.lat, lng: alert.lng } : null;
+      const { alert, guard, ignored, location } = await loadVisibilityContext(guardId, alertId);
       try {
         assertGuardCanSee(
           { guardId: alert.guardId, status: alert.status, location },
           guard,
-          { now: now(), timeZone, ignoredByGuard: ignored !== null },
+          { now: now(), timeZone, ignoredByGuard: ignored },
         );
       } catch (error) {
         // El 404 genérico de ownership.ts lleva otro texto: aquí debe ser idéntico al de "no existe".
@@ -253,22 +263,12 @@ export function createGuardService(deps: GuardServiceDeps) {
      * ocupado no pueda distinguir una alerta ajena de una inexistente por el tipo de error.
      */
     async accept(guardId: string, alertId: string): Promise<AlertJson> {
-      const found = await prisma.alert.findUnique({ where: { id: alertId }, include: ALERT_INCLUDE });
-      if (!found) throw notFound(ALERT_NOT_FOUND);
-      const { user, profile } = await loadGuardWithProfile(guardId, ALERT_NOT_FOUND);
-      // Como en getAlert: un guardia de baja no ve nada.
-      if (!user.isActive) throw notFound(ALERT_NOT_FOUND);
-      const ignored = await prisma.alertIgnore.findUnique({
-        where: { guardId_alertId: { guardId, alertId } },
-        select: { guardId: true },
-      });
-      const location =
-        found.lat !== null && found.lng !== null ? { lat: found.lat, lng: found.lng } : null;
+      const { alert: found, guard, ignored, location } = await loadVisibilityContext(guardId, alertId);
       // Sin la condición de estado (D22): la que ya tomó otro sigue siendo "visible" y da 409.
       const visible = isAlertVisibleToGuard(
         { guardId: found.guardId, status: found.status, location },
-        toVisibilityGuard(user, profile),
-        { now: now(), timeZone, ignoredByGuard: ignored !== null, skipStatusCheck: true },
+        guard,
+        { now: now(), timeZone, ignoredByGuard: ignored, skipStatusCheck: true },
       );
       if (!visible) throw notFound(ALERT_NOT_FOUND);
       if (found.status !== AlertStatus.searching || found.guardId !== null) throw alertTaken();
@@ -315,6 +315,32 @@ export function createGuardService(deps: GuardServiceDeps) {
       // Después del commit: el dueño la ve aceptada y a los demás guardias les sale del listado.
       deps.onAlertChanged?.({ userId: accepted.userId, alertId, dispatch: true });
       return serializeGuardAlert(accepted, guardId, serialize);
+    },
+
+    /**
+     * G-03 (extra del front): el guardia deja de ver una alerta (D39). Idempotente: la visibilidad
+     * se evalúa sin el filtro de "ignorada", así que repetirlo responde 200. Si la alerta es suya
+     * (asignada) la asignación manda (D22): responde 200 sin registrar nada, para que una
+     * liberación posterior no la deje oculta para él. El contrato no define un error para eso.
+     * No avisa al dueño (no ve las ignoradas ni cambia nada para él) ni al despacho (a los demás
+     * guardias no les cambia): solo se recalculan el listado y el detalle del propio guardia.
+     */
+    async ignore(guardId: string, alertId: string): Promise<null> {
+      const { alert, guard, location } = await loadVisibilityContext(guardId, alertId);
+      const visible = isAlertVisibleToGuard(
+        { guardId: alert.guardId, status: alert.status, location },
+        guard,
+        { now: now(), timeZone, ignoredByGuard: false },
+      );
+      if (!visible) throw notFound(ALERT_NOT_FOUND);
+      if (isAssignedTo(alert, guardId)) return null;
+      const { count } = await prisma.alertIgnore.createMany({
+        data: [{ guardId, alertId }],
+        skipDuplicates: true,
+      });
+      // Un segundo ignore no cambia nada: no hace falta recalcular sus canales.
+      if (count > 0) deps.onGuardChanged?.(guardId);
+      return null;
     },
   };
 }

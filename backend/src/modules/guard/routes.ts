@@ -57,4 +57,9 @@ export async function guardRoutes(app: FastifyInstance, options: GuardRoutesOpti
   app.post('/guard/alerts/:id/accept', async (request) =>
     ok(await service.accept(request.user.id, alertId(request))),
   );
+
+  // G-03 (extra del front): idempotente; 200 con data null (safelink_service.dart:195).
+  app.post('/guard/alerts/:id/ignore', async (request) =>
+    ok(await service.ignore(request.user.id, alertId(request))),
+  );
 }

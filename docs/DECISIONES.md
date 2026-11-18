@@ -292,7 +292,7 @@ G-03 **ya dice** "doble clic de volumen" (`docs/HISTORIAS_DE_USUARIO.md:167`). L
 
 ## D34 · Tiempo real del guardia
 
-- **Estado:** implementada en parte (paso 3: varios temas, `refreshOnPing`, límite por (usuario, canal), log `info` de `AppError`, canal `guard/alerts` y temas `dispatchTopic`/`guardTopic`/`alertTopic`; paso 4: canal `guard/alerts/:id` con `alertTopic` + `guardTopic` y `refreshOnPing`, para cerrarse si una alerta solo disponible deja de serlo por turno o cobertura). Paso 5: `accept` publica `alertsTopicForUser(dueño)`, `alertTopic` y `dispatchTopic` (la alerta desaparece al instante del listado de los demás). Falta que `ignore` y `arrive` publiquen (pasos 6 y 7); la salida de `searching` por escalada llega en BE-05 y mientras tanto la cubre el ping.
+- **Estado:** implementada en parte (paso 3: varios temas, `refreshOnPing`, límite por (usuario, canal), log `info` de `AppError`, canal `guard/alerts` y temas `dispatchTopic`/`guardTopic`/`alertTopic`; paso 4: canal `guard/alerts/:id` con `alertTopic` + `guardTopic` y `refreshOnPing`, para cerrarse si una alerta solo disponible deja de serlo por turno o cobertura). Paso 5: `accept` publica `alertsTopicForUser(dueño)`, `alertTopic` y `dispatchTopic` (la alerta desaparece al instante del listado de los demás). Paso 6: `ignore` publica solo `guardTopic` (D39). Falta que `arrive` publique (paso 7); la salida de `searching` por escalada llega en BE-05 y mientras tanto la cubre el ping.
 - **Contexto:** a diferencia de `alerts/active` (un tema por dueño, D31), lo que ve cada guardia depende de su cobertura, turno e ignoradas, y cambia con el paso del tiempo.
 - **Decisión:**
   - `SseChannel` admite **varios topics** (compatible con el `topic` actual). Temas nuevos: `dispatchTopic` (global: una alerta entra o sale de `searching`, o cambia su ubicación estando en `searching`), `guardTopic(guardId)` (su ubicación e ignorar; BE-06 agrega cobertura y baja) y `alertTopic(alertId)` (cualquier cambio de esa alerta).
@@ -300,7 +300,7 @@ G-03 **ya dice** "doble clic de volumen" (`docs/HISTORIAS_DE_USUARIO.md:167`). L
   - Si `guard/alerts/:id` deja de ser visible: evento `NOT_FOUND` y cierre. Un `:id` que no sea UUID también se responde con evento `NOT_FOUND`; los `401`/`403` siguen respondiéndose por HTTP antes de abrir el stream.
   - Los `AppError` esperados del snapshot se registran en nivel `info`.
   - El límite de streams (D26) pasa a ser por **(usuario, canal)** y no por usuario, para que abrir el listado y el detalle a la vez no se expulsen entre sí.
-  - `accept`, `arrive` e `ignore` publican también `alertsTopicForUser(dueño)` (D31), para que el usuario vea el cambio.
+  - `accept` y `arrive` publican también `alertsTopicForUser(dueño)` (D31), para que el usuario vea el cambio. `ignore` no, porque el dueño no observa nada distinto (D39).
 - **Detalle:** el nombre del canal es obligatorio y fijo (no uno por alerta), para que el límite no se multiplique. Un guardia sin perfil recibe una lista vacía, no un error (un error cerraría el stream y el cliente reconectaría en bucle).
 - **Consecuencias:** cada evento de `dispatchTopic` provoca una lectura por guardia conectado; con pocos guardias es aceptable (misma lógica que D17). Complementa D3, D26 y D31.
 - **Riesgo aceptado para el prototipo (revisión de seguridad, paso 3):** el costo crece como avisos × streams abiertos × alertas en `searching` (la consulta trae todas y filtra en memoria), y `refreshOnPing` hace unas 3 consultas por stream en cada ping aunque nada cambie; con el límite por canal un usuario puede tener más streams que antes y no hay tope total. Antes de un despliegue real: intervalo mínimo entre snapshots por stream, una sola consulta de `searching` por ventana compartida entre guardias, recorte por *bounding box* de la cobertura con `take` configurable, y tope total de streams por usuario y global.
@@ -334,8 +334,10 @@ G-03 **ya dice** "doble clic de volumen" (`docs/HISTORIAS_DE_USUARIO.md:167`). L
 
 ## D39 · Ignorar es idempotente
 
-- **Estado:** aprobada, se implementa en BE-04 (paso 6).
+- **Estado:** implementada (paso 6; `POST /guard/alerts/:id/ignore` en `backend/src/modules/guard/`, responde `{ "data": null }`).
 - **Decisión:** la visibilidad se evalúa **sin** el filtro de "ignorada"; la inserción en `alert_ignores` usa `skipDuplicates`. Un segundo `ignore` responde `200`. Si la alerta está asignada al guardia, el registro no cambia su visibilidad (la asignación manda, D22).
+- **Alerta propia en curso:** responde `200` **sin guardar** el registro ni publicar (el contrato no define un error). Si se guardara, una liberación o escalada posterior la dejaría oculta para ese guardia sin que lo pidiera.
+- **Tiempo real:** solo publica `guardTopic(guardId)`: su listado la quita y su `guard/alerts/:id` emite `NOT_FOUND`. **No** publica `alertsTopicForUser(dueño)` ni `dispatchTopic` (corrige D34): el dueño no ve las ignoradas y a los demás guardias no les cambia nada.
 - **Consecuencias:** reintentos de red del cliente no producen error ni duplicados.
 
 ## D40 · Mensajes y respuestas del guardia
@@ -397,7 +399,7 @@ Cosas que no se cierran en el paso 2 pero que el backend **debe** resolver. Cada
 
 **Asignación de guardias (de BE-04 paso 5 para BE-05 y BE-06)**
 
-- **Baja de un guardia (BE-06):** en este orden, `is_active = false` y después liberar o reasignar sus alertas `in_progress`/`guard_arrived` (con `guard_id = null` si vuelven a `searching`, o el `CHECK` de D35 falla). Así una aceptación que gane la carrera (ver D35, "Baja concurrente") queda cubierta. Debe llamar al mismo despachador del push (D44) y publicar `guardTopic`.
+- **Baja de un guardia (BE-06):** en este orden, `is_active = false` y después liberar o reasignar sus alertas `in_progress`/`guard_arrived` (con `guard_id = null` si vuelven a `searching`, o el `CHECK` de D35 falla). Así una aceptación que gane la carrera (ver D35, "Baja concurrente") queda cubierta. Al liberar una alerta (baja, escalada o reasignación), borrar el registro de `alert_ignores` del guardia que la tenía: una carrera entre `ignore` y `accept` del mismo guardia puede haberlo dejado (D39) y la ocultaría si vuelve a `searching`. Debe llamar al mismo despachador del push (D44) y publicar `guardTopic`.
 - **Reasignar desde admin (BE-06):** si el guardia destino ya atiende otra, el índice de D36 lanza `P2002`; dar un mensaje claro en vez del `INVALID_STATE` genérico.
 - **Escalar o resolver (BE-05):** escalar desde `guard_arrived` deja `guard_id` (el índice libera al guardia); comprobar que `escalated` y `resolved_by_admin` no le muestran `userPhone` ni `location` (D23). Cualquier vuelta a `searching` o paso a `no_response` pone `guard_id = null` en la misma sentencia. Revisar que un `23514` (violación de `CHECK`) caiga en un 4xx o 5xx genérico sin mensaje interno.
 
