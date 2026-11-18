@@ -8,6 +8,8 @@ import { adminRoutes } from './modules/admin/routes.js';
 import { alertsRoutes } from './modules/alerts/routes.js';
 import { createAlertsService, type AlertChange } from './modules/alerts/service.js';
 import { authRoutes } from './modules/auth/routes.js';
+import { devicesRoutes } from './modules/devices/routes.js';
+import { createDevicesService } from './modules/devices/service.js';
 import { eventsRoutes } from './modules/events/routes.js';
 import { guardRoutes } from './modules/guard/routes.js';
 import { createGuardService } from './modules/guard/service.js';
@@ -157,6 +159,7 @@ export function buildApp(config: Config, deps: AppDependencies = {}): FastifyIns
         await api.register(adminRoutes, { prisma });
         await api.register(alertsRoutes, { prisma, service: alerts, photos, photoUrls });
         await api.register(guardRoutes, { service: guard });
+        await api.register(devicesRoutes, { service: createDevicesService({ prisma }) });
         await api.register(eventsRoutes, { prisma, hub, alerts, guard });
       },
       { prefix: API_PREFIX },

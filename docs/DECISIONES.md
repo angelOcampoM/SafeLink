@@ -66,7 +66,7 @@ Se leyó el documento completo y se comparó contra el código. Por defecto **ga
 |---|---|---|---|---|
 | 1 | Prefijo de la API | Base `/api/v1` (`CTX:49,262`) | Las rutas no tienen prefijo (`safelink_service.dart:125`); son relativas a la base | **Resuelto (D20):** el servidor monta todo bajo `/api/v1`; la app usa `API_URL=http://host:3000/api/v1`. `/health` queda fuera del prefijo |
 | 2 | Rutas de "instantánea" | Recomienda `GET /alerts/active`, `GET /guard/alerts`, `GET /admin/alerts/escalated` (`CTX:283,297,316`) | No existen; el front usa los canales | **No se implementan.** El snapshot llega al conectar el canal SSE (D3) |
-| 3 | Token del dispositivo | `PUT /users/me/device-token` (`CTX:273`) | No existe (ni FCM, `CTX:52`) | Fuera de las 31 rutas. Se evalúa en BE-04 junto con las notificaciones |
+| 3 | Token del dispositivo | `PUT /users/me/device-token` (`CTX:273`) | No existe (ni FCM, `CTX:52`) | Fuera de las 31 rutas. **Resuelto en BE-04** como excepción de contrato solo para `guard` (D42) |
 | 4 | Ruta de refresh | No existe | No existe | Se agrega `POST /auth/refresh` como **excepción aprobada** (D8) |
 | 5 | Forma del login | Sugiere `data: { token, user }` (`CTX:436`) | `desdeJson` lee el `User` directo de `data` (`datos/nube_auth_repository.dart:20`) | D7: `data` es el `User` con `accessToken` y `refreshToken` como campos extra. No se rompe el mapeador |
 | 6 | Restaurar sesión | `GET /auth/me` con el token guardado (`CTX:436`) | `POST /auth/session { userId }` (`datos/nube_auth_repository.dart:50-54`) | Se mantiene `/auth/session` (ruta del front) y exige Bearer (D7) |
@@ -361,10 +361,16 @@ G-03 **ya dice** "doble clic de volumen" (`docs/HISTORIAS_DE_USUARIO.md:167`). L
 
 ## D42 · Token de dispositivo
 
-- **Estado:** aprobada, se implementa en BE-04 (paso 9).
+- **Estado:** implementada (paso 9; migración `20261118180000_device_tokens`, `backend/src/modules/devices/` y borrado en `backend/src/auth/tokens.ts`).
+- **Detalle de implementación:** el token se valida sin recortar (1–512 caracteres del alfabeto de FCM/APNs, `[A-Za-z0-9_:.-]`; si no, `400`), para no guardar algo distinto de lo que mandó el cliente y para que un carácter de control no llegue a Postgres como un `500`. El registro toma el lock de la familia y exige sesión viva (si no, `401`), para que un `PUT` justo después del `logout` no deje un token huérfano. El borrado vive en la revocación de familia, así que lo cubren `logout`, la reutilización de un refresh, el refresh de un usuario inactivo y la gracia no disponible; `revokeAllUserFamilies` borra todos los del usuario. Para enviar (paso 11) solo cuentan tokens de usuarios activos con un refresh de su familia no revocado **y no vencido**. Rate limit por usuario con `RATE_LIMIT_REFRESH_MAX` / `RATE_LIMIT_REFRESH_WINDOW`.
+- **Riesgos aceptados y pendientes (revisión de seguridad, paso 9):**
+  - **Reasignación entre cuentas:** si un guardia conociera el token push de otro (no son públicos ni adivinables), al registrarlo le quitaría el push a ese otro guardia (FCM entrega al teléfono dueño del token, no al que lo registra). Se acepta: el caso legítimo (el teléfono cambia de cuenta) es más común y el SSE sigue siendo el canal principal. Mitigación futura: no reasignar si la sesión del dueño actual sigue viva.
+  - **Sin tope por sesión:** varios tokens pueden convivir en una misma familia hasta el `logout` (FCM rota tokens). Mitigación futura: una familia = un dispositivo, reemplazar el anterior.
+  - **Retención:** los tokens de familias que vencen sin revocarse no se borran (no se usan: `findLiveTokens` los excluye). Pendiente una limpieza periódica.
+  - **Baja de guardia (BE-06):** `deactivateGuard` (BE-02) pone `isActive = false` pero no llama a `revokeAllUserFamilies`; sus tokens quedan guardados aunque no se usen. Ya está en los pendientes de asignación de BE-06.
 - **Contexto:** `PUT /users/me/device-token` existe en `CTX:273` pero no en el front (D6 punto 3).
 - **Decisión:** **EXCEPCIÓN de contrato aprobada**, solo para el rol `guard` (minimización; agregar `protected_user` después no rompe nada). Tabla `device_tokens`: `id`, `user_id` (FK con cascada), `token` (texto único, máximo 512), `family_id` (el `sid` de la sesión que lo registró), `created_at`, `last_seen_at`; sin `platform` (CTX solo manda `{token}`). Upsert idempotente por `token`; si era de otro usuario se **reasigna**. Responde `null`. `logout` borra los tokens con `family_id = sid`; la baja (BE-06) borra todos; solo se envía a tokens cuya familia sigue viva.
-- **Consecuencias:** es la tercera ruta extra (junto a `POST /auth/refresh` y la foto, D30); `tests/unit/politicas-contrato.test.ts` deberá listarla en `EXTRAS`. Atiende el pendiente "`PUT /users/me/device-token`: no permitido para `admin`".
+- **Consecuencias:** es la tercera ruta extra (junto a `POST /auth/refresh` y la foto, D30); `tests/unit/politicas-contrato.test.ts` la lista en `EXTRAS`. Atiende el pendiente "`PUT /users/me/device-token`: no permitido para `admin`".
 
 ## D43 · `PushNotifier` y adaptador FCM
 

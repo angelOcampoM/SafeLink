@@ -74,7 +74,7 @@ El `message` de `OUTSIDE_GEOFENCE` es siempre ese (aunque falte la ubicación): 
 | `UNAUTHORIZED` | 401 | `Tu sesión terminó. Vuelve a iniciar sesión.` | Sin token, token inválido o vencido, sesión revocada (`sid`, D25), refresh inválido, usuario dado de baja. **Excepción:** en `POST /auth/session` solo falta de token, firma o algoritmo inválidos o token vencido dan 401; sesión revocada, usuario inactivo o `userId ≠ sub` dan `200` con `data: null` (D7, D25) | `errores.dart:47` |
 | `USER_BLOCKED` | 403 | `Tu cuenta está bloqueada temporalmente` | **Crear una alerta** estando bloqueado (no al iniciar sesión) | `errores.dart:26`, `memoria_alerta_usuario_repository.dart:23` |
 | `FORBIDDEN` **(EXCEPCIÓN, código nuevo)** | 403 | `No tienes permiso para realizar esta acción.` | Rol no permitido para la ruta o canal | decidido (D9) |
-| `TOO_MANY_REQUESTS` **(EXCEPCIÓN, código nuevo)** | 429 | `Demasiados intentos. Espera un momento e intenta de nuevo.` | Demasiados intentos por IP en `POST /auth/login` o `/auth/refresh`; incluye cabecera `Retry-After` | decidido (D29) |
+| `TOO_MANY_REQUESTS` **(EXCEPCIÓN, código nuevo)** | 429 | `Demasiados intentos. Espera un momento e intenta de nuevo.` | Demasiados intentos: por IP en `POST /auth/login` o `/auth/refresh`, y por usuario en las rutas que lo indican en §5 (alertas, ubicaciones, token de dispositivo); incluye cabecera `Retry-After` | decidido (D29) |
 | `NOT_FOUND` | 404 | Ver abajo | Recurso inexistente **o ajeno** (no se revela que existe); ruta inexistente | `errores.dart:43` |
 | `EMAIL_TAKEN` | 409 | `Ese correo ya está registrado` | Registro, alta de guardia o edición de guardia con correo ya usado | `errores.dart:22`, `memoria_admin_repository.dart:40,67` |
 | `ALERT_TAKEN` | 409 | `Otro guardia ya aceptó esta alerta` | Aceptar una alerta que ya no está en `searching` | `errores.dart:30`, `regla_alerta.dart:31` |
@@ -373,7 +373,7 @@ Resultado siempre ordenado por fecha de recepción (`receivedAt`) descendente (e
 
 ---
 
-## 5. Rutas (31 del front + 1 excepción)
+## 5. Rutas (31 del front + 3 excepciones: `/auth/refresh`, la foto y `/users/me/device-token`)
 
 Todas las rutas son relativas a `/api/v1` (D20).
 
@@ -394,10 +394,11 @@ Evidencia de las rutas: `safelink_service.dart:124-157`. Cliente: `nube_auth_rep
 | GET | `/auth/me` (`:148`) | autenticado (cualquier rol) | — | User actualizado (bloqueo, falsas alarmas) | — | U-02, G-01 | BE-01 (implementado) |
 | POST | `/auth/session` (`:149-152`) | Bearer, con **verificación propia** (no el hook general) | `{ "userId" }` (`.strict()`; texto de hasta 100 caracteres) | User, o `null` | `401 UNAUTHORIZED` solo si falta el token, la firma o el algoritmo no son válidos, o venció. `200` con `data: null` si el `sid` está revocado, el usuario está inactivo o `userId ≠ sub` (también si `userId` no es un UUID) | U-02 | BE-01 (implementado) |
 | PATCH | `/users/me/settings` (`:153-157`) | `protected_user` | `{ "volumeDoubleClickEnabled": boolean }` | User actualizado | — | U-05 | BE-02 (implementado) |
+| PUT | `/users/me/device-token` **(EXCEPCIÓN: no existe en el front, D42)** | `guard` | `{ "token" }` (`.strict()`; 1–512 caracteres del alfabeto de FCM/APNs, sin recortar) | `null` | `INVALID_STATE` (400, token inválido); `UNAUTHORIZED` (sesión ya revocada); `TOO_MANY_REQUESTS` (429, por usuario). Idempotente; si el token era de otra cuenta se reasigna. El token nunca se devuelve ni se registra | G-02 | BE-04 (implementado) |
 
 Notas:
 
-- `POST /auth/logout`: el front no manda cuerpo (`nube_auth_repository.dart:42`). El backend identifica la sesión por el claim `sid` del access token, revoca esa familia de refresh tokens y cierra sus streams SSE abiertos (D8, D25).
+- `POST /auth/logout`: el front no manda cuerpo (`nube_auth_repository.dart:42`). El backend identifica la sesión por el claim `sid` del access token, revoca esa familia de refresh tokens, borra los tokens de dispositivo registrados en esa sesión (D42) y cierra sus streams SSE abiertos (D8, D25).
 - El access JWT lleva `sub`, `role` y `sid` (id de la familia en `refresh_tokens`), firmado con HS256 (D25). Un `sid` revocado devuelve `401` de inmediato, sin esperar a que venza el token.
 - `POST /auth/refresh` (implementado, D25): el refresh es opaco (32 bytes de CSPRNG en base64url); en la base solo se guarda su SHA-256. Rotación en cada uso: el token presentado queda usado y se emite un sucesor. **Ventana de gracia** (`REFRESH_GRACE_SECONDS`, 0–60, default 5; 0 la desactiva): un token ya rotado, presentado dentro de la ventana, se acepta **una vez más** y emite un sucesor **nuevo** de la misma familia, sin revocarla (dentro de la gracia pueden coexistir dos sucesores vivos). Fuera de la ventana, o con la gracia ya consumida, es reutilización: se revoca **toda la familia** y se responde `401 UNAUTHORIZED`. Si el token rotado tenía un hermano de gracia sin usar, ese hermano se revoca. Cada sucesor vence a `min(now + JWT_REFRESH_EXPIRES_IN, inicio de la sesión + JWT_SESSION_MAX_AGE)` (vigencia deslizante con vida máxima absoluta, 90d por defecto); un refresh vencido o de una sesión que superó la vida máxima da `401` sin revocar la familia. Un `refreshToken` con forma inválida (no es base64url de 43 caracteres) da `401` sin consultar la base.
 - **Rate limit (D29):** `POST /auth/login` (10 por minuto) y `POST /auth/refresh` (30 por minuto), por IP, configurables; cuenta todos los intentos. Al excederse: `429` con `TOO_MANY_REQUESTS` y cabecera `Retry-After` (sin `X-RateLimit-*`). `POST /auth/register` se suma en BE-02.
@@ -595,7 +596,7 @@ Los valores de modo demo (`segundosEscalamientoDemo`, `segundosNuevaAlertaMin/Ma
 | `:id` validado como UUID; uno inválido responde `404 NOT_FOUND` | BE-01 (paso 4 en adelante) |
 | Rate limit en `POST /auth/login` y `/auth/refresh` con error `429 TOO_MANY_REQUESTS` (**implementado en BE-01 paso 5**, D29); en `POST /auth/register` (**pendiente, BE-02**); en `POST /alerts` (BE-03); en `PUT /guard/location` y `POST /alerts/:id/locations`, por usuario y acorde a `LOCATION_UPDATE_SECONDS` (BE-04 / BE-03) | BE-01 / BE-02 / BE-03 / BE-04 |
 | `GET /health` solo responde `{ "data": { "status": "ok" } }`, sin versión, base de datos ni detalles | BE-01 |
-| `PUT /users/me/device-token`: ruta sugerida por `context_desarrollo`, no existe en el front; si se implementa (BE-04), no permitida para el rol `admin` | BE-04 |
+| `PUT /users/me/device-token`: excepción de contrato (no existe en el front), **implementada en BE-04 paso 9 solo para el rol `guard`** (D42). Cuerpo `{ "token": string }` (1–512 caracteres del alfabeto de FCM/APNs), responde `{ "data": null }`; idempotente, el token nunca se devuelve ni se registra, rate limit por usuario | BE-04 |
 | El 404 de ruta inexistente refleja solo el path, sin query string | BE-01 |
 | La semilla solo corre con `NODE_ENV` `development` o `test`; se niega con `production` | BE-01 (paso 3) |
 | Prohibido registrar en los logs de la aplicación cuerpos, coordenadas, teléfonos, `password`, `accessToken` o `refreshToken` | BE-01 (paso 4 en adelante) |

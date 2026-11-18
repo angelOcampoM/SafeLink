@@ -84,6 +84,7 @@ model User {
   ignores       AlertIgnore[]
   statusChanges AlertStatusHistory[]
   refreshTokens RefreshToken[]
+  deviceTokens  DeviceToken[]
 
   @@map("users")
 }
@@ -198,4 +199,23 @@ model RefreshToken {
   @@index([userId])
   @@index([familyId])
   @@map("refresh_tokens")
+}
+
+// Token push del dispositivo del guardia (D42). Solo se envía a los que tienen la sesión viva.
+model DeviceToken {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  // Dato sensible: nunca se registra en logs ni se devuelve en una respuesta. Máximo 512 (CHECK).
+  token      String   @unique
+  // Sesión (sid) que lo registró; logout y revocación de la familia lo borran. Sin FK: la familia
+  // no es una fila propia, sino un valor repetido en refresh_tokens.
+  familyId   String   @map("family_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  lastSeenAt DateTime @default(now()) @map("last_seen_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+  @@map("device_tokens")
 }

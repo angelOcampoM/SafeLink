@@ -54,7 +54,7 @@ function expiry(now: Date, startedAt: Date, options: RefreshOptions): Date {
 }
 
 /** Advisory lock transaccional por familia; varias familias siempre en el mismo orden. */
-async function lockFamilies(tx: Db, familyIds: readonly string[]): Promise<void> {
+export async function lockFamilies(tx: Db, familyIds: readonly string[]): Promise<void> {
   const sorted = [...new Set(familyIds)].sort();
   for (const id of sorted) {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${id}, 0))`;
@@ -66,6 +66,8 @@ async function revokeFamilyLocked(tx: Db, familyId: string, now: Date): Promise<
     where: { familyId, revokedAt: null },
     data: { revokedAt: now },
   });
+  // D42: la sesión cerrada ya no recibe push (logout, reutilización, usuario inactivo).
+  await tx.deviceToken.deleteMany({ where: { familyId } });
 }
 
 /** Abre una sesión nueva: primer token de una familia nueva (family_id = sid). */
@@ -119,6 +121,8 @@ export async function revokeAllUserFamilies(
     const ids = families.map((f) => f.familyId);
     await lockFamilies(tx, ids);
     for (const id of ids) await revokeFamilyLocked(tx, id, now);
+    // D42: también los de familias que ya estaban revocadas (baja o cambio de contraseña).
+    await tx.deviceToken.deleteMany({ where: { userId } });
   });
 }
 

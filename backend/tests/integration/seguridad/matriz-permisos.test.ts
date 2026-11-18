@@ -58,6 +58,7 @@ const REALES = new Set([
   'POST /guard/alerts/:id/arrive',
   'GET /events/guard/alerts',
   'GET /events/guard/alerts/:id',
+  'PUT /users/me/device-token',
 ]);
 const ROLES: readonly Role[] = ['protected_user', 'guard', 'admin'];
 

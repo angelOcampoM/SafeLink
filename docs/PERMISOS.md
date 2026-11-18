@@ -38,7 +38,7 @@ Códigos: sin token, token inválido, sesión revocada o usuario inactivo = `401
 
 ## 3. Matriz rol × ruta
 
-Leyenda: ✅ permitido (sujeto a la regla de la última columna), 401 = no autenticado, 403 = rol incorrecto. Las rutas son relativas a `/api/v1`. 37 entradas: 31 rutas del front, `POST /auth/refresh` (excepción aprobada, D8), `GET /alerts/:id/photo` (excepción, D30) y 4 canales SSE.
+Leyenda: ✅ permitido (sujeto a la regla de la última columna), 401 = no autenticado, 403 = rol incorrecto. Las rutas son relativas a `/api/v1`. 38 entradas: 31 rutas del front, `POST /auth/refresh` (excepción aprobada, D8), `GET /alerts/:id/photo` (excepción, D30), `PUT /users/me/device-token` (excepción, D42) y 4 canales SSE.
 
 La columna "Regla de propiedad o visibilidad" describe lo que define el contrato y las decisiones (D9, D22, D23); se implementa en la tarjeta indicada. Un recurso ajeno responde `404 NOT_FOUND`, nunca 403.
 
@@ -81,6 +81,7 @@ La columna "Regla de propiedad o visibilidad" describe lo que define el contrato
 | 35 | `GET /events/guard/alerts/:id` (SSE) | 401 | 403 | ✅ | 403 | `assertGuardCanSee`; si deja de ser visible, evento `NOT_FOUND` y cierre | BE-04 |
 | 36 | `GET /events/admin/alerts/escalated` (SSE) | 401 | 403 | 403 | ✅ | Solo alertas `escalated` | BE-05 |
 | 37 | `GET /alerts/:id/photo` | ✅ | ✅ | ✅ | ✅ | Pública; la autoriza la firma HMAC de la URL, que solo emite el servidor a quien puede ver la alerta. Cualquier fallo, 404 (D30) | BE-03 |
+| 38 | `PUT /users/me/device-token` | 401 | 403 | ✅ | 403 | Solo el token del propio guardia, ligado a su sesión (`sid`); el token nunca se devuelve ni se registra. Rate limit por usuario (D42) | BE-04 |
 
 En los canales SSE, 401 y 403 se responden como HTTP normal antes de abrir el stream (D22). Nunca se acepta el token en el query string.
 

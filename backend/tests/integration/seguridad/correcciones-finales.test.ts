@@ -48,6 +48,7 @@ const REALES = new Set([
   'POST /guard/alerts/:id/arrive',
   'GET /events/guard/alerts',
   'GET /events/guard/alerts/:id',
+  'PUT /users/me/device-token',
 ]);
 
 describe('guards: ruta con roles sin authenticate decorado', () => {
@@ -226,8 +227,8 @@ describe('recorrido de rutas registradas', () => {
     const claves = sinHead().map((r) => `${r.metodo} ${r.url.slice(API_PREFIX.length)}`);
     expect(new Set(claves).size).toBe(claves.length);
     expect([...claves].sort()).toEqual(Object.keys(ROUTE_POLICIES).sort());
-    // 36 de BE-01 + GET /alerts/:id/photo (BE-03, D30).
-    expect(claves).toHaveLength(37);
+    // 36 de BE-01 + GET /alerts/:id/photo (BE-03, D30) + PUT /users/me/device-token (BE-04, D42).
+    expect(claves).toHaveLength(38);
   });
 
   it('solo /health queda fuera del prefijo', () => {
