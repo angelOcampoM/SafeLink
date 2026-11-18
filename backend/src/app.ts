@@ -104,6 +104,8 @@ export function buildApp(config: Config, deps: AppDependencies = {}): FastifyIns
       photoUrl: (alertId: string, photoKey: string | null) =>
         photoKey ? photoUrls.url(alertId, photoKey) : null,
       guardMetersPerMinute: config.GUARD_METERS_PER_MINUTE,
+      etaRoundingSeconds: config.ETA_ROUNDING_SECONDS,
+      guardGridMeters: config.ETA_GUARD_GRID_METERS,
     };
     // Un solo cableado de avisos de alerta para los servicios del usuario y del guardia.
     const onAlertChanged = ({ userId, alertId, dispatch }: AlertChange): void => {
@@ -121,6 +123,7 @@ export function buildApp(config: Config, deps: AppDependencies = {}): FastifyIns
       prisma,
       serialize,
       timeZone: config.TZ_SHIFTS,
+      geofenceMeters: config.GEOFENCE_METERS,
       waitMetersPerMinute: config.WAIT_METERS_PER_MINUTE,
       onUserAlertChanged: (userId) => bus.publish(alertsTopicForUser(userId)),
       onGuardChanged: (guardId) => bus.publish(guardTopic(guardId)),

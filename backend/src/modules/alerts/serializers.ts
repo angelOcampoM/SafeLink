@@ -1,7 +1,8 @@
 // Forma `AlertaJson` del front (nube_mapeadores.dart:117-165, contrato 4.4). Se envían
 // SIEMPRE todas las claves (con null si no aplican). Campo por campo: jamás spread del
 // registro, para que un campo interno (receivedAt, photoKey, statusChangedAt) no se filtre.
-import { ATTENDED_STATUSES, etaSeconds, isActiveStatus } from '../../domain/alert-rules.js';
+import { ATTENDED_STATUSES, etaSeconds, isActiveStatus, roundEtaUp } from '../../domain/alert-rules.js';
+import { snapToGrid } from '../../domain/geo.js';
 import { isAssignedTo } from '../../domain/guard-visibility.js';
 import type {
   AlertStatus,
@@ -76,6 +77,16 @@ export interface SerializeOptions {
   photoUrl: (alertId: string, photoKey: string | null) => string | null;
   /** GUARD_METERS_PER_MINUTE para el ETA (D27). */
   guardMetersPerMinute: number;
+  /**
+   * ETA_ROUNDING_SECONDS (D47): solo la vista del dueño. Obligatorio para que ningún servicio
+   * nuevo le entregue al dueño el ETA exacto por olvido.
+   */
+  etaRoundingSeconds: number;
+  /**
+   * ETA_GUARD_GRID_METERS (D47): tamaño de la celda a cuyo centro se ajusta la posición del
+   * guardia antes del ETA del dueño. Obligatorio por el mismo motivo que `etaRoundingSeconds`.
+   */
+  guardGridMeters: number;
 }
 
 const iso = (d: Date | null): string | null => (d ? d.toISOString() : null);
@@ -113,7 +124,17 @@ export function serializeOwnAlert(alert: AlertRecord, options: SerializeOptions)
     escalationReason: alert.escalationReason,
     resolution: alert.resolution,
     adminNote: alert.adminNote,
-    etaSeconds: etaSeconds(alert.status, guardLocation, location, options.guardMetersPerMinute),
+    // D47: al dueño se le ajusta la posición del guardia al centro de su celda y el ETA se
+    // redondea hacia arriba; el guardia y el admin reciben el valor exacto.
+    etaSeconds: roundEtaUp(
+      etaSeconds(
+        alert.status,
+        guardLocation ? snapToGrid(guardLocation, options.guardGridMeters) : null,
+        location,
+        options.guardMetersPerMinute,
+      ),
+      options.etaRoundingSeconds,
+    ),
   };
 }
 

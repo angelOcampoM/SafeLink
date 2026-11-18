@@ -45,6 +45,7 @@ const REALES = new Set([
   'GET /guard/alerts/:id',
   'POST /guard/alerts/:id/accept',
   'POST /guard/alerts/:id/ignore',
+  'POST /guard/alerts/:id/arrive',
   'GET /events/guard/alerts',
   'GET /events/guard/alerts/:id',
 ]);
@@ -92,6 +93,10 @@ let ejecuciones = 0;
 const registro: Registro[] = [];
 
 const GUARD_EMAIL = 'final-guardia@prueba.test';
+const ADMIN_EMAIL = 'final-admin@prueba.test';
+// Ruta que sigue siendo stub después de BE-04 (BE-05 la implementa: entonces hay que moverla a otra).
+const RUTA_STUB = 'POST /admin/alerts/:id/resolve';
+let adminToken = '';
 
 beforeAll(async () => {
   db = await abrirDb();
@@ -104,6 +109,9 @@ beforeAll(async () => {
       passwordHash,
       role: 'guard',
     },
+  });
+  await db.prisma.user.create({
+    data: { name: 'Final admin', email: ADMIN_EMAIL, phone: '7771234567', passwordHash, role: 'admin' },
   });
   app = buildApp(configPrueba({ RATE_LIMIT_REFRESH_MAX: '3' }), { prisma: db.prisma });
   // Se agrega después de registerRouteGuards: ve cada ruta ya con los hooks del guard aplicados.
@@ -122,7 +130,7 @@ beforeAll(async () => {
           method: metodo as 'GET',
           url: ruta,
           handler: async () => {
-            if (clave === 'POST /guard/alerts/:id/arrive') ejecuciones += 1;
+            if (clave === RUTA_STUB) ejecuciones += 1;
             return ok({ ruta: clave });
           },
         });
@@ -133,6 +141,7 @@ beforeAll(async () => {
   await app.ready();
   const res = await login(app, GUARD_EMAIL);
   guardToken = res.body.data.accessToken as string;
+  adminToken = (await login(app, ADMIN_EMAIL)).body.data.accessToken as string;
 }, 120_000);
 
 afterAll(async () => {
@@ -159,25 +168,26 @@ describe('POST /auth/session con rate limit (comparte el límite de refresh)', (
   });
 });
 
-// Stub de larga vida: POST /guard/alerts/:id/arrive (G-07) es la última ruta del guardia en
-// implementarse. GET /guard/me dejó de ser stub en BE-04 paso 1, por eso cambió la ruta de control.
+// Stub de larga vida: POST /admin/alerts/:id/resolve (A-04, BE-05). POST /guard/alerts/:id/arrive (G-07)
+// fue el stub hasta BE-04 paso 7 y ya es real; por eso el token de estas pruebas es el de admin.
+// Al implementar BE-05 hay que mover RUTA_STUB y estas variantes a otra ruta que siga siendo stub.
 const ID_ALERTA = '3f2b8c1e-9a4d-4e6b-8f10-2c7d5a9b0e11';
-const ARRIVE = `guard/alerts/${ID_ALERTA}/arrive`;
+const RUTA = `admin/alerts/${ID_ALERTA}/resolve`;
 
-describe('normalización de rutas: nada de lo que parezca /api/v1/guard/alerts/:id/arrive llega al handler', () => {
+describe('normalización de rutas: nada de lo que parezca /api/v1/admin/alerts/:id/resolve llega al handler', () => {
   const variantes = [
-    `/API/V1/${ARRIVE}`,
-    `/api/v1//${ARRIVE}`,
-    `/api/v1/${ARRIVE}/`,
-    `/api/v1/guard%2Falerts/${ID_ALERTA}/arrive`,
-    `/api/v1/GUARD/alerts/${ID_ALERTA}/arrive`,
-    `/api/v1/${ARRIVE}/%2e`,
-    `/api/v1/./${ARRIVE}`,
+    `/API/V1/${RUTA}`,
+    `/api/v1//${RUTA}`,
+    `/api/v1/${RUTA}/`,
+    `/api/v1/admin%2Falerts/${ID_ALERTA}/resolve`,
+    `/api/v1/ADMIN/alerts/${ID_ALERTA}/resolve`,
+    `/api/v1/${RUTA}/%2e`,
+    `/api/v1/./${RUTA}`,
   ];
 
-  it.each(variantes)('POST %s con token de guard -> 404 y el stub no se ejecuta', async (ruta) => {
+  it.each(variantes)('POST %s con token de admin -> 404 y el stub no se ejecuta', async (ruta) => {
     const antes = ejecuciones;
-    const res = await request(app.server).post(ruta).set('Authorization', `Bearer ${guardToken}`).send({});
+    const res = await request(app.server).post(ruta).set('Authorization', `Bearer ${adminToken}`).send({});
     expect(res.status).toBe(404);
     expect(res.body.error.code).toBe('NOT_FOUND');
     expect(ejecuciones).toBe(antes);
@@ -186,8 +196,8 @@ describe('normalización de rutas: nada de lo que parezca /api/v1/guard/alerts/:
   it('control: la ruta exacta sí ejecuta el stub', async () => {
     const antes = ejecuciones;
     const res = await request(app.server)
-      .post(`${API_PREFIX}/${ARRIVE}`)
-      .set('Authorization', `Bearer ${guardToken}`)
+      .post(`${API_PREFIX}/${RUTA}`)
+      .set('Authorization', `Bearer ${adminToken}`)
       .send({});
     expect(res.status).toBe(200);
     expect(ejecuciones).toBe(antes + 1);
@@ -195,15 +205,15 @@ describe('normalización de rutas: nada de lo que parezca /api/v1/guard/alerts/:
 
   it('OPTIONS anónimo sobre una ruta con roles -> 404 (nunca 200)', async () => {
     const antes = ejecuciones;
-    const res = await request(app.server).options(`${API_PREFIX}/${ARRIVE}`);
+    const res = await request(app.server).options(`${API_PREFIX}/${RUTA}`);
     expect(res.status).toBe(404);
     expect(ejecuciones).toBe(antes);
   });
 
-  it('OPTIONS con token de guard también -> 404', async () => {
+  it('OPTIONS con token de admin también -> 404', async () => {
     const res = await request(app.server)
-      .options(`${API_PREFIX}/${ARRIVE}`)
-      .set('Authorization', `Bearer ${guardToken}`);
+      .options(`${API_PREFIX}/${RUTA}`)
+      .set('Authorization', `Bearer ${adminToken}`);
     expect(res.status).toBe(404);
   });
 });

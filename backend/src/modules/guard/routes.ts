@@ -58,6 +58,11 @@ export async function guardRoutes(app: FastifyInstance, options: GuardRoutesOpti
     ok(await service.accept(request.user.id, alertId(request))),
   );
 
+  // G-07: sin cuerpo; la ubicación del guardia es la última que mandó por PUT /guard/location.
+  app.post('/guard/alerts/:id/arrive', async (request) =>
+    ok(await service.arrive(request.user.id, alertId(request))),
+  );
+
   // G-03 (extra del front): idempotente; 200 con data null (safelink_service.dart:195).
   app.post('/guard/alerts/:id/ignore', async (request) =>
     ok(await service.ignore(request.user.id, alertId(request))),

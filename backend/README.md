@@ -50,6 +50,7 @@ Para levantar todo en contenedores: `docker compose up --build`. Para apagar: `d
 - `POSTGRES_PASSWORD` va dentro de la URL sin codificar: genérala solo con caracteres seguros, por ejemplo `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
 - `docker-compose.yml` exige `JWT_SECRET` (`:?`) incluso para `docker compose up -d db` y para los scripts `db:test:*`: defínelo en `.env` antes de levantar la base. Genera uno fuerte con el comando de la sección de secretos; nunca uno débil solo para destrabar.
 - Una variable vacía en `.env` (por ejemplo `GEOFENCE_METERS=`) hace que la API no arranque: bórrala o dale valor.
+- `ETA_ROUNDING_SECONDS` (60 por defecto, mínimo 30) redondea hacia arriba el ETA que ve el usuario protegido y `ETA_GUARD_GRID_METERS` (250, mínimo 100) ajusta la posición del guardia al centro de una celda antes de calcularlo, para dificultar que deduzca su ubicación exacta (D47). Guardia y admin ven el valor exacto.
 - Prisma 7: la URL de la base se lee de `prisma.config.ts` (carga `backend/.env`). El cliente usa el adaptador `pg` (`src/db/prisma.ts`).
 - Semilla: mismas cuentas del front (contraseña `SafeLink1`), turnos relativos a la hora de ejecución, alertas activas en cada estado. Cada corrida la reinicia.
 - Docker Compose: el servicio `migrate` aplica las migraciones y termina; la API espera a que acabe.

@@ -5,8 +5,10 @@
 import {
   ACTIVE_STATUSES,
   ATTENDED_STATUSES,
+  ALERT_NOT_IN_ATTENDANCE,
   GUARD_ALREADY_ATTENDING,
 } from '../../domain/alert-rules.js';
+import { isWithinRadius, metersRemaining } from '../../domain/geo.js';
 import { guardMetrics, type GuardMetrics } from '../../domain/metrics.js';
 import {
   isAlertAvailableToGuard,
@@ -17,10 +19,10 @@ import {
 import { prioritizeAlerts, type PrioritizedAlert } from '../../domain/priority.js';
 import { esGuardiaOcupado } from '../../db/errores-prisma.js';
 import type { PrismaClient } from '../../db/prisma.js';
-import { AppError, alertTaken, invalidState, notFound } from '../../errors/app-error.js';
+import { AppError, alertTaken, invalidState, notFound, outsideGeofence } from '../../errors/app-error.js';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { AlertStatus, Role } from '../../generated/prisma/enums.js';
-import { assertGuardCanSee } from '../../security/ownership.js';
+import { assertAssignedGuard, assertGuardCanSee } from '../../security/ownership.js';
 import { ALERT_NOT_FOUND, type AlertChange } from '../alerts/service.js';
 import {
   ALERT_INCLUDE,
@@ -35,6 +37,8 @@ export interface GuardServiceDeps {
   serialize: SerializeOptions;
   /** Zona horaria IANA de los turnos (config TZ_SHIFTS). */
   timeZone: string;
+  /** GEOFENCE_METERS: radio en que se puede registrar la llegada (G-07). */
+  geofenceMeters: number;
   /** WAIT_METERS_PER_MINUTE: peso de la espera en el orden del listado. */
   waitMetersPerMinute: number;
   /** Reloj inyectable para las pruebas. */
@@ -57,7 +61,7 @@ const historyWhere = (guardId: string): Prisma.AlertWhereInput => ({
 });
 
 export function createGuardService(deps: GuardServiceDeps) {
-  const { prisma, serialize, timeZone, waitMetersPerMinute } = deps;
+  const { prisma, serialize, timeZone, geofenceMeters, waitMetersPerMinute } = deps;
   const now = deps.now ?? (() => new Date());
 
   /**
@@ -120,7 +124,7 @@ export function createGuardService(deps: GuardServiceDeps) {
       })) !== null;
     const location =
       alert.lat !== null && alert.lng !== null ? { lat: alert.lat, lng: alert.lng } : null;
-    return { alert, guard: toVisibilityGuard(user, profile), ignored, location };
+    return { alert, guard: toVisibilityGuard(user, profile), profile, ignored, location };
   }
 
   return {
@@ -315,6 +319,65 @@ export function createGuardService(deps: GuardServiceDeps) {
       // Después del commit: el dueño la ve aceptada y a los demás guardias les sale del listado.
       deps.onAlertChanged?.({ userId: accepted.userId, alertId, dispatch: true });
       return serializeGuardAlert(accepted, guardId, serialize);
+    },
+
+    /**
+     * G-07 (D40): el guardia registra su llegada. Orden de errores: 404 (no es suya o no existe,
+     * sin distinguirlas) -> 409 INVALID_STATE (es suya pero ya no está en `in_progress`) -> 422
+     * OUTSIDE_GEOFENCE. Así un guardia ajeno nunca ve `remainingMeters` ni un 409. La distancia
+     * sale de su última ubicación guardada (PUT /guard/location) y de la ubicación actual de la
+     * alerta; el borde exacto cuenta como dentro (regla_geocerca.dart: distancia <= radio).
+     * Sin ubicación de alguno de los dos (D37; una alerta en curso siempre tiene la suya) se
+     * responde 422 con `remainingMeters: null`. Al dueño le avisa para que pueda confirmar (U-09).
+     */
+    async arrive(guardId: string, alertId: string): Promise<AlertJson> {
+      const { alert, profile, location } = await loadVisibilityContext(guardId, alertId);
+      try {
+        assertAssignedGuard(alert, { id: guardId });
+      } catch (error) {
+        // Mismo texto que "no existe" (D40); el 404 genérico de ownership.ts lleva otro.
+        if (error instanceof AppError && error.code === 'NOT_FOUND') throw notFound(ALERT_NOT_FOUND);
+        throw error;
+      }
+      if (alert.status !== AlertStatus.in_progress) throw invalidState(ALERT_NOT_IN_ATTENDANCE);
+
+      const guardLocation =
+        profile.lastLocationLat !== null && profile.lastLocationLng !== null
+          ? { lat: profile.lastLocationLat, lng: profile.lastLocationLng }
+          : null;
+      // Sin alguna de las dos ubicaciones la distancia es infinita: remainingMeters sale null.
+      if (!guardLocation || !location) throw outsideGeofence(Number.POSITIVE_INFINITY);
+      if (!isWithinRadius(location, geofenceMeters, guardLocation)) {
+        throw outsideGeofence(metersRemaining(guardLocation, location, geofenceMeters));
+      }
+
+      const at = now();
+      const arrived = await prisma.$transaction(async (tx) => {
+        // Baja concurrente (BE-06): igual que accept, se bloquea al guardia y se revisa que siga activo.
+        const active = await tx.$queryRaw<{ id: string }[]>`
+          SELECT id::text AS id FROM users WHERE id = ${guardId}::uuid AND is_active FOR SHARE`;
+        if (active.length === 0) throw notFound(ALERT_NOT_FOUND);
+
+        // Solo pasa si sigue en curso y asignada a él (la escalada o una liberación pudo ganar).
+        const { count } = await tx.alert.updateMany({
+          where: { id: alertId, status: AlertStatus.in_progress, guardId },
+          data: { status: AlertStatus.guard_arrived, arrivedAt: at, statusChangedAt: at },
+        });
+        if (count === 0) throw invalidState(ALERT_NOT_IN_ATTENDANCE);
+        await tx.alertStatusHistory.create({
+          data: {
+            alertId,
+            fromStatus: AlertStatus.in_progress,
+            toStatus: AlertStatus.guard_arrived,
+            actorId: guardId,
+            at,
+          },
+        });
+        return tx.alert.findUniqueOrThrow({ where: { id: alertId }, include: ALERT_INCLUDE });
+      });
+      // Después del commit: el dueño ve la llegada. No estaba en `searching`, el despacho no cambia.
+      deps.onAlertChanged?.({ userId: arrived.userId, alertId, dispatch: false });
+      return serializeGuardAlert(arrived, guardId, serialize);
     },
 
     /**

@@ -68,6 +68,11 @@ export const envSchema = z.object({
   LOCATION_UPDATE_SECONDS: entero(5),
   WAIT_METERS_PER_MINUTE: entero(100),
   GUARD_METERS_PER_MINUTE: entero(250),
+  // D47: el ETA que ve el dueño se redondea hacia arriba a este múltiplo (segundos) (mínimo 30) y se calcula
+  // con la posición del guardia ajustada al centro de una celda de ETA_GUARD_GRID_METERS (mínimo 100).
+  // Redondeo + celda dificultan, no eliminan, deducir al guardia con ubicaciones falsas: solo revelan la celda.
+  ETA_ROUNDING_SECONDS: entero(60).pipe(z.number().min(30)),
+  ETA_GUARD_GRID_METERS: entero(250).pipe(z.number().min(100)),
   COVERAGE_RADIUS_MIN_METERS: entero(500),
   COVERAGE_RADIUS_MAX_METERS: entero(10000),
   ADMIN_NOTE_MAX_LENGTH: entero(300),

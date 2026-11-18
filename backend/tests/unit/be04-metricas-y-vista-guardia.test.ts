@@ -100,6 +100,8 @@ const OTRO = '99999999-9999-4999-8999-999999999999';
 const OPCIONES = {
   photoUrl: (_id: string, key: string | null) => (key ? `/foto/${key}` : null),
   guardMetersPerMinute: 250,
+  etaRoundingSeconds: 1,
+  guardGridMeters: 0, // sin celda: estas pruebas esperan el ETA exacto (D47 se prueba en be04-llegada-eta)
 };
 
 const CLAVES_ALERTA_JSON = [

@@ -1,7 +1,7 @@
 # SafeLink — Registro de decisiones
 
 **Historias que cubre:** U-01 a U-09, G-01 a G-07, A-01 a A-08 (decisiones transversales del backend).
-**Tarjeta:** BE-01 (paso 2; actualizado en el paso 5: D25, D28 y D29); BE-03 (D30, D31); BE-04 (D32 a D46, paso 1). Varias decisiones se implementan en BE-02 a BE-07; se indica en cada una.
+**Tarjeta:** BE-01 (paso 2; actualizado en el paso 5: D25, D28 y D29); BE-03 (D30, D31); BE-04 (D32 a D47). Varias decisiones se implementan en BE-02 a BE-07; se indica en cada una.
 **Fecha de todas las decisiones:** 2026-11-10. **Decidido por:** el equipo / la responsable del backend.
 
 Formato de cada decisión: contexto, opciones, decisión, consecuencias. Las rutas de archivo del front son relativas a `lib/`. Si el código y este documento discrepan, se reporta; no se corrige a ciegas.
@@ -322,7 +322,7 @@ G-03 **ya dice** "doble clic de volumen" (`docs/HISTORIAS_DE_USUARIO.md:167`). L
 
 ## D37 · Guardia sin última ubicación
 
-- **Estado:** implementada en parte (paso 3: listado, `backend/src/modules/guard/service.ts`); `arrive` en el paso 7.
+- **Estado:** implementada (paso 3: listado; paso 7: `arrive` responde `422` con `remainingMeters: null` sin última ubicación; `backend/src/modules/guard/service.ts`).
 - **Decisión:** en el listado, `distanceMeters` usa `lastLocation ?? centro de cobertura` (`docs/API_CONTRATO.md:301`); `etaSeconds` queda `null` (D27, que no usa el centro de cobertura). `arrive` responde `422 OUTSIDE_GEOFENCE` con `remainingMeters: null` si no hay última ubicación.
 - **Consecuencias:** una `lastLocation` vieja o falsificada que permita marcar llegada se **acepta como riesgo documentado**: la reporta el cliente y el backend no puede verificarla.
 
@@ -342,7 +342,7 @@ G-03 **ya dice** "doble clic de volumen" (`docs/HISTORIAS_DE_USUARIO.md:167`). L
 
 ## D40 · Mensajes y respuestas del guardia
 
-- **Estado:** el `404` (paso 1) y el mensaje de D36 (paso 5) están **implementados**; el `409` de `arrive` se implementa en el paso 7.
+- **Estado:** implementada (404 en el paso 1, mensaje de D36 en el paso 5 y `409` de `arrive` en el paso 7).
 - **Decisión:**
   - `404 NOT_FOUND` «La alerta ya no existe», con **cuerpo idéntico** para alerta inexistente, no visible, ajena, UUID mal formado y guardia sin perfil. No hay `403` ni `409` que permitan enumerar (pendiente "Recurso ajeno = 404").
   - `409 INVALID_STATE` de `arrive` fuera de `in_progress`: «Esta alerta ya no está en atención».
@@ -392,6 +392,17 @@ G-03 **ya dice** "doble clic de volumen" (`docs/HISTORIAS_DE_USUARIO.md:167`). L
 - **Estado:** aprobada, se implementa en BE-04 (paso 8).
 - **Decisión:** las pruebas de BE-03 que simulaban al guardia escribiendo directo en la base (`alertas-usuario.test.ts`) se migran a las **rutas reales** del guardia, **sin debilitar ninguna aserción**.
 - **Consecuencias:** si alguna aserción no se puede conservar con la ruta real, se reporta en lugar de relajarla.
+
+## D47 · ETA redondeado en la vista del dueño
+
+- **Estado:** implementada (paso 7; `snapToGrid` en `backend/src/domain/geo.ts` y `roundEtaUp` en `backend/src/domain/alert-rules.ts`, aplicados en `serializeOwnAlert`).
+- **Contexto:** la revisión de seguridad del paso 2 encontró que, con una alerta `in_progress`, el usuario podía mandar ubicaciones inventadas (`POST /alerts/:id/locations`) y leer `etaSeconds` (≈ 4 m por segundo de ETA) para triangular la posición exacta del guardia, ahora en tiempo real. Contradice "el usuario ve el ETA, no la ubicación del guardia".
+- **Decisión (aprobada por el usuario):** en la vista del **dueño** (REST y `alerts/active`):
+  1. La última ubicación del guardia se ajusta al **centro de una celda** de `ETA_GUARD_GRID_METERS` (250 por defecto, mínimo 100; `snapToGrid` en `backend/src/domain/geo.ts`) antes de calcular el ETA.
+  2. El resultado se redondea **hacia arriba** a un múltiplo de `ETA_ROUNDING_SECONDS` (60 por defecto, mínimo 30). `0` sigue en `0` y `null` en `null`; sigue siendo entero.
+  Las vistas del guardia y del admin conservan el valor exacto. Los dos campos son obligatorios en `SerializeOptions`, para que ningún servicio nuevo entregue el ETA exacto al dueño por olvido.
+- **Por qué los dos:** la revisión de seguridad mostró que redondear solo la salida no basta: con una búsqueda binaria sobre el punto donde cambia el escalón (~25-30 ubicaciones falsas, ~1 min con el límite actual) se recupera la posición exacta. Con la celda, esa búsqueda solo revela el centro de la celda.
+- **Consecuencias:** el contrato no cambia (el campo sigue siendo entero). Riesgo residual aceptado: el dueño puede saber en qué celda de ~250 m está el guardia, y el abuso es visible para el guardia (ve "saltar" la ubicación de la alerta). Además, como la cuadrícula es fija y cada `PUT /guard/location` empuja `alerts/active`, un dueño que deja fija su ubicación puede notar el momento en que el guardia cruza el borde de una celda y fijar esa coordenada con un margen de ~20 m (o la que marque el jitter del GPS si el guardia está quieto junto a un borde). Mitigación futura si hiciera falta: histéresis al cambiar de celda, o publicar el ETA del dueño solo cuando cambie el valor ya redondeado. Se descartaron rechazar ubicaciones en `in_progress` (rompe U-07) y congelar el ETA del dueño hasta la siguiente ubicación del guardia (más invasivo).
 
 ## Pendientes de seguridad para tarjetas siguientes
 

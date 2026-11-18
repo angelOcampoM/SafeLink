@@ -55,6 +55,7 @@ const REALES = new Set([
   'GET /guard/alerts/:id',
   'POST /guard/alerts/:id/accept',
   'POST /guard/alerts/:id/ignore',
+  'POST /guard/alerts/:id/arrive',
   'GET /events/guard/alerts',
   'GET /events/guard/alerts/:id',
 ]);

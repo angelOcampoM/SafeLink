@@ -6,7 +6,8 @@
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../../../src/app.js';
-import { etaSeconds } from '../../../src/domain/alert-rules.js';
+import { etaSeconds, roundEtaUp } from '../../../src/domain/alert-rules.js';
+import { snapToGrid } from '../../../src/domain/geo.js';
 import {
   alertTopic,
   alertsTopicForUser,
@@ -256,15 +257,22 @@ describe('PUT /guard/location: D31, el dueño de la alerta en curso recibe el ET
 
     expect((await put({ location: NUEVA })).status).toBe(200);
     const e = (await c.siguiente()) as { data: { etaSeconds: number | null; status: string } };
-    const esperado = etaSeconds('in_progress', NUEVA, CENTRO, configPrueba().GUARD_METERS_PER_MINUTE);
-    expect(esperado).toBeGreaterThan(0);
+    const { ETA_ROUNDING_SECONDS: paso, ETA_GUARD_GRID_METERS: celda, GUARD_METERS_PER_MINUTE: ritmo } = configPrueba();
+    const exacto = etaSeconds('in_progress', NUEVA, CENTRO, ritmo);
+    expect(exacto).toBeGreaterThan(0);
     expect(e.data.status).toBe('in_progress');
+    // D47: el dueño ve el ETA de la posición ajustada al centro de la celda, redondeado hacia arriba, no el exacto.
+    const esperado = roundEtaUp(etaSeconds('in_progress', snapToGrid(NUEVA, celda), CENTRO, ritmo), paso) as number;
+    expect(esperado % paso).toBe(0);
+    expect(e.data.etaSeconds).not.toBe(exacto); // el caso sirve: el exacto no coincide
     expect(e.data.etaSeconds).toBe(esperado);
 
     // Un segundo movimiento (más cerca) vuelve a publicar, con un ETA menor.
     expect((await put({ location: { lat: 18.8402, lng: -99.18 } })).status).toBe(200);
     const e2 = (await c.siguiente()) as { data: { etaSeconds: number } };
-    expect(e2.data.etaSeconds).toBeLessThan(esperado as number);
+    const cerca = etaSeconds('in_progress', snapToGrid({ lat: 18.8402, lng: -99.18 }, celda), CENTRO, ritmo);
+    expect(e2.data.etaSeconds).toBe(roundEtaUp(cerca, paso));
+    expect(e2.data.etaSeconds).toBeLessThan(esperado);
   });
 
   describe('con un bus espía', () => {

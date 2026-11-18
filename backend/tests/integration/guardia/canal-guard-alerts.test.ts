@@ -9,7 +9,7 @@ import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { haversineMeters } from '../../../src/domain/geo.js';
 import { createGuardService } from '../../../src/modules/guard/service.js';
-import { MSG_UNAUTHORIZED, PASSWORD, crearEntorno, hasherPrueba, login, type Entorno } from '../auth/helpers.js';
+import { MSG_UNAUTHORIZED, PASSWORD, configPrueba, crearEntorno, hasherPrueba, login, type Entorno } from '../auth/helpers.js';
 import { correoUnico, crearAlerta, crearUsuario } from '../db/helpers.js';
 import { abrirSse, type ConexionSse } from '../sse-helpers.js';
 
@@ -555,8 +555,9 @@ describe('listAvailable con reloj inyectado (turno que cruza medianoche, D1, D22
   const servicio = (ahora: Date) =>
     createGuardService({
       prisma: env.prisma,
-      serialize: { photoUrl: () => null, guardMetersPerMinute: 100 },
+      serialize: { photoUrl: () => null, guardMetersPerMinute: 100, etaRoundingSeconds: configPrueba().ETA_ROUNDING_SECONDS, guardGridMeters: configPrueba().ETA_GUARD_GRID_METERS },
       timeZone: ZONA,
+      geofenceMeters: configPrueba().GEOFENCE_METERS,
       waitMetersPerMinute: 100,
       now: () => ahora,
     });
