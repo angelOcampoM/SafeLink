@@ -14,7 +14,7 @@ import {
   isAlertAvailableToGuard,
   isAssignedTo,
   isAlertVisibleToGuard,
-  type VisibilityGuard,
+  toVisibilityGuard,
 } from '../../domain/guard-visibility.js';
 import { prioritizeAlerts, type PrioritizedAlert } from '../../domain/priority.js';
 import { esGuardiaOcupado } from '../../db/errores-prisma.js';
@@ -75,34 +75,6 @@ export function createGuardService(deps: GuardServiceDeps) {
     });
     if (!user?.guardProfile) throw notFound(message);
     return { user, profile: user.guardProfile };
-  }
-
-  /** Datos del guardia que decide la visibilidad (D22); un solo armado para todos los usos. */
-  function toVisibilityGuard(
-    user: { id: string; isActive: boolean },
-    profile: {
-      shiftStart: string;
-      shiftEnd: string;
-      coverageCenterLat: number | null;
-      coverageCenterLng: number | null;
-      coverageRadiusMeters: number | null;
-    },
-  ): VisibilityGuard {
-    return {
-      id: user.id,
-      active: user.isActive,
-      shiftStart: profile.shiftStart,
-      shiftEnd: profile.shiftEnd,
-      coverage:
-        profile.coverageCenterLat !== null &&
-        profile.coverageCenterLng !== null &&
-        profile.coverageRadiusMeters !== null
-          ? {
-              center: { lat: profile.coverageCenterLat, lng: profile.coverageCenterLng },
-              radiusMeters: profile.coverageRadiusMeters,
-            }
-          : null,
-    };
   }
 
   /**

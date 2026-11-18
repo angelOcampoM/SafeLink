@@ -8,7 +8,37 @@ export interface DevicesServiceDeps {
   prisma: PrismaClient;
 }
 
+/** Token de dispositivo con su dueño; el despachador lo necesita para borrar inválidos sin cruzar usuarios. */
+export interface LiveDevice {
+  token: string;
+  userId: string;
+}
+
 export function createDevicesService({ prisma }: DevicesServiceDeps) {
+  async function findLiveDevices(guardIds: readonly string[], now: Date = new Date()): Promise<LiveDevice[]> {
+    if (guardIds.length === 0) return [];
+    const rows = await prisma.deviceToken.findMany({
+      where: {
+        userId: { in: [...guardIds] },
+        user: { isActive: true },
+      },
+      select: { token: true, userId: true, familyId: true },
+    });
+    if (rows.length === 0) return [];
+    const live = await prisma.refreshToken.findMany({
+      where: {
+        familyId: { in: [...new Set(rows.map((r) => r.familyId))] },
+        revokedAt: null,
+        expiresAt: { gt: now },
+      },
+      select: { familyId: true, userId: true },
+    });
+    const alive = new Set(live.map((l) => `${l.userId}:${l.familyId}`));
+    return rows
+      .filter((r) => alive.has(`${r.userId}:${r.familyId}`))
+      .map((r) => ({ token: r.token, userId: r.userId }));
+  }
+
   return {
     /**
      * Upsert idempotente por token. Si ya existía (aunque fuera de otro usuario: el teléfono
@@ -40,25 +70,23 @@ export function createDevicesService({ prisma }: DevicesServiceDeps) {
      * refresh token vigente (sin vencer); así no se envía a un dispositivo con la sesión caducada.
      */
     async findLiveTokens(guardIds: readonly string[], now: Date = new Date()): Promise<string[]> {
-      if (guardIds.length === 0) return [];
-      const rows = await prisma.deviceToken.findMany({
-        where: {
-          userId: { in: [...guardIds] },
-          user: { isActive: true },
-        },
-        select: { token: true, userId: true, familyId: true },
+      return (await findLiveDevices(guardIds, now)).map((d) => d.token);
+    },
+
+    /** Igual que findLiveTokens pero con el dueño de cada token (el despachador ordena por guardia). */
+    findLiveDevices,
+
+    /**
+     * Borra tokens que el proveedor declaró inválidos, solo si pertenecen a uno de los usuarios
+     * dados (los destinatarios del envío): un token reasignado a otra cuenta no se toca.
+     * Devuelve cuántos borró.
+     */
+    async deleteTokensOf(tokens: readonly string[], userIds: readonly string[]): Promise<number> {
+      if (tokens.length === 0 || userIds.length === 0) return 0;
+      const { count } = await prisma.deviceToken.deleteMany({
+        where: { token: { in: [...tokens] }, userId: { in: [...userIds] } },
       });
-      if (rows.length === 0) return [];
-      const live = await prisma.refreshToken.findMany({
-        where: {
-          familyId: { in: [...new Set(rows.map((r) => r.familyId))] },
-          revokedAt: null,
-          expiresAt: { gt: now },
-        },
-        select: { familyId: true, userId: true },
-      });
-      const alive = new Set(live.map((l) => `${l.userId}:${l.familyId}`));
-      return rows.filter((r) => alive.has(`${r.userId}:${r.familyId}`)).map((r) => r.token);
+      return count;
     },
   };
 }

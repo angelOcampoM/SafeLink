@@ -220,5 +220,6 @@ El repo está dentro de OneDrive y la ruta contiene espacios. `node_modules` tie
 | `FCM_PROJECT_ID` | (vacía) | Id del proyecto de Firebase; obligatoria con `fcm` |
 | `FCM_SERVICE_ACCOUNT_FILE` | (vacía) | **Ruta** al JSON de la cuenta de servicio, fuera del repo; obligatoria con `fcm` |
 | `PUSH_MAX_ATTEMPTS` | `2` | Intentos totales por token ante 429, 5xx o error de red (1 a 5) |
+| `PUSH_MAX_TOKENS_PER_ALERT` | `500` | Tope de tokens por alerta (1 a 500); si hay más, se avisa a los guardias más cercanos |
 
 Para activar FCM (lo hace el equipo, no el código): crear el proyecto en Firebase, habilitar la API de Cloud Messaging (HTTP v1), crear una cuenta de servicio con permiso para enviar mensajes y descargar su JSON a una carpeta **fuera del repo**. Después, en `backend/.env`: `PUSH_PROVIDER=fcm`, `FCM_PROJECT_ID` y `FCM_SERVICE_ACCOUNT_FILE` con la ruta del JSON. Si el archivo falta o es inválido, la API no arranca (el error nombra el problema, nunca el contenido). En Docker Compose monta el JSON como volumen de solo lectura y apunta `FCM_SERVICE_ACCOUNT_FILE` a la ruta dentro del contenedor. Nunca subas ese archivo ni lo pegues en `.env`. Guarda el JSON fuera del repo o renómbralo (p. ej. `cuenta-fcm.json`): el nombre por defecto de GCP (`<proyecto>-<hex>.json`) no se puede ignorar con un patrón seguro.

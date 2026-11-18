@@ -40,6 +40,12 @@ export interface AlertChange {
   userId: string;
   alertId: string;
   dispatch: boolean;
+  /**
+   * Verdadero solo si la alerta ENTRÓ a `searching` en este cambio (nace con ubicación o pasa de
+   * `pending_location` a `searching`). Es lo que dispara el push (D44); moverse estando en
+   * `searching` no lo dispara. Ausente cuenta como falso.
+   */
+  published?: boolean;
 }
 
 export interface AlertsServiceDeps {
@@ -121,7 +127,8 @@ export function createAlertsService(deps: AlertsServiceDeps) {
           });
           return alert;
         });
-        avisar({ userId, alertId: creada.id, dispatch: creada.status === AlertStatus.searching });
+        const publicada = creada.status === AlertStatus.searching;
+        avisar({ userId, alertId: creada.id, dispatch: publicada, published: publicada });
         return serializeOwnAlert(creada, serialize);
       } catch (error) {
         if (esAlertaActivaDuplicada(error)) throw invalidState(ALREADY_HAS_ACTIVE_ALERT);
@@ -177,7 +184,13 @@ export function createAlertsService(deps: AlertsServiceDeps) {
         }
       });
       // Entra a la lista de los guardias al pasar a searching, o se mueve estando en ella.
-      avisar({ userId, alertId, dispatch: next === AlertStatus.searching });
+      // El push (published) solo al entrar a searching, no al moverse estando en ella (D44).
+      avisar({
+        userId,
+        alertId,
+        dispatch: next === AlertStatus.searching,
+        published: cambiaEstado && next === AlertStatus.searching,
+      });
       return null;
     },
 

@@ -82,6 +82,7 @@ services:
       PUSH_PROVIDER:
       FCM_PROJECT_ID:
       PUSH_MAX_ATTEMPTS:
+      PUSH_MAX_TOKENS_PER_ALERT:
       # Con PUSH_PROVIDER=fcm: ruta DENTRO del contenedor del JSON de la cuenta de servicio, que se
       # monta como volumen de solo lectura desde fuera del repo (ver README). No se copia a la imagen.
       FCM_SERVICE_ACCOUNT_FILE:

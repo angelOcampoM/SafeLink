@@ -374,7 +374,7 @@ G-03 **ya dice** "doble clic de volumen" (`docs/HISTORIAS_DE_USUARIO.md:167`). L
 
 ## D43 · `PushNotifier` y adaptador FCM
 
-- **Estado:** implementada (paso 10; `backend/src/notifications/`: interfaz, no-op y `fcm-notifier`; doble en `backend/tests/helpers/recording-notifier.ts`). **No verificado contra FCM real:** solo con un `fetch` falso y llaves RSA efímeras. Todavía no envía nada: el disparo es del paso 11 (D44).
+- **Estado:** implementada (paso 10; `backend/src/notifications/`: interfaz, no-op y `fcm-notifier`; doble en `backend/tests/helpers/recording-notifier.ts`). **No verificado contra FCM real:** solo con un `fetch` falso y llaves RSA efímeras. El disparo existe desde el paso 11 (D44), pero sigue sin verificarse contra FCM real.
 - **Detalle de implementación:** con `PUSH_PROVIDER=fcm` la API no arranca si falta la variable o el JSON de la cuenta es inválido, y el error nunca muestra el contenido del archivo. `FCM_PROJECT_ID` y `FCM_SERVICE_ACCOUNT_FILE` vacías cuentan como ausentes. Un `401` renueva el access token una vez sin gastar intento; `Retry-After` se respeta con un tope de 10 s; 5 envíos en paralelo y tokens deduplicados; timeout de 10 s por petición. Nunca se registra el cuerpo de las respuestas de Google. `backend/.gitignore` ignora `*service-account*.json`, `*-firebase-adminsdk-*.json` y `firebase-*.json`.
 - **Tokens inválidos (endurecido tras la revisión de seguridad):** FCM responde `400 INVALID_ARGUMENT` tanto a un token inválido como a un mensaje mal formado. Por eso un token solo se marca para borrar con `404` + `UNREGISTERED` o con un `400` cuyo detalle `google.rpc.BadRequest` señala `message.token`; cualquier otro `400`, o un `404` sin `UNREGISTERED`, cuenta como fallido. Salvaguarda: si en un envío con 2 o más destinatarios **todos** salen inválidos, no se borra ninguno y se registra un `warn` (probable error del mensaje).
 - **Endurecimiento (revisión de seguridad):** `token_uri` solo `https` en `oauth2.googleapis.com` o `www.googleapis.com` (si no, la API no arranca); la llave debe ser RSA; `redirect: 'error'` en OAuth y FCM; los cuerpos no leídos se cancelan para liberar conexiones; `warn` con solo conteos cuando hay fallos o falla OAuth. El doble de pruebas vive en `backend/tests/helpers/` y no llega a la imagen. Los patrones de credenciales están también en el `.gitignore` de la raíz y en `backend/.dockerignore`; el nombre por defecto de GCP (`<proyecto>-<hex>.json`) no se puede ignorar con un patrón seguro: guardar el JSON fuera del repo.
@@ -386,9 +386,20 @@ G-03 **ya dice** "doble clic de volumen" (`docs/HISTORIAS_DE_USUARIO.md:167`). L
 
 ## D44 · Quién y cuándo se notifica
 
-- **Estado:** aprobada, se implementa en BE-04 (paso 11).
+- **Estado:** implementada (paso 11; `backend/src/notifications/dispatcher.ts`, evento `AlertChange.published`, `findLiveDevices` y `deleteTokensOf` en devices). Detalles:
+  - Solo se dispara al **publicar**: creación con ubicación o paso `pending_location` → `searching`; no por movimiento.
+  - Es fire-and-forget **tras el commit**: la respuesta HTTP no espera al push y un fallo no la afecta.
+  - Se relee la alerta antes de enviar: si ya no está en `searching`, tiene guardia o no tiene ubicación, no se envía.
+  - Destinatarios: los que cumplen `isAlertAvailableToGuard` y además tienen una sesión viva (D42). Un solo mensaje por alerta, tokens sin repetidos.
+  - `urgent` = `isUrgent(triggerMethod)` (verdadero con disparo `shake`).
+  - Tope `PUSH_MAX_TOKENS_PER_ALERT` (500 por defecto, rango 1..500): si se rebasa, se prioriza a los guardias más cercanos (distancia como en D37) y se registra un `warn`.
+  - Los tokens inválidos se borran solo si pertenecen a este envío y a sus destinatarios.
+  - Los logs llevan solo ids y conteos.
+  - Con `PUSH_PROVIDER=none` no se consulta nada (el despachador queda deshabilitado).
+  - `dispatchAlert` se exporta para que BE-06 lo reutilice.
 - **Decisión:** se notifica cuando una alerta **nace** con ubicación (entra en `searching`) y cuando una `pending_location` recibe coordenadas y pasa a `searching`. Destinatarios: los que devuelve **la misma función** que arma el snapshot de `guard/alerts` (activo, con cobertura, en radio, en turno, sin ignorar) y que además tienen un token de sesión viva (D42). **No** se renotifica por movimiento en `searching`. Un guardia que entra en turno con alertas ya en `searching` no recibe push: las ve por el canal (al conectar o en el refresco del ping, D34).
 - **Consecuencias:** BE-06 debe llamar al mismo despachador cuando una alerta vuelva a `searching` (baja de un guardia con alerta `in_progress`).
+- **Riesgos aceptados (prototipo):** la entrega es de mejor esfuerzo. Entre leer los tokens y enviar, un guardia que cierra sesión, es dado de baja o ignora la alerta puede recibir un último aviso; solo lleva el `alertId` y la autorización real ocurre al abrir la alerta (`GET /guard/alerts/:id` y `accept` revalidan). No hay límite global de despachos simultáneos ni se esperan los pendientes al cerrar la app: lo acotan el límite de alertas por usuario y D15. El abuso (un usuario que publica y cancela para avisar a todos los guardias de su zona) depende del límite de falsas alarmas de BE-06.
 
 ## D45 · Parte del front
 

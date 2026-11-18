@@ -13,6 +13,7 @@ import { createDevicesService } from './modules/devices/service.js';
 import { eventsRoutes } from './modules/events/routes.js';
 import { guardRoutes } from './modules/guard/routes.js';
 import { createGuardService } from './modules/guard/service.js';
+import { createAlertDispatcher } from './notifications/dispatcher.js';
 import { createFcmNotifier } from './notifications/fcm-notifier.js';
 import { createNoopNotifier } from './notifications/noop-notifier.js';
 import type { PushLogger, PushNotifier } from './notifications/push-notifier.js';
@@ -44,7 +45,7 @@ export interface AppDependencies {
   prisma?: PrismaClient;
   /** Bus de eventos del tiempo real (D3); por defecto, uno en memoria. */
   bus?: EventBus;
-  /** Notificador push (D43); por defecto se arma según PUSH_PROVIDER. Aún no se usa para enviar (paso 11). */
+  /** Notificador push (D43); por defecto se arma según PUSH_PROVIDER. Inyectarlo enciende el despachador (D44). */
   push?: PushNotifier;
 }
 
@@ -97,9 +98,6 @@ export function buildApp(config: Config, deps: AppDependencies = {}): FastifyIns
   app.decorate('config', config);
   // Con PUSH_PROVIDER=fcm, una cuenta de servicio ausente o inválida lanza aquí y la API no arranca.
   const push: PushNotifier = deps.push ?? buildPushNotifier(config, app.log);
-  // TODO(paso 11): inyectar `push` en el despachador. El envío debe ir fuera del camino de la
-  // petición HTTP y de la transacción (fire-and-forget con .catch), con tope de tokens por alerta.
-  void push;
   registerErrorHandling(app, { isProduction: config.NODE_ENV === 'production' });
   // Las respuestas de la API no se cachean (llevan tokens y datos personales). Va en la raíz
   // para cubrir también el 404 de rutas inexistentes bajo el prefijo.
@@ -135,10 +133,24 @@ export function buildApp(config: Config, deps: AppDependencies = {}): FastifyIns
       guardGridMeters: config.ETA_GUARD_GRID_METERS,
     };
     // Un solo cableado de avisos de alerta para los servicios del usuario y del guardia.
-    const onAlertChanged = ({ userId, alertId, dispatch }: AlertChange): void => {
+    const devices = createDevicesService({ prisma });
+    // Aviso push (D44): sin PUSH_PROVIDER=fcm ni doble inyectado el notificador es el no-op, así que
+    // el despachador se apaga y no gasta consultas. BE-06 reutiliza `alertDispatcher.dispatchAlert`.
+    const alertDispatcher = createAlertDispatcher({
+      prisma,
+      push,
+      devices,
+      logger: app.log,
+      timeZone: config.TZ_SHIFTS,
+      maxTokensPerAlert: config.PUSH_MAX_TOKENS_PER_ALERT,
+      enabled: deps.push !== undefined || config.PUSH_PROVIDER === 'fcm',
+    });
+    const onAlertChanged = ({ userId, alertId, dispatch, published }: AlertChange): void => {
       bus.publish(alertsTopicForUser(userId));
       bus.publish(alertTopic(alertId));
       if (dispatch) bus.publish(dispatchTopic);
+      // Fire-and-forget, después del commit: la respuesta no espera al push.
+      if (published) alertDispatcher.notifyPublished(alertId);
     };
     const alerts = createAlertsService({
       prisma,
@@ -184,7 +196,7 @@ export function buildApp(config: Config, deps: AppDependencies = {}): FastifyIns
         await api.register(adminRoutes, { prisma });
         await api.register(alertsRoutes, { prisma, service: alerts, photos, photoUrls });
         await api.register(guardRoutes, { service: guard });
-        await api.register(devicesRoutes, { service: createDevicesService({ prisma }) });
+        await api.register(devicesRoutes, { service: devices });
         await api.register(eventsRoutes, { prisma, hub, alerts, guard });
       },
       { prefix: API_PREFIX },

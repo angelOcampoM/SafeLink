@@ -97,6 +97,10 @@ export const envSchema = z.object({
   FCM_SERVICE_ACCOUNT_FILE: z.string().optional().transform((v) => (v?.trim() ? v.trim() : undefined)),
   // Intentos totales por token ante 429, 5xx o error de red.
   PUSH_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(5).default(2),
+  // Tope de tokens por alerta (D44). FCM v1 manda un mensaje por token, así que el tope acota las
+  // peticiones y el tiempo de un solo aviso; 500 era también el tamaño de lote del envío multicast
+  // de FCM. Si se rebasa, se prioriza a los guardias más cercanos.
+  PUSH_MAX_TOKENS_PER_ALERT: z.coerce.number().int().min(1).max(500).default(500),
 });
 
 export type Config = z.infer<typeof envSchema>;
