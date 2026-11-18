@@ -13,6 +13,9 @@ import { createDevicesService } from './modules/devices/service.js';
 import { eventsRoutes } from './modules/events/routes.js';
 import { guardRoutes } from './modules/guard/routes.js';
 import { createGuardService } from './modules/guard/service.js';
+import { createFcmNotifier } from './notifications/fcm-notifier.js';
+import { createNoopNotifier } from './notifications/noop-notifier.js';
+import type { PushLogger, PushNotifier } from './notifications/push-notifier.js';
 import { authPluginRoot } from './plugins/auth.js';
 import {
   alertTopic,
@@ -41,6 +44,23 @@ export interface AppDependencies {
   prisma?: PrismaClient;
   /** Bus de eventos del tiempo real (D3); por defecto, uno en memoria. */
   bus?: EventBus;
+  /** Notificador push (D43); por defecto se arma según PUSH_PROVIDER. Aún no se usa para enviar (paso 11). */
+  push?: PushNotifier;
+}
+
+function buildPushNotifier(config: Config, logger: PushLogger): PushNotifier {
+  if (config.PUSH_PROVIDER !== 'fcm') return createNoopNotifier(logger);
+  // Un Config armado sin loadConfig podría omitirlos: se falla en vez de caer en silencio al no-op.
+  if (!config.FCM_PROJECT_ID || !config.FCM_SERVICE_ACCOUNT_FILE) {
+    throw new Error('PUSH_PROVIDER=fcm requiere FCM_PROJECT_ID y FCM_SERVICE_ACCOUNT_FILE');
+  }
+  return createFcmNotifier({
+    projectId: config.FCM_PROJECT_ID,
+    serviceAccountFile: config.FCM_SERVICE_ACCOUNT_FILE,
+    maxAttempts: config.PUSH_MAX_ATTEMPTS,
+    ttlSeconds: config.ACCEPT_TIMEOUT_SECONDS,
+    logger,
+  });
 }
 
 export function buildApp(config: Config, deps: AppDependencies = {}): FastifyInstance {
@@ -75,6 +95,11 @@ export function buildApp(config: Config, deps: AppDependencies = {}): FastifyIns
           },
   });
   app.decorate('config', config);
+  // Con PUSH_PROVIDER=fcm, una cuenta de servicio ausente o inválida lanza aquí y la API no arranca.
+  const push: PushNotifier = deps.push ?? buildPushNotifier(config, app.log);
+  // TODO(paso 11): inyectar `push` en el despachador. El envío debe ir fuera del camino de la
+  // petición HTTP y de la transacción (fire-and-forget con .catch), con tope de tokens por alerta.
+  void push;
   registerErrorHandling(app, { isProduction: config.NODE_ENV === 'production' });
   // Las respuestas de la API no se cachean (llevan tokens y datos personales). Va en la raíz
   // para cubrir también el 404 de rutas inexistentes bajo el prefijo.

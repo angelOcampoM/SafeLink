@@ -10,3 +10,7 @@ tests
 README.md
 src/generated
 storage
+# Credenciales de cuenta de servicio (FCM): nunca a la imagen.
+*service-account*.json
+*-firebase-adminsdk-*.json
+firebase-*.json

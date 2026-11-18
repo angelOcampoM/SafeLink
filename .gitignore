@@ -35,3 +35,8 @@ AGENTS.md
 .env
 .env.*
 !.env.example
+
+# Credenciales de cuenta de servicio (FCM): viven fuera del repo; por si se copian aquí.
+*service-account*.json
+*-firebase-adminsdk-*.json
+firebase-*.json

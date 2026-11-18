@@ -560,6 +560,7 @@ data: {"data":null}
 | Peso de la espera en el orden | `WAIT_METERS_PER_MINUTE` (100) | `configuracion.dart:15` |
 | Velocidad del guardia para el ETA | `GUARD_METERS_PER_MINUTE` (250) | `configuracion.dart:16` |
 | Redondeo hacia arriba del ETA en la vista del dueño | `ETA_ROUNDING_SECONDS` (60, mínimo 30). Nueva, solo backend (D47) | — |
+| Notificaciones push | `PUSH_PROVIDER` (`none` por defecto, o `fcm`), `FCM_PROJECT_ID`, `FCM_SERVICE_ACCOUNT_FILE` (ruta a un JSON **fuera del repo**; obligatorias con `fcm`), `PUSH_MAX_ATTEMPTS` (2, de 1 a 5). Nuevas, solo backend (D43); el formato del mensaje se documenta en el paso 12 | — |
 | Celda a la que se ajusta la posición del guardia para el ETA del dueño | `ETA_GUARD_GRID_METERS` (250, mínimo 100). Nueva, solo backend (D47): el dueño solo puede deducir la celda en una lectura suelta, no la posición exacta (riesgo residual por cruces de borde en D47) | — |
 | Radio de cobertura mínimo y máximo | `COVERAGE_RADIUS_MIN_METERS` (500), `COVERAGE_RADIUS_MAX_METERS` (10000) | `configuracion.dart:17-18` |
 | Largo máximo de la nota del admin | `ADMIN_NOTE_MAX_LENGTH` (300) | `regla_alerta.dart:61` |
