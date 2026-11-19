@@ -128,6 +128,34 @@ dispositivo*, ejecutarlos una vez cuando haya build instalable y adjuntar la
 captura como evidencia. Si se dejan como pruebas automatizadas, van a quedar
 en rojo para siempre sin que eso signifique nada.
 
+## Backend, tarjeta BE-04 (despacho de alertas al guardia)
+
+Casos del backend que cubren, del lado del servidor, las historias G-02, G-03, G-05 (HU-11, HU-12 y HU-24 del issue #54, D33) y las de soporte G-04, G-06 y G-07. Se ejecutan con `npm test` desde `backend/` (Vitest). Las pruebas de integración usan Postgres real (`safelink_test`; ver `backend/README.md`); las unitarias no necesitan base. Rutas de archivo relativas a `backend/tests/`. Este bloque no cuenta en los 83 casos del front. Ninguna de estas pruebas toca FCM real (D43).
+
+| Historia | Qué comprueba | Tipo | Prueba |
+|---|---|---|---|
+| G-02 / HU-11 | El push se envía al crear la alerta con ubicación o al llegar la primera ubicación; no por movimiento; no si ya no está en `searching` o no hay guardias con token | Integración | `integration/despacho/push-alerta.test.ts` |
+| G-02 | Destinatarios: solo guardias en radio, en turno, activos, sin ignorar y con sesión viva (revocada o vencida no reciben); un solo envío con tokens sin repetidos | Integración | `integration/despacho/push-alerta.test.ts` |
+| G-02 | Tope `PUSH_MAX_TOKENS_PER_ALERT` (los más cercanos) y su validación de rango | Integración y unitaria | `integration/despacho/push-alerta.test.ts`, `unit/be04-despacho-env.test.ts` |
+| G-02 | El push no retrasa ni rompe la respuesta HTTP; los fallos se absorben; los logs solo llevan ids y conteos | Integración | `integration/despacho/push-alerta.test.ts` |
+| G-02 | Formato FCM v1 (datos en texto, bloque `android` y `apns`), OAuth con JWT RS256, reintentos, `Retry-After`, redirecciones | Unitaria (con `fetch` simulado) | `unit/be04-push.test.ts` |
+| G-02 | Tokens inválidos: solo `404 UNREGISTERED` o `400` con `message.token`; salvaguarda cuando todos salen inválidos; no se borran tokens ajenos | Unitaria e integración | `unit/be04-push.test.ts`, `integration/despacho/push-alerta.test.ts` |
+| G-02 | Cuenta de servicio inválida (la API no arranca, el error no muestra su contenido); `none` por defecto; no-op y doble de pruebas | Unitaria | `unit/be04-push.test.ts`, `unit/be04-server-arranque.test.ts` |
+| G-02 | Token de dispositivo: registro idempotente y reasignación, validación (400), solo `guard` (401/403), rate limit (429), logout y revocación borran los tokens, token no aparece en respuestas ni logs | Integración | `integration/dispositivos/device-token.test.ts`, `device-token-limite.test.ts`, `device-token-logs.test.ts` |
+| G-02 | Apertura del detalle desde la notificación; recepción en Android en silencio y en iOS | 📱 | Requiere FCM y dispositivo (D45): **no automatizable hoy** |
+| G-03 / HU-12 | Canal `guard/alerts`: permisos antes de abrir el stream, snapshot por guardia, visibilidad, `userPhone` nulo, orden y cifras, cambios en vivo, límite de conexiones por (usuario, canal) | Integración | `integration/guardia/canal-guard-alerts.test.ts`, `unit/be04-sse-multicanal.test.ts` |
+| G-03 | Orden del listado (urgentes primero, luego `score`), equivalente a `regla_prioridad.dart` | Unitaria | `unit/be04-prioridad.test.ts` |
+| G-03 | `ignore`: idempotente, desaparece solo para ese guardia, 404 idéntico para lo no visible, alerta propia asignada sin efecto, permisos, tiempo real | Integración | `integration/guardia/guardia-ignorar.test.ts` |
+| G-04 | `GET /guard/alerts/:id`: alertas visibles y 404 con el mismo cuerpo para lo demás; canal `guard/alerts/:id` (asignada, disponible, ajena, `:id` no UUID, seguridad de datos) | Integración | `integration/guardia/guardia-lectura.test.ts`, `integration/guardia/canal-guard-alerta-detalle.test.ts` |
+| G-01 / extra | `GET /guard/me`, `/guard/history` y `/guard/metrics`; sin `passwordHash`; minimización de datos (D23) y cálculo de métricas | Integración y unitaria | `integration/guardia/guardia-lectura.test.ts`, `unit/be04-metricas-y-vista-guardia.test.ts` |
+| G-05 / HU-24 | `accept`: éxito, 404 idéntico, `ALERT_TAKEN`, "ya atiendes otra" (D36), permisos, el guardia no cierra la alerta, aceptación simultánea (concurrencia), tiempo real | Integración | `integration/guardia/guardia-aceptar.test.ts` |
+| G-05 | Restricciones de base: `alerts_guard_absent_chk` y `alerts_one_active_per_guard_idx` | Integración (BD) | `integration/db/restricciones-asignacion.test.ts` |
+| G-06 | `PUT /guard/location`: éxito, validación, permisos, el dueño recibe el ETA nuevo, rate limit por guardia, logs sin coordenadas | Integración | `integration/guardia/guardia-ubicacion.test.ts`, `integration/guardia/guardia-ubicacion-limite.test.ts` |
+| G-07 | `arrive`: éxito, 404, 409 si ya no está en `in_progress`, 422 `OUTSIDE_GEOFENCE` con `remainingMeters` (y `null` sin ubicación), permisos, concurrencia, tiempo real | Integración | `integration/guardia/guardia-llegada.test.ts` |
+| U-08 / D47 | ETA del dueño redondeado y ajustado a la celda; guardia y admin ven el exacto; ubicaciones falsas solo revelan la celda | Unitaria e integración | `unit/be04-llegada-eta.test.ts`, `integration/guardia/guardia-llegada.test.ts` |
+| G-02 a G-07, U-03, U-09 | Flujo completo de una alerta con las rutas reales del guardia | Integración | `integration/flujo/flujo-completo.test.ts` |
+| Permisos | Matriz rol × ruta (incluye las rutas y canales de BE-04 y el token de dispositivo) y paridad de la política con el contrato | Integración y unitaria | `integration/seguridad/matriz-permisos.test.ts`, `unit/politicas-contrato.test.ts` |
+
 ## Historial de decisiones
 
 - **01/11/2026 · G-01.** El equipo decidió que el guardia no ve pantalla de

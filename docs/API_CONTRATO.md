@@ -1,8 +1,8 @@
 # SafeLink — Contrato de la API
 
 **Historias que cubre:** U-01 a U-09, G-01 a G-07, A-01 a A-08.
-**Tarjeta:** BE-01 (paso 2, definición del contrato). Cada ruta indica la tarjeta que la implementa (BE-01 a BE-07).
-**Fecha:** 2026-11-10.
+**Tarjeta:** BE-01 (paso 2, definición del contrato). Cada ruta indica la tarjeta que la implementa (BE-01 a BE-07). BE-04 (despacho de alertas, historias G-02, G-03, G-05 y soporte de G-04, G-06 y G-07; HU-11, HU-12 y HU-24 del issue #54, D33) se documentó en el paso 12: secciones 5.1 (token de dispositivo), 5.3 (guardia), 6 (canales del guardia) y 10 (notificaciones push).
+**Fecha:** 2026-11-10 (BE-04: 2026-11-18).
 
 Este documento se extrajo del **código del front** (fuente de verdad) y se verificó leyendo cada archivo. Cada elemento lleva su evidencia `archivo:línea`. Las rutas de archivo son relativas a `lib/` (`datos/…`, `dominio/…`). Los ejemplos de JSON se construyeron con los campos reales de `datos/nube_mapeadores.dart` y con valores de `datos/datos_semilla.dart`; en el backend los IDs serán UUID (ver D10 en `docs/DECISIONES.md`).
 
@@ -398,6 +398,16 @@ Evidencia de las rutas: `safelink_service.dart:124-157`. Cliente: `nube_auth_rep
 
 Notas:
 
+- `PUT /users/me/device-token` (BE-04, D42; `backend/src/modules/devices/`): solo `guard` (un `protected_user` o `admin` recibe `403 FORBIDDEN` antes de leer el cuerpo). Cuerpo `{ "token": string }` con `.strict()`: de 1 a 512 caracteres del alfabeto `[A-Za-z0-9_:.-]`, **sin recortar** (un espacio o un carácter de control es `400`). Mensaje del `400 INVALID_STATE`: `El token del dispositivo no es válido`. Responde `200` `{ "data": null }`; nunca devuelve ni registra el token. Es un upsert por token: repetirlo no duplica y refresca `last_seen_at`; si el token estaba registrado a otra cuenta, **se reasigna** a la sesión actual. El registro exige sesión viva (misma comprobación que `authenticate`, bajo el lock de la familia): una sesión ya revocada responde `401 UNAUTHORIZED`. Rate limit por usuario con `RATE_LIMIT_REFRESH_MAX` y `RATE_LIMIT_REFRESH_WINDOW` (30 por minuto por defecto): `429 TOO_MANY_REQUESTS`. Una sesión puede tener varios tokens. El front aún **no** llama a esta ruta (D45); la guía para el cliente está en `docs/CONEXION_DISPOSITIVO.md`.
+
+  ```json
+  { "token": "<token de FCM del dispositivo>" }
+  ```
+
+  ```json
+  { "data": null }
+  ```
+
 - `POST /auth/logout`: el front no manda cuerpo (`nube_auth_repository.dart:42`). El backend identifica la sesión por el claim `sid` del access token, revoca esa familia de refresh tokens, borra los tokens de dispositivo registrados en esa sesión (D42) y cierra sus streams SSE abiertos (D8, D25).
 - El access JWT lleva `sub`, `role` y `sid` (id de la familia en `refresh_tokens`), firmado con HS256 (D25). Un `sid` revocado devuelve `401` de inmediato, sin esperar a que venza el token.
 - `POST /auth/refresh` (implementado, D25): el refresh es opaco (32 bytes de CSPRNG en base64url); en la base solo se guarda su SHA-256. Rotación en cada uso: el token presentado queda usado y se emite un sucesor. **Ventana de gracia** (`REFRESH_GRACE_SECONDS`, 0–60, default 5; 0 la desactiva): un token ya rotado, presentado dentro de la ventana, se acepta **una vez más** y emite un sucesor **nuevo** de la misma familia, sin revocarla (dentro de la gracia pueden coexistir dos sucesores vivos). Fuera de la ventana, o con la gracia ya consumida, es reutilización: se revoca **toda la familia** y se responde `401 UNAUTHORIZED`. Si el token rotado tenía un hermano de gracia sin usar, ese hermano se revoca. Cada sucesor vence a `min(now + JWT_REFRESH_EXPIRES_IN, inicio de la sesión + JWT_SESSION_MAX_AGE)` (vigencia deslizante con vida máxima absoluta, 90d por defecto); un refresh vencido o de una sesión que superó la vida máxima da `401` sin revocar la familia. Un `refreshToken` con forma inválida (no es base64url de 43 caracteres) da `401` sin consultar la base.
@@ -464,6 +474,26 @@ Evidencia: `safelink_service.dart:182-200`. Cliente: `nube_alerta_guardia_reposi
 - **Minimización de datos (D23):** antes de aceptar el guardia ve `userName`, `location` y `photoUrl` (G-04), pero `userPhone` es `null`; solo el guardia asignado lo recibe, mientras la alerta esté en `in_progress` o `guard_arrived`. Cuando la alerta ya no está activa, para el rol `guard` también `location` va `null`, pero `photoUrl` se conserva como evidencia (en `/guard/history` y en `GET /guard/alerts/:id` de alertas no activas, incluidas `no_response` y `escalated`). Aplica a REST y SSE; el admin ve todo.
 - La geocerca: `arrive` solo procede si `distancia(lastLocation del guardia, alerta.location) <= GEOFENCE_METERS` (`regla_geocerca.dart:23-24`), con Haversine y radio de la Tierra 6 371 000 m (`regla_geocerca.dart:11`).
 
+**Implementado en BE-04** (`backend/src/modules/guard/`; todas las rutas operan sobre el guardia del token, nunca sobre un id del cliente, salvo el `:id` de la alerta):
+
+- Un `:id` que no es UUID responde igual que una alerta inexistente: `404 NOT_FOUND` `La alerta ya no existe`. El mismo cuerpo se usa para alerta inexistente, no visible, ajena, guardia sin perfil o dado de baja (D40); no hay `403` ni `409` que permitan enumerar.
+- `GET /guard/me` y `PUT /guard/location`: un usuario con rol `guard` sin fila de perfil recibe `404 NOT_FOUND` con el mensaje por defecto `No encontramos lo que buscabas`.
+- `PUT /guard/location` **no exige turno vigente** (D38). Rate limit por guardia (no por IP) con `RATE_LIMIT_LOCATIONS_PER_WINDOW` por ventana de `LOCATION_UPDATE_SECONDS`: `429 TOO_MANY_REQUESTS` con `Retry-After`. El límite corre antes de validar el cuerpo: un `400` consume cupo y un `401` no. Si el guardia tiene una alerta `in_progress`, el dueño recibe por `alerts/active` el ETA actualizado (con el redondeo de D47).
+- `POST /guard/alerts/:id/accept` y `/arrive` no llevan cuerpo y responden `200` (no crean recurso). `accept` guarda también una fila en `alert_status_history` (actor = el guardia). Orden de errores de `accept`: `404` (no la ve) → `409 ALERT_TAKEN` → `409 INVALID_STATE` `Ya estás atendiendo otra alerta`.
+- `arrive`, geocerca: si el guardia no tiene última ubicación (o la alerta no tiene ubicación), la distancia es infinita y responde `422 OUTSIDE_GEOFENCE` con `remainingMeters: null` (D37). Una `lastLocation` vieja o falsificada que permita marcar llegada se acepta como riesgo documentado: la reporta el cliente.
+- `etaSeconds` del guardia y del admin es el valor exacto; el del **dueño** va ajustado a una celda de `ETA_GUARD_GRID_METERS` y redondeado hacia arriba a un múltiplo de `ETA_ROUNDING_SECONDS` (D47). Detalle en 4.4.
+- Ejemplo real de `arrive` fuera de la geocerca, sin ubicación del guardia:
+
+  ```json
+  { "error": { "code": "OUTSIDE_GEOFENCE", "message": "Aún no estás en el punto de la alerta", "remainingMeters": null } }
+  ```
+
+- Ejemplo de `accept` sobre una alerta que otro ya tomó:
+
+  ```json
+  { "error": { "code": "ALERT_TAKEN", "message": "Otro guardia ya aceptó esta alerta" } }
+  ```
+
 ### 5.4 Administración
 
 Evidencia: `safelink_service.dart:202-296`. Cliente: `nube_admin_repository.dart`. Rol de todas: `admin`.
@@ -498,7 +528,7 @@ Comportamiento (front):
 | BE-01 | `/auth/login`, `/auth/me`, `/auth/refresh`, `/auth/logout`, `/auth/session`, `/health` |
 | BE-02 | `/auth/register`, `/users/me/settings`, cliente de la app para sesión y registro |
 | BE-03 | `/alerts`, `/alerts/mine`, `/alerts/:id/locations`, `/alerts/:id/confirm`, foto, canal `alerts/active` |
-| BE-04 | `/guard/*` (8 rutas), canales `guard/alerts` y `guard/alerts/:id` |
+| BE-04 | `/guard/*` (8 rutas), canales `guard/alerts` y `guard/alerts/:id`, `PUT /users/me/device-token` (excepción, D42) y el aviso push (sección 10) |
 | BE-05 | Escalamiento automático, `/admin/alerts/:id/resolve`, canal `admin/alerts/escalated`, bloqueo por falsas alarmas |
 | BE-06 (tentativa) | `/admin/guards` (6 rutas) |
 | BE-07 (tentativa) | `/admin/alerts`, `/admin/metrics`, `/admin/metrics/guards/:id`, `/admin/users`, `/admin/users/blocked`, `DELETE /admin/users/:id/block` |
@@ -522,15 +552,23 @@ Reglas del transporte:
 
 - `Content-Type: text/event-stream`. Cada evento: `data: {"data": ...}\n\n`, con el mismo envoltorio que las respuestas REST (`safelink_service.dart:90`).
 - **Al conectar** se envía el estado actual como primer evento (snapshot completo). En el mock el stream emite el valor actual al suscribirse (`memoria_base_datos.dart:58-63`). **Cada evento es un snapshot completo, no un delta**: el front reemplaza su estado con lo que llega. Puede haber eventos repetidos con el mismo contenido (el mock emite ante cualquier cambio global); el cliente debe tolerarlo.
-- Comentario `: ping\n\n` periódico para mantener viva la conexión. El intervalo es `SSE_PING_SECONDS` (25 por defecto); en cada ping se revisa que la sesión siga viva (D31). Máximo de streams por usuario: `SSE_MAX_CONNECTIONS_PER_USER` (3).
+- Comentario `: ping\n\n` periódico para mantener viva la conexión. El intervalo es `SSE_PING_SECONDS` (25 por defecto); en cada ping se revisa que la sesión siga viva (D31). Máximo de streams abiertos por **(usuario, canal)**: `SSE_MAX_CONNECTIONS_PER_USER` (3; D26, D34).
 - Errores una vez abierto el stream: `data: {"error":{"code":"...","message":"..."}}\n\n` y se cierra la conexión. Así actúa el mock con un canal desconocido: emite un solo evento de error (`safelink_service.dart:88`). Alerta inexistente en `guard/alerts/:id`: `NOT_FOUND`.
 - Autenticación: header `Authorization: Bearer <accessToken>`. **Nunca** el token en el query string (queda en logs y en el historial). Si falta o es inválido el token, o el rol no corresponde, se responde **antes de abrir el stream** con HTTP 401 / 403 y el envoltorio JSON normal **(decidido, D22)**.
 - Rol por canal: el usuario solo recibe su alerta; el guardia, solo lo que le corresponde; el admin, solo escaladas. Rol incorrecto: `403 FORBIDDEN`.
 - **Visibilidad por guardia, en cada emisión (D22):** en `guard/alerts` y `guard/alerts/:id` la visibilidad se reevalúa **en cada emisión y por guardia** (nunca un snapshot global compartido). Si la alerta de `guard/alerts/:id` deja de ser visible para ese guardia (por ejemplo, otro la aceptó), se emite `data: {"error":{"code":"NOT_FOUND","message":"La alerta ya no existe"}}` y se cierra el stream.
-- **Vida del stream (D26):** el servidor cierra el stream al llegar el `exp` del access token; el cliente reconecta con un token renovado. Antes de cerrar por `exp`, `logout` o baja de guardia, el servidor emite `data: {"error":{"code":"UNAUTHORIZED","message":"Tu sesión terminó. Vuelve a iniciar sesión."}}`. Hay un máximo configurable de conexiones SSE por usuario; al superarlo se **cierra la conexión más antigua** (no se rechaza la nueva, para no dejar sin datos a la app que reconecta). Un `logout` o la baja de un guardia cierran sus streams abiertos vía `EventBus` (D25).
+- **Vida del stream (D26):** el servidor cierra el stream al llegar el `exp` del access token; el cliente reconecta con un token renovado. Antes de cerrar por `exp`, `logout` o baja de guardia, el servidor emite `data: {"error":{"code":"UNAUTHORIZED","message":"Tu sesión terminó. Vuelve a iniciar sesión."}}`. Hay un máximo configurable de conexiones SSE por (usuario, canal) (`SSE_MAX_CONNECTIONS_PER_USER`); al superarlo se **cierra la conexión más antigua de ese canal** (no se rechaza la nueva, para no dejar sin datos a la app que reconecta; abrir el listado y el detalle a la vez no se expulsan). Un `logout` o la baja de un guardia cierran sus streams abiertos vía `EventBus` (D25).
 - **Requisito del cliente (BE-02 / BE-04):** el `escuchar()` real debe reconectar cuando el stream se cierre, renovando antes el token con `POST /auth/refresh`; no debe exponer la reconexión a los view models como fin de stream, y emite error solo si no puede reconectar. Los view models solo manejan `onError` (`presentacion/usuario/estado_alerta_view_model.dart:34-42`, `presentacion/guardia/navegacion_view_model.dart:63-71`).
 - Los snapshots se vuelven a emitir cuando cambian los datos que los componen: estado de alertas, cobertura y turno del guardia, ubicación del guardia (afecta `distanceMeters`) y el paso del tiempo (`waitingMinutes`, inicio y fin de turno). El bus de eventos es en memoria detrás de una interfaz `EventBus` (D3).
 - Implementación: BE-03 (usuario), BE-04 (guardia), BE-05 (admin).
+
+**Canales del guardia (BE-04, D34; `backend/src/modules/events/routes.ts`):**
+
+- **`guard/alerts`**: snapshot completo de `PrioritizedAlert[]`, calculado **por guardia y desde la base en cada emisión** (nunca un snapshot compartido). Guardia de baja, sin cobertura, fuera de turno o sin perfil: lista vacía `{"data":[]}` (un error cerraría el stream y el cliente reconectaría en bucle). Se vuelve a emitir cuando cambia el despacho global (una alerta entra o sale de `searching`, o cambia su ubicación estando en `searching`) y cuando cambia algo propio del guardia (su ubicación o una alerta que ignora).
+- **`guard/alerts/:id`**: snapshot `Alert` con la misma visibilidad que `GET /guard/alerts/:id`. Escucha la alerta y al guardia. Si la alerta deja de ser visible (otro la aceptó, la ignoró, cambió su turno o cobertura) se emite `data: {"error":{"code":"NOT_FOUND","message":"La alerta ya no existe"}}` y se cierra. Un `:id` que no es UUID **no** responde `404` HTTP: el stream abre, emite ese mismo evento `NOT_FOUND` y cierra. Los `401` y `403` sí se responden por HTTP antes de abrir el stream.
+- **`refreshOnPing`:** ambos canales recalculan su snapshot en cada ping (`SSE_PING_SECONDS`, 25 s por defecto) además de las emisiones por evento, para reflejar el paso del tiempo (`waitingMinutes`, inicio y fin de turno, salida de `searching` por escalada). Por eso puede llegar un evento con el mismo contenido que el anterior; el cliente debe tolerarlo.
+- Cuando el guardia acepta, el dueño recibe el cambio por `alerts/active` y desaparece al instante del listado de los demás guardias; cuando marca llegada, el dueño recibe el cambio (U-09). `ignore` solo recalcula los canales del propio guardia (D39).
+- Privacidad: antes de aceptar, `userPhone` es `null` en ambos canales. Solo el guardia asignado lo recibe con la alerta `in_progress` o `guard_arrived` (D23).
 
 Ejemplo de un evento de `guard/alerts`:
 
@@ -560,13 +598,13 @@ data: {"data":null}
 | Peso de la espera en el orden | `WAIT_METERS_PER_MINUTE` (100) | `configuracion.dart:15` |
 | Velocidad del guardia para el ETA | `GUARD_METERS_PER_MINUTE` (250) | `configuracion.dart:16` |
 | Redondeo hacia arriba del ETA en la vista del dueño | `ETA_ROUNDING_SECONDS` (60, mínimo 30). Nueva, solo backend (D47) | — |
-| Notificaciones push | `PUSH_PROVIDER` (`none` por defecto, o `fcm`), `FCM_PROJECT_ID`, `FCM_SERVICE_ACCOUNT_FILE` (ruta a un JSON **fuera del repo**; obligatorias con `fcm`), `PUSH_MAX_ATTEMPTS` (2, de 1 a 5), `PUSH_MAX_TOKENS_PER_ALERT` (500, de 1 a 500). Nuevas, solo backend (D43); el formato del mensaje se documenta en el paso 12 | — |
+| Notificaciones push | `PUSH_PROVIDER` (`none` por defecto, o `fcm`), `FCM_PROJECT_ID`, `FCM_SERVICE_ACCOUNT_FILE` (ruta a un JSON **fuera del repo**; obligatorias con `fcm`), `PUSH_MAX_ATTEMPTS` (2, de 1 a 5), `PUSH_MAX_TOKENS_PER_ALERT` (500, de 1 a 500). Nuevas, solo backend (D43); el formato del mensaje está en la sección 10 | — |
 | Celda a la que se ajusta la posición del guardia para el ETA del dueño | `ETA_GUARD_GRID_METERS` (250, mínimo 100). Nueva, solo backend (D47): el dueño solo puede deducir la celda en una lectura suelta, no la posición exacta (riesgo residual por cruces de borde en D47) | — |
 | Radio de cobertura mínimo y máximo | `COVERAGE_RADIUS_MIN_METERS` (500), `COVERAGE_RADIUS_MAX_METERS` (10000) | `configuracion.dart:17-18` |
 | Largo máximo de la nota del admin | `ADMIN_NOTE_MAX_LENGTH` (300) | `regla_alerta.dart:61` |
 | Tiempo de aceptación y de confirmación | `ACCEPT_TIMEOUT_SECONDS` (300), `CONFIRM_TIMEOUT_SECONDS` (900) | `configuracion.dart:10-11` (en minutos en el front). El front **no los usa**: sus simulaciones escalan con `segundosEscalamientoDemo` (90 s) para ambos casos (`memoria_base_datos.dart:191`). Ver D6 y D14 |
 | Frecuencia de envío de ubicación (cliente) | `LOCATION_UPDATE_SECONDS` (5) | `configuracion.dart:14` |
-| Tolerancia de `triggeredAt` respecto a la hora del servidor | `TRIGGERED_AT_TOLERANCE_SECONDS` (600). Nueva; no existe en el front ni en `backend/src/config/env.ts` todavía (D24) | — |
+| Tolerancia de `triggeredAt` respecto a la hora del servidor | `TRIGGERED_AT_TOLERANCE_SECONDS` (600). Nueva, solo backend: no existe en el front; está en `backend/src/config/env.ts` (D24) | — |
 
 Los valores de modo demo (`segundosEscalamientoDemo`, `segundosNuevaAlertaMin/Max`, `modoDemo`) son solo del front y no van al backend (`configuracion.dart:19-22`).
 
@@ -601,3 +639,91 @@ Los valores de modo demo (`segundosEscalamientoDemo`, `segundosNuevaAlertaMin/Ma
 | El 404 de ruta inexistente refleja solo el path, sin query string | BE-01 |
 | La semilla solo corre con `NODE_ENV` `development` o `test`; se niega con `production` | BE-01 (paso 3) |
 | Prohibido registrar en los logs de la aplicación cuerpos, coordenadas, teléfonos, `password`, `accessToken` o `refreshToken` | BE-01 (paso 4 en adelante) |
+| Prohibido registrar tokens de dispositivo, access tokens de Google y el contenido de la cuenta de servicio de FCM (sección 10) | BE-04 |
+
+---
+
+## 10. Notificaciones push
+
+**Historias:** G-02 (recepción; HU-11 del issue #54, D33). **Tarjeta:** BE-04 (D43, D44). Código: `backend/src/notifications/` (`push-notifier.ts`, `fcm-notifier.ts`, `noop-notifier.ts`, `dispatcher.ts`).
+
+> **No verificado contra FCM real.** El adaptador solo se probó con un `fetch` simulado y llaves RSA efímeras (`backend/tests/unit/be04-push.test.ts`). Nadie ha enviado un mensaje a un teléfono con este código. Hasta que se pruebe con una cuenta de servicio real, el formato de abajo es lo que **el servidor arma**, no una entrega comprobada.
+
+El push es un **aviso**, no un canal de datos ni de autorización: el canal principal es SSE (`guard/alerts`). El push existe para despertar la app del guardia cuando no tiene el stream abierto.
+
+### 10.1 Proveedor y configuración
+
+`PUSH_PROVIDER=none` (por defecto) no envía nada: el despachador queda deshabilitado y no consulta la base. Con `fcm` hacen falta `FCM_PROJECT_ID` y `FCM_SERVICE_ACCOUNT_FILE`; si faltan o el JSON es inválido, la API no arranca. Variables y valores por defecto en la sección 7 y en `backend/README.md`.
+
+### 10.2 Cuándo se envía (D44)
+
+- Cuando una alerta **entra a `searching`**: al crearla con ubicación, o cuando una `pending_location` recibe su primera ubicación (`POST /alerts/:id/locations`).
+- **No** se envía por movimiento estando ya en `searching`, ni a un guardia que entra en turno con alertas ya publicadas (las ve por el canal al conectar o en el siguiente ping).
+- Es de mejor esfuerzo, **después del commit** y sin esperar: la respuesta HTTP no depende del push y un fallo del notificador no la afecta.
+- Antes de enviar se relee la alerta: si ya no está en `searching`, tiene guardia o no tiene ubicación, no se envía.
+- Reutilizable: `dispatchAlert(alertId)` se exportó para que BE-06 lo llame cuando una alerta vuelva a `searching`.
+
+### 10.3 A quién
+
+Un guardia recibe el aviso si cumple a la vez:
+
+1. La alerta es **visible/disponible para él** con la misma función que arma el snapshot de `guard/alerts` (activo, con cobertura, dentro del radio, en turno, sin haberla ignorado).
+2. Tiene un token en `device_tokens` cuya **sesión sigue viva**: usuario activo y, en su familia, al menos un refresh token sin revocar y sin vencer (D42).
+
+Se hace **un envío por alerta** (una sola llamada al notificador con la lista de tokens, sin repetidos); el adaptador FCM manda **un mensaje por token** (FCM v1 no tiene multicast; 5 en paralelo). Si hay más tokens que `PUSH_MAX_TOKENS_PER_ALERT` (500), se avisa a los guardias más cercanos (distancia desde su última ubicación o, si no hay, desde el centro de cobertura, como D37) y se registra un `warn`. Un guardia con varios dispositivos recibe un mensaje por cada token.
+
+### 10.4 Formato del mensaje
+
+Los datos son **solo de datos y todos los valores son texto** (FCM lo exige). No llevan nombre, teléfono ni ubicación (D23):
+
+```json
+{ "type": "alert", "alertId": "7c1f6a5e-3b0d-4c2e-9a41-5d8e2f9b1a07", "urgent": "false" }
+```
+
+| Clave | Valor |
+|---|---|
+| `type` | Siempre `"alert"` |
+| `alertId` | UUID de la alerta (el ejemplo es ilustrativo) |
+| `urgent` | `"true"` si el disparo fue `shake` (doble clic de volumen); `"false"` en otro caso (misma regla que el orden del listado) |
+
+Petición que arma `fcm-notifier.ts` por cada token (`POST https://fcm.googleapis.com/v1/projects/<FCM_PROJECT_ID>/messages:send`, con `Authorization: Bearer <access token OAuth2>`):
+
+```json
+{
+  "message": {
+    "token": "<token del dispositivo>",
+    "data": { "type": "alert", "alertId": "<uuid>", "urgent": "false" },
+    "android": { "priority": "HIGH", "ttl": "300s" },
+    "apns": {
+      "headers": { "apns-priority": "10" },
+      "payload": {
+        "aps": {
+          "alert": { "title": "SafeLink", "body": "Nueva alerta cerca de ti" },
+          "sound": "default"
+        }
+      }
+    }
+  }
+}
+```
+
+- **Android:** prioridad `HIGH` y `ttl` = `ACCEPT_TIMEOUT_SECONDS` en segundos con sufijo `s` (`300s` por defecto): pasado el tiempo de aceptación el aviso ya no sirve. No hay bloque `android.notification`: es un mensaje de datos y **la app debe armar la notificación** (canal de alarma, pantalla completa; ver `docs/CONEXION_DISPOSITIVO.md`).
+- **iOS:** `apns-priority: 10` y `aps.alert` con título `SafeLink` y cuerpo `Nueva alerta cerca de ti` (el texto es fijo y genérico, igual para urgente y no urgente) y `sound: default`. No se manda `apns-expiration` ni `apns-push-type`; si APNs o FCM los exigieran, no está verificado.
+- Texto del aviso, `ttl` y prioridades no son configurables por variable de entorno (salvo el `ttl`, que sale de `ACCEPT_TIMEOUT_SECONDS`).
+
+### 10.5 Errores del proveedor y borrado de tokens
+
+- Un token se marca inválido (y el servidor lo **borra**) solo si FCM lo señala con certeza: `404` con `errorCode` `UNREGISTERED`, o `400` cuyo detalle `google.rpc.BadRequest` trae un `fieldViolation` con `field = "message.token"`. Cualquier otro `400` (p. ej. un mensaje mal formado) y un `404` sin `UNREGISTERED` cuentan como fallo y **no** borran nada.
+- Salvaguarda: si en un envío con 2 o más destinatarios **todos** salen inválidos, no se borra ninguno y se registra un `warn` (lo probable es un error del mensaje).
+- Solo se borran tokens de ese envío y de sus destinatarios.
+- `401` de FCM: se renueva el access token una vez sin gastar intento. `429`, `5xx` y errores de red o timeout: reintento hasta `PUSH_MAX_ATTEMPTS` (2) respetando `Retry-After` con tope de 10 s. Timeout de 10 s por petición.
+- Los logs llevan solo ids y conteos: nunca tokens de dispositivo, access tokens de Google, llave privada, cuerpos de respuesta, coordenadas ni teléfonos.
+
+### 10.6 Qué debe hacer el cliente
+
+1. Al recibir el mensaje, **no** confiar en su contenido para decidir nada: `alertId` es solo una referencia.
+2. Abrir `GET /guard/alerts/:id` (o el canal `guard/alerts/:id`) con su access token. El servidor revalida visibilidad, turno, cobertura y que no esté ignorada.
+3. `404 NOT_FOUND` significa que la alerta ya no está disponible para ese guardia (otro la tomó, se escaló, se cerró o la ignoró): mostrar el aviso de "alerta ya atendida" y no ofrecer aceptar.
+4. Aceptar sigue siendo `POST /guard/alerts/:id/accept`; el push nunca autoriza nada.
+
+Limitación aceptada (D44): entre leer los tokens y enviar, un guardia que cierra sesión, es dado de baja o ignora la alerta puede recibir un último aviso. Solo lleva el `alertId`; la autorización real ocurre al abrir la alerta.
