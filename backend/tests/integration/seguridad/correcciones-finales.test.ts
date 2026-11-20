@@ -51,6 +51,8 @@ const REALES = new Set([
   // BE-05
   'GET /events/admin/alerts/escalated',
   'POST /admin/alerts/:id/resolve',
+  // BE-06
+  'PUT /admin/guards/:id/coverage',
   // BE-07
   'GET /admin/alerts',
   'GET /admin/metrics',
@@ -100,24 +102,24 @@ interface Registro {
 let db: ContextoDb;
 let app: FastifyInstance;
 let guardToken = '';
-let ejecuciones = 0;
 const registro: Registro[] = [];
 
 const GUARD_EMAIL = 'final-guardia@prueba.test';
 const ADMIN_EMAIL = 'final-admin@prueba.test';
-// Ruta que sigue siendo stub después de BE-07: la ÚNICA que queda de las 38 de la política
-// (PUT /admin/guards/:id/coverage, A-03, la implementa BE-06). Cuando BE-06 la implemente no
-// quedará ninguna ruta stub y estas pruebas tendrán que apuntar a una ruta real que responda
-// 404 ante un id inexistente, o registrar una ruta de prueba propia fuera de ROUTE_POLICIES.
-// Historial de esta variable: POST /guard/alerts/:id/arrive (real desde BE-04),
-// POST /admin/alerts/:id/resolve (real desde BE-05), DELETE /admin/users/:id/block (real desde BE-07).
-const RUTA_STUB = 'PUT /admin/guards/:id/coverage';
+// Desde BE-06 ya NO queda ninguna ruta stub: las 38 de la política están implementadas.
+// Las pruebas de normalización de abajo usan una ruta REAL (GET /admin/metrics/guards/:id) y
+// comparan 404 contra 200, en vez de contar ejecuciones de un stub. El registro de stubs se
+// deja puesto: si alguien agrega una clave a la política antes de implementarla, vuelve a
+// cubrirla solo. Historial de la variable que había aquí: POST /guard/alerts/:id/arrive
+// (real desde BE-04), POST /admin/alerts/:id/resolve (BE-05), DELETE /admin/users/:id/block
+// (BE-07) y PUT /admin/guards/:id/coverage (BE-06).
+let guardiaId = '';
 let adminToken = '';
 
 beforeAll(async () => {
   db = await abrirDb();
   const passwordHash = await hasherPrueba.hash(PASSWORD);
-  await db.prisma.user.create({
+  const guardia = await db.prisma.user.create({
     data: {
       name: 'Final guardia',
       email: GUARD_EMAIL,
@@ -126,6 +128,7 @@ beforeAll(async () => {
       role: 'guard',
     },
   });
+  guardiaId = guardia.id;
   await db.prisma.user.create({
     data: { name: 'Final admin', email: ADMIN_EMAIL, phone: '7771234567', passwordHash, role: 'admin' },
   });
@@ -145,10 +148,7 @@ beforeAll(async () => {
         api.route({
           method: metodo as 'GET',
           url: ruta,
-          handler: async () => {
-            if (clave === RUTA_STUB) ejecuciones += 1;
-            return ok({ ruta: clave });
-          },
+          handler: async () => ok({ ruta: clave }),
         });
       }
     },
@@ -184,50 +184,46 @@ describe('POST /auth/session con rate limit (comparte el límite de refresh)', (
   });
 });
 
-// La misma RUTA_STUB de arriba, escrita con un id concreto. El token de estas pruebas es el
-// de admin porque la cobertura es del admin (A-03).
-const ID_GUARDIA = '3f2b8c1e-9a4d-4e6b-8f10-2c7d5a9b0e11';
-const RUTA = `admin/guards/${ID_GUARDIA}/coverage`;
-
-describe('normalización de rutas: nada de lo que parezca /api/v1/admin/guards/:id/coverage llega al handler', () => {
-  const variantes = [
-    `/API/V1/${RUTA}`,
-    `/api/v1//${RUTA}`,
-    `/api/v1/${RUTA}/`,
-    `/api/v1/admin%2Fguards/${ID_GUARDIA}/coverage`,
-    `/api/v1/ADMIN/guards/${ID_GUARDIA}/coverage`,
-    `/api/v1/${RUTA}/%2e`,
-    `/api/v1/./${RUTA}`,
+// Ruta REAL con un `:id` en el camino: con el id de un guardia responde 200, así que
+// cualquier variante que acabe en 404 demuestra que el enrutador no la reconoció. El token es
+// de admin porque la ruta es del admin.
+describe('normalización de rutas: nada de lo que parezca /api/v1/admin/metrics/guards/:id llega al handler', () => {
+  const variantes = (): string[] => [
+    `/API/V1/admin/metrics/guards/${guardiaId}`,
+    `/api/v1//admin/metrics/guards/${guardiaId}`,
+    `/api/v1/admin/metrics/guards/${guardiaId}/`,
+    `/api/v1/admin%2Fmetrics/guards/${guardiaId}`,
+    `/api/v1/ADMIN/metrics/guards/${guardiaId}`,
+    `/api/v1/admin/metrics/guards/${guardiaId}/%2e`,
+    `/api/v1/./admin/metrics/guards/${guardiaId}`,
   ];
 
-  it.each(variantes)('PUT %s con token de admin -> 404 y el stub no se ejecuta', async (ruta) => {
-    const antes = ejecuciones;
-    const res = await request(app.server).put(ruta).set('Authorization', `Bearer ${adminToken}`).send({});
-    expect(res.status).toBe(404);
-    expect(res.body.error.code).toBe('NOT_FOUND');
-    expect(ejecuciones).toBe(antes);
+  it('cada variante con token de admin -> 404 NOT_FOUND', async () => {
+    for (const ruta of variantes()) {
+      const res = await request(app.server).get(ruta).set('Authorization', `Bearer ${adminToken}`);
+      expect(res.status, ruta).toBe(404);
+      expect(res.body.error.code, ruta).toBe('NOT_FOUND');
+    }
   });
 
-  it('control: la ruta exacta sí ejecuta el stub', async () => {
-    const antes = ejecuciones;
+  it('control: la ruta exacta sí llega al manejador', async () => {
     const res = await request(app.server)
-      .put(`${API_PREFIX}/${RUTA}`)
-      .set('Authorization', `Bearer ${adminToken}`)
-      .send({});
+      .get(`${API_PREFIX}/admin/metrics/guards/${guardiaId}`)
+      .set('Authorization', `Bearer ${adminToken}`);
     expect(res.status).toBe(200);
-    expect(ejecuciones).toBe(antes + 1);
+    expect(res.body.data).toHaveProperty('attendedCount');
   });
 
   it('OPTIONS anónimo sobre una ruta con roles -> 404 (nunca 200)', async () => {
-    const antes = ejecuciones;
-    const res = await request(app.server).options(`${API_PREFIX}/${RUTA}`);
+    const res = await request(app.server).options(
+      `${API_PREFIX}/admin/metrics/guards/${guardiaId}`,
+    );
     expect(res.status).toBe(404);
-    expect(ejecuciones).toBe(antes);
   });
 
   it('OPTIONS con token de admin también -> 404', async () => {
     const res = await request(app.server)
-      .options(`${API_PREFIX}/${RUTA}`)
+      .options(`${API_PREFIX}/admin/metrics/guards/${guardiaId}`)
       .set('Authorization', `Bearer ${adminToken}`);
     expect(res.status).toBe(404);
   });

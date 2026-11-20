@@ -557,6 +557,38 @@ para acordarlo en equipo y no se cambia aquí.
 
 ---
 
+## D50 · Alcance de BE-06: cobertura del guardia
+
+**Contexto.** `PUT /admin/guards/:id/coverage` (A-03) era la última de las 38 rutas de la
+política sin implementar. Define el turno, el centro, el radio y la zona del guardia: es el
+dato con el que el despacho decide a qué guardias les llega una alerta y la etiqueta con la que
+las métricas agrupan por zona.
+
+**Decisiones.**
+
+1. **El esquema valida la forma; las tres reglas de negocio están en el servicio.** El radio
+   mínimo y el máximo son configuración (`COVERAGE_RADIUS_MIN_METERS` y
+   `COVERAGE_RADIUS_MAX_METERS`), así que el esquema no puede conocerlos: el mensaje de error
+   lleva el valor configurado, no uno escrito en el código.
+
+2. **El orden de validación es turno, radio y zona**, el mismo del front. El formulario del
+   administrador muestra un error a la vez: si el backend contestara primero por la zona, la
+   persona corregiría algo distinto a lo que le marcó la app.
+
+3. **`NOT_FOUND` gana al cuerpo inválido.** Primero se comprueba que el id sea de un guardia y
+   después se valida el cuerpo, igual que en el resto de `/admin/guards/:id`.
+
+4. **El radio viaja como entero** (`z.int`), porque el front lo castea con `as int?` y un
+   `4000.0` lo rompería (sección 1 del contrato).
+
+**Consecuencia para las pruebas de seguridad.** Ya no queda ninguna ruta stub: las pruebas de
+normalización de `correcciones-finales.test.ts` pasan a usar una ruta **real** con `:id`
+(`GET /admin/metrics/guards/:id`) y comparan 404 contra 200, en vez de contar ejecuciones de un
+stub. El registro de stubs se deja puesto: si alguien agrega una clave a la política antes de
+implementarla, vuelve a cubrirla solo.
+
+---
+
 **Decisiones de diseño aún abiertas**
 
 - **Ventana de gracia del refresh (D25):** **cerrada en BE-01 paso 5.** Se eligió aceptar el token ya rotado una vez más y emitir un sucesor nuevo de la misma familia; `REFRESH_GRACE_SECONDS` vale 5 por defecto.

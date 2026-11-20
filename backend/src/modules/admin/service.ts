@@ -1,6 +1,6 @@
 // A-01 Alta · A-02 Edición y baja de guardias (BE-02).
-// A-05 Historial · A-06 Métricas generales · A-07 Métricas por guardia · A-08 Desbloqueo (BE-07).
-// La cobertura (turno, centro, radio y zona) es A-03 y vive en BE-06.
+// A-03 Cobertura (BE-06). A-05 Historial · A-06 Métricas generales · A-07 Métricas por
+// guardia · A-08 Desbloqueo (BE-07).
 import type { PasswordHasher } from '../../auth/password.js';
 import {
   generalMetrics,
@@ -8,10 +8,11 @@ import {
   type GeneralMetrics,
   type GuardMetrics,
 } from '../../domain/metrics.js';
+import { hhmmToMinutes } from '../../domain/shift.js';
 import { wallClockToUtc } from '../../domain/timezone.js';
 import { esCorreoDuplicado, esRegistroInexistente } from '../../db/errores-prisma.js';
 import type { PrismaClient } from '../../db/prisma.js';
-import { emailTaken, notFound } from '../../errors/app-error.js';
+import { emailTaken, invalidInput, notFound } from '../../errors/app-error.js';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { Role } from '../../generated/prisma/enums.js';
 import { serializeUser, type UserJson } from '../auth/serializers.js';
@@ -21,7 +22,7 @@ import {
   type AlertJson,
   type SerializeOptions,
 } from '../alerts/serializers.js';
-import type { HistoryQuery, PeriodQuery } from './schemas.js';
+import type { CoverageBody, HistoryQuery, PeriodQuery } from './schemas.js';
 import { serializeGuard, type GuardJson } from './serializers.js';
 
 /** Turno por defecto de un guardia recién dado de alta (memoria_admin_repository.dart:53-59). */
@@ -37,11 +38,23 @@ export interface AdminServiceDeps {
   serialize: SerializeOptions;
   /** Zona horaria IANA de los turnos (config TZ_SHIFTS): hora de `alertsByHour` y de las fechas sin zona. */
   timeZone: string;
+  /** A-03: COVERAGE_RADIUS_MIN_METERS y COVERAGE_RADIUS_MAX_METERS. */
+  coverageRadius: { min: number; max: number };
   now?: () => Date;
 }
 
+/** `true` si el texto es una hora "HH:mm" válida (`regla_turno.dart` usa el mismo patrón). */
+function esHoraValida(hhmm: string): boolean {
+  try {
+    hhmmToMinutes(hhmm);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function createAdminService(deps: AdminServiceDeps) {
-  const { prisma, hasher, serialize, timeZone } = deps;
+  const { prisma, hasher, serialize, timeZone, coverageRadius } = deps;
   const now = deps.now ?? (() => new Date());
 
   /**
@@ -179,6 +192,44 @@ export function createAdminService(deps: AdminServiceDeps) {
       await guardiaConPerfil(guardId);
       await prisma.user.update({ where: { id: guardId }, data: { isActive: false } });
       return null;
+    },
+
+    /**
+     * A-03 · Cobertura: turno, centro, radio y zona. Es el dato que el despacho usa para
+     * decidir a qué guardias les llega una alerta (centro + radio + turno) y la etiqueta con
+     * la que las métricas agrupan por zona.
+     *
+     * Orden de validación igual al del front (`cobertura_view_model.dart`): turno, radio y
+     * zona. Importa porque el formulario muestra un error a la vez: si el backend contestara
+     * primero por la zona, el usuario corregiría algo distinto a lo que le marcó la app.
+     */
+    async updateCoverage(guardId: string, input: CoverageBody): Promise<GuardJson> {
+      await guardiaConPerfil(guardId); // NOT_FOUND antes de validar el cuerpo
+
+      if (!esHoraValida(input.shiftStart) || !esHoraValida(input.shiftEnd)) {
+        throw invalidInput('Usa el formato HH:mm');
+      }
+      if (input.radiusMeters < coverageRadius.min) {
+        throw invalidInput(`El radio mínimo es de ${String(coverageRadius.min)} m`);
+      }
+      if (input.radiusMeters > coverageRadius.max) {
+        throw invalidInput(`El radio máximo es de ${String(coverageRadius.max)} m`);
+      }
+      const zona = input.zone.trim();
+      if (zona.length === 0) throw invalidInput('Escribe la zona de cobertura');
+
+      await prisma.guardProfile.update({
+        where: { userId: guardId },
+        data: {
+          shiftStart: input.shiftStart,
+          shiftEnd: input.shiftEnd,
+          coverageCenterLat: input.center.lat,
+          coverageCenterLng: input.center.lng,
+          coverageRadiusMeters: input.radiusMeters,
+          zone: zona,
+        },
+      });
+      return guardiaConPerfil(guardId);
     },
 
     /**
