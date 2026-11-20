@@ -343,3 +343,40 @@ La foto y el rumbo de la alerta (U-06) siguen simulados: el repositorio del prof
 incluye cámara** (ni el paquete ni el permiso en el manifiesto), así que eso no se pudo tomar
 de ahí. En iOS el atajo no puede funcionar con el teléfono bloqueado: Apple no deja a una app
 de terceros interceptar el volumen (eso es exclusivo de funciones del sistema como SOS).
+
+---
+
+## 12. Sensores y permisos reales (U-01, U-02, U-06, U-07)
+
+Agregado junto con BE-06/BE-07. En un teléfono la app ya usa cámara, GPS y rumbo de verdad;
+en web, escritorio y pruebas sigue con los simulados (lo decide `enTelefono` en `main.dart`).
+
+| Archivo | Qué hace |
+|---|---|
+| `lib/datos/sensores_reales.dart` | `CamaraReal`, `UbicacionReal` y `BrujulaReal` (geolocator + camera) |
+| `lib/datos/permisos_sistema_real.dart` | Pide cámara, ubicación y notificaciones (permission_handler) |
+
+### Qué comprobar en el teléfono
+
+1. **Permisos.** Regístrate con una cuenta nueva: aparece la pantalla que explica los tres
+   accesos. Al tocar **Continuar**, el sistema pregunta uno por uno.
+2. **Niégalos todos a propósito.** La app debe seguir funcionando: se entra al inicio y el
+   botón de pánico sigue ahí. La alerta saldrá sin foto y sin ubicación.
+3. **Concédelos y envía una alerta.** En el detalle debe aparecer la foto y la ubicación. En
+   el backend, `GET /admin/alerts` debe traer `photoUrl` y `location` con valores.
+4. **Rumbo.** Con el teléfono quieto el GPS no da rumbo fiable y llega `null`: eso es correcto,
+   no un fallo. Camina unos metros antes de disparar para verlo con valor.
+5. **Seguimiento (U-07).** Con la alerta activa, camina: la ubicación debe actualizarse (el
+   filtro es de 10 metros, así que moverse en el sitio no manda nada).
+
+### Lo que falta y por qué
+
+| Pendiente | Qué hace falta |
+|---|---|
+| Mapas de verdad (G-06, A-03) | Una clave de Google Maps y `google_maps_flutter`. Hoy se ve `MapPlaceholder` con los mismos datos |
+| Aviso push al guardia (G-02) | Un proyecto de Firebase (`google-services.json`) y `PUSH_PROVIDER=fcm` en el backend |
+| Gráficas del panel (A-06) | `fl_chart` si el equipo lo decide; hoy los números se muestran sin gráfica |
+| Ubicación en segundo plano | Android obliga a pedirla en un paso aparte y posterior al permiso normal |
+
+Las tres primeras necesitan credenciales o una decisión del equipo, no código: no son algo que
+se pueda cerrar sin eso.

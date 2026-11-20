@@ -635,6 +635,54 @@ el backend manda `x-accel-buffering: no`).
 
 ---
 
+## D52 · Sensores y permisos reales del teléfono
+
+**Contexto.** La cámara, el GPS y la brújula eran simulados (`sensores_simulados.dart`), así
+que en un teléfono una alerta salía sin foto, sin coordenada y sin rumbo: el guardia no tenía
+a dónde ir. Los permisos del sistema no se pedían nunca (había un TODO en la pantalla de
+permisos).
+
+**Decisiones.**
+
+1. **Ningún sensor lanza nunca.** Si no responde, no hay permiso o el teléfono no tiene la
+   pieza, devuelven `null` y la alerta viaja igual (marcada como evidencia incompleta o
+   pendiente de ubicación). Una alerta de pánico no se pierde porque la cámara tardó. La
+   espera máxima por lectura son 8 segundos, corta a propósito.
+
+2. **El rumbo sale del propio GPS** (`Position.heading`), no de un paquete de brújula aparte:
+   es el curso del dispositivo, que es lo que importa para saber hacia dónde mira la foto, y
+   quita una dependencia. Con el teléfono quieto el GPS no da rumbo fiable y devuelve `null`.
+
+3. **La foto es automática, sin vista previa ni botón.** Se abre la cámara, se dispara y se
+   cierra en un `finally`: una cámara abierta deja el LED encendido y bloquea a las demás
+   apps. Resolución media, porque la foto tiene que salir y subir rápido, no quedar bonita.
+
+4. **Los permisos se piden al tocar "Continuar", nunca antes.** Primero la pantalla explica
+   para qué sirve cada uno y después el sistema pregunta; al revés, la persona ve tres
+   diálogos sin contexto. Negarse **no** bloquea la app ni deja a nadie atrapado en esa
+   pantalla.
+
+5. **La ubicación se pide "mientras se usa la app".** Android exige pedir la de segundo plano
+   en un paso aparte y posterior, así que eso queda para cuando haga falta (U-07 con la
+   pantalla apagada) y no en el alta.
+
+6. **`permission_handler` se queda en 12.x, no 13.x.** La 13 obliga a `compileSdk 37` y el
+   Android Gradle Plugin de este proyecto llega a 36: subirlo es un cambio de herramientas que
+   afecta a todo el equipo, no algo que meter de lado en esta tarjeta.
+
+7. **La capa de datos sigue sin conocer la interfaz.** Los adaptadores reales viven en
+   `lib/datos/sensores_reales.dart` y `permisos_sistema_real.dart`, implementan los mismos
+   contratos que los simulados, y la única línea que cambia es la de `main.dart`: en web,
+   escritorio y pruebas se siguen usando los simulados.
+
+**Lo que NO se puede probar aquí.** Los adaptadores son envoltorios finos sobre plugins de
+plataforma: no hay prueba automática que valga sin un teléfono. Lo que sí está probado es el
+enganche (7 pruebas de que los permisos se piden al continuar, que negarse no bloquea y que
+revisar el estado no suelta diálogos) y que el APK compila. La captura real de foto, GPS y
+rumbo es verificación en dispositivo: ver `docs/CONEXION_DISPOSITIVO.md`.
+
+---
+
 **Decisiones de diseño aún abiertas**
 
 - **Ventana de gracia del refresh (D25):** **cerrada en BE-01 paso 5.** Se eligió aceptar el token ya rotado una vez más y emitir un sucesor nuevo de la misma familia; `REFRESH_GRACE_SECONDS` vale 5 por defecto.

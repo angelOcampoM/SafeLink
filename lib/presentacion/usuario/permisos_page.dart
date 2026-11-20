@@ -5,8 +5,10 @@
 // el router decide cuándo mostrarla (igual que la pantalla de bloqueo).
 // Sin ViewModel propio: no carga datos ni guarda estado.
 //
-// TODO(U-06): pedir los permisos reales del sistema al tocar "Continuar"
-// (cámara, ubicación en segundo plano y notificaciones).
+// "Continuar" se los pide al sistema de verdad: la sesión llama a `PermisosSistema`
+// (lib/datos/permisos_sistema.dart). Primero se explica para qué son y después se piden,
+// nunca al revés. Negarse no bloquea la app: la alerta viajará sin foto o pendiente de
+// ubicación, pero sale.
 
 import 'package:flutter/material.dart';
 
@@ -62,7 +64,8 @@ class PermisosPage extends StatelessWidget {
               SlButton(label: 'Continuar', onPressed: sesion.permisosVistos),
               AppSpacing.gapSm,
               Text(
-                'Puedes cambiar estos permisos después desde Configuración.',
+                'Al continuar, el teléfono te preguntará por cada uno. Puedes cambiarlos '
+                'después desde los ajustes del sistema.',
                 style: context.text.bodySmall,
                 textAlign: TextAlign.center,
               ),
