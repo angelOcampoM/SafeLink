@@ -183,6 +183,9 @@ describe('PUT /admin/guards/:id/coverage', () => {
         triggeredAt: new Date('2026-03-01T18:00:00Z'),
         receivedAt: new Date('2026-03-01T18:00:00Z'),
         statusChangedAt: new Date('2026-03-01T18:00:00Z'),
+        // La base exige fecha de cierre en una alerta `closed`
+        // (alerts_closed_at_required_chk, solo en el SQL de la migración).
+        closedAt: new Date('2026-03-01T18:10:00Z'),
       },
     });
     const res = await request(env.app.server)
