@@ -3,16 +3,26 @@ import { createPasswordHasher } from '../../auth/password.js';
 import type { PrismaClient } from '../../db/prisma.js';
 import { ok } from '../../http/envelope.js';
 import { parse, parseIdParam } from '../../http/validate.js';
-import { createGuardBodySchema, guardsQuerySchema, updateGuardBodySchema } from './schemas.js';
+import type { SerializeOptions } from '../alerts/serializers.js';
+import {
+  createGuardBodySchema,
+  guardsQuerySchema,
+  historyQuerySchema,
+  periodQuerySchema,
+  updateGuardBodySchema,
+} from './schemas.js';
 import { createAdminService } from './service.js';
 
 export interface AdminRoutesOptions {
   prisma: PrismaClient;
+  /** Opciones de serialización de alertas: las mismas que usan los demás módulos (app.ts). */
+  serialize: SerializeOptions;
 }
 
 /**
- * Gestión de guardias (A-01, A-02 · BE-02). El acceso lo decide la política
- * central (src/security/policies.ts): estas rutas son solo para el rol admin.
+ * Gestión de guardias (A-01, A-02 · BE-02) y, además, historial, métricas y desbloqueo
+ * (A-05 a A-08 · BE-07). El acceso lo decide la política central
+ * (src/security/policies.ts): estas rutas son solo para el rol admin.
  * La cobertura (PUT /admin/guards/:id/coverage) es A-03 y toca a BE-06.
  */
 export async function adminRoutes(app: FastifyInstance, options: AdminRoutesOptions): Promise<void> {
@@ -22,7 +32,12 @@ export async function adminRoutes(app: FastifyInstance, options: AdminRoutesOpti
     timeCost: config.ARGON2_TIME_COST,
     parallelism: config.ARGON2_PARALLELISM,
   });
-  const service = createAdminService({ prisma: options.prisma, hasher });
+  const service = createAdminService({
+    prisma: options.prisma,
+    hasher,
+    serialize: options.serialize,
+    timeZone: config.TZ_SHIFTS,
+  });
 
   app.get('/admin/guards', async (request) => {
     const query = parse(guardsQuerySchema, request.query);
@@ -50,5 +65,35 @@ export async function adminRoutes(app: FastifyInstance, options: AdminRoutesOpti
   app.delete('/admin/guards/:id', async (request) => {
     const id = parseIdParam((request.params as { id?: unknown }).id);
     return ok(await service.deactivateGuard(id));
+  });
+
+  // A-05 · Historial con filtros (contrato 4.8). Un filtro inválido es 400 INVALID_STATE.
+  app.get('/admin/alerts', async (request) => {
+    const query = parse(historyQuerySchema, request.query);
+    return ok(await service.listAlerts(query));
+  });
+
+  // A-06 · Métricas generales del periodo.
+  app.get('/admin/metrics', async (request) => {
+    const query = parse(periodQuerySchema, request.query);
+    return ok(await service.generalMetrics(query));
+  });
+
+  // A-07 · Métricas de un guardia. Id que no es de un guardia: NOT_FOUND.
+  app.get('/admin/metrics/guards/:id', async (request) => {
+    const id = parseIdParam((request.params as { id?: unknown }).id);
+    const query = parse(periodQuerySchema, request.query);
+    return ok(await service.guardMetrics(id, query));
+  });
+
+  // A-08 · Usuarios protegidos y los bloqueados ahora mismo.
+  app.get('/admin/users', async () => ok(await service.listProtectedUsers()));
+
+  app.get('/admin/users/blocked', async () => ok(await service.listBlockedUsers()));
+
+  // A-08 · Desbloqueo a mano: quita el bloqueo y reinicia el contador de falsas alarmas.
+  app.delete('/admin/users/:id/block', async (request) => {
+    const id = parseIdParam((request.params as { id?: unknown }).id);
+    return ok(await service.unblockUser(id));
   });
 }

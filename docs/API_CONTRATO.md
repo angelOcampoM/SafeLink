@@ -371,13 +371,15 @@ Con cero alertas todo vale 0 y las listas van vacías en `alertsByZone`; `alerts
 
 Resultado siempre ordenado por fecha de recepción (`receivedAt`) descendente (el front ordena por `triggeredAt`, `filtro_historial.dart:28`). Un `status` desconocido en el mock revienta; en el backend es `400 INVALID_STATE`.
 
+**D49 · Zona horaria de `from` y `to`.** El front manda la fecha con `DateTime.toIso8601String()` sobre una fecha **local** (`FiltroHistorialJson.aQuery`, `nube_mapeadores.dart:226-227`), así que el texto llega **sin zona**: `2026-11-18T00:00:00.000`. El backend lee esos textos como hora de pared de `TZ_SHIFTS`, no como UTC ni como la zona del servidor (en CI es UTC y el rango se correría seis horas: el "día 18" del administrador dejaría fuera la tarde del 18 y metería la madrugada del 19). Si el texto **sí** trae zona (`...Z` o `...-06:00`) se respeta la que trae. Una fecha imposible (mes 13, 31 de febrero) es `400 INVALID_STATE`, no un rango distinto al pedido.
+
 ---
 
 ## 5. Rutas (31 del front + 3 excepciones: `/auth/refresh`, la foto y `/users/me/device-token`)
 
 Todas las rutas son relativas a `/api/v1` (D20).
 
-Columnas: **Rol** = quién puede llamarla (el resto recibe `403 FORBIDDEN`). **Req.** = cuerpo o query que manda el front. **Tarjeta** = quién la implementa (BE-06/BE-07 son **tentativas**).
+Columnas: **Rol** = quién puede llamarla (el resto recibe `403 FORBIDDEN`). **Req.** = cuerpo o query que manda el front. **Tarjeta** = quién la implementa (solo BE-06 sigue siendo **tentativa**; BE-07 ya está implementada).
 
 **Errores comunes a todas las rutas autenticadas** (no se repiten en cada fila): `401 UNAUTHORIZED` (sin token, vencido, sesión revocada o usuario dado de baja; `authenticate` relee `is_active` y rechaza un `sid` revocado en la misma consulta, D25; **excepción:** `POST /auth/session` usa verificación propia y devuelve `200` con `data: null` para sesión revocada o usuario inactivo), `403 FORBIDDEN` (rol no permitido), `400 INVALID_STATE` (cuerpo o query inválidos), `500`/`503 SERVICE_UNAVAILABLE`.
 
@@ -507,12 +509,12 @@ Evidencia: `safelink_service.dart:202-296`. Cliente: `nube_admin_repository.dart
 | DELETE | `/admin/guards/:id` (`:234-237`) | — | `null`. **Baja lógica**: `isActive=false`, no borra el registro (`memoria_admin_repository.dart:75-78`) | `NOT_FOUND` | A-02 | BE-02 (implementado) |
 | PUT | `/admin/guards/:id/coverage` (`:238-251`) | `{ "shiftStart", "shiftEnd", "center": {lat,lng}, "radiusMeters": int, "zone": string }` | Guard | `INVALID_STATE` 400 (formato de turno, radio fuera de rango, zona vacía; ver sección 2); `NOT_FOUND` | A-03 | BE-06 |
 | POST | `/admin/alerts/:id/resolve` (`:252-262`) | `{ "resolution", "adminNote" }` (nota obligatoria, 1–300 caracteres) | Alert (`resolved_by_admin`, `resolution`, `adminNote`, `closedAt`) | `INVALID_STATE` 409 `Esta alerta ya no está escalada`; `INVALID_STATE` 400 por nota; `NOT_FOUND` | A-04 | BE-05 |
-| GET | `/admin/alerts` (`:263-268`) | query de la sección 4.8 | Alert[] (todas, también activas) | `INVALID_STATE` 400 (filtro inválido) | A-05 | BE-07 |
-| GET | `/admin/metrics` (`:269-275`) | query `from`, `to` | GeneralMetrics | — | A-06 | BE-07 |
-| GET | `/admin/metrics/guards/:id` (`:276-282`) | query `from`, `to` | GuardMetrics | `NOT_FOUND` | A-07 | BE-07 |
-| GET | `/admin/users` (`:283-287`) | — | User[] **solo `protected_user`**, ordenados por nombre (`memoria_admin_repository.dart:161-165`) | — | A-08 (extra del front) | BE-07 |
-| GET | `/admin/users/blocked` (`:288-292`) | — | User[] con `blockedUntil` en el futuro (`memoria_admin_repository.dart:168-172`) | — | A-08 | BE-07 |
-| DELETE | `/admin/users/:id/block` (`:293-296`) | — | `null`. Quita el bloqueo **y pone `falseAlarmCount` en 0** (`memoria_admin_repository.dart:177`) | `NOT_FOUND` (también si el id no es de un `protected_user`) | A-08 | BE-07 |
+| GET | `/admin/alerts` (`:263-268`) | query de la sección 4.8 | Alert[] (todas, también activas) | `INVALID_STATE` 400 (filtro inválido) | A-05 | BE-07 (implementado) |
+| GET | `/admin/metrics` (`:269-275`) | query `from`, `to` | GeneralMetrics | — | A-06 | BE-07 (implementado) |
+| GET | `/admin/metrics/guards/:id` (`:276-282`) | query `from`, `to` | GuardMetrics | `NOT_FOUND` | A-07 | BE-07 (implementado) |
+| GET | `/admin/users` (`:283-287`) | — | User[] **solo `protected_user`**, ordenados por nombre (`memoria_admin_repository.dart:161-165`) | — | A-08 (extra del front) | BE-07 (implementado) |
+| GET | `/admin/users/blocked` (`:288-292`) | — | User[] con `blockedUntil` en el futuro (`memoria_admin_repository.dart:168-172`) | — | A-08 | BE-07 (implementado) |
+| DELETE | `/admin/users/:id/block` (`:293-296`) | — | `null`. Quita el bloqueo **y pone `falseAlarmCount` en 0** (`memoria_admin_repository.dart:177`) | `NOT_FOUND` (también si el id no es de un `protected_user`) | A-08 | BE-07 (implementado) |
 
 Comportamiento (front):
 
@@ -533,7 +535,7 @@ Comportamiento (front):
 | BE-04 | `/guard/*` (8 rutas), canales `guard/alerts` y `guard/alerts/:id`, `PUT /users/me/device-token` (excepción, D42) y el aviso push (sección 10) |
 | BE-05 | Escalamiento automático, `/admin/alerts/:id/resolve`, canal `admin/alerts/escalated`, bloqueo por falsas alarmas (**implementado**, D48) |
 | BE-06 (tentativa) | `/admin/guards` (6 rutas) |
-| BE-07 (tentativa) | `/admin/alerts`, `/admin/metrics`, `/admin/metrics/guards/:id`, `/admin/users`, `/admin/users/blocked`, `DELETE /admin/users/:id/block` |
+| BE-07 | `/admin/alerts`, `/admin/metrics`, `/admin/metrics/guards/:id`, `/admin/users`, `/admin/users/blocked`, `DELETE /admin/users/:id/block` (**implementado**, D49) |
 
 Total: 6 (sesión y cuenta del front) + 4 (usuario) + 8 (guardia) + 13 (admin) = **31 rutas** del front, más `POST /auth/refresh`.
 

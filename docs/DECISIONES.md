@@ -504,6 +504,59 @@ Cosas que no se cierran en el paso 2 pero que el backend **debe** resolver. Cada
 
 - La API debe validar que `alerts.guard_id` y `alert_ignores.guard_id` sean usuarios con rol `guard` (no se puede con CHECK).
 
+## D49 · Alcance de BE-07: historial, métricas y desbloqueo del administrador
+
+**Contexto.** BE-07 cierra las seis rutas de administración que quedaban: `GET /admin/alerts`
+(A-05), `GET /admin/metrics` (A-06), `GET /admin/metrics/guards/:id` (A-07), `GET /admin/users`,
+`GET /admin/users/blocked` y `DELETE /admin/users/:id/block` (A-08). Con eso quedan 37 de las 38
+rutas de la política implementadas; la única pendiente es `PUT /admin/guards/:id/coverage` (A-03,
+BE-06).
+
+**Decisiones.**
+
+1. **Las fechas del filtro sin zona son hora de pared de `TZ_SHIFTS`.** El front manda
+   `DateTime.toIso8601String()` sobre una fecha local, así que el texto llega sin zona
+   (`2026-11-18T00:00:00.000`). Leerlo como UTC correría el rango seis horas: el "día 18" del
+   administrador dejaría fuera la tarde del 18 y metería la madrugada del 19. Si el texto trae
+   zona explícita se respeta la que trae. La conversión vive en `src/domain/timezone.ts`, con
+   `Intl` (nada que instalar) y en dos pasadas, para que en una zona con horario de verano se
+   use el desplazamiento de esa fecha y no uno fijo.
+
+2. **Una fecha imposible es 400, no un rango distinto.** `Date.parse` acepta un 31 de febrero
+   y lo corre al 3 de marzo en silencio. El esquema revisa el día del calendario aparte: un
+   filtro con una fecha que no existe se rechaza en lugar de responder un periodo que nadie
+   pidió.
+
+3. **Los códigos de `status` del filtro salen del enum de la base**, no de una lista escrita a
+   mano en el esquema: un estado nuevo en el modelo queda filtrable sin tocar el esquema y no
+   pueden desalinearse. Un estado desconocido es `400 INVALID_STATE` (en el mock del front
+   revienta).
+
+4. **`alertsByHour` agrupa por la hora de `TZ_SHIFTS`.** El front usa la hora local del
+   dispositivo (`regla_metricas.dart:22`), que en el servidor no existe; la referencia es la
+   zona de los turnos, no la del proceso (en CI es UTC). Queda configurable y hay una prueba
+   que lo levanta con `TZ_SHIFTS=UTC` para demostrar que la zona es lo que decide.
+
+5. **Las métricas por guardia solo exigen que el id sea de un guardia**, no que tenga perfil:
+   exigir el perfil haría que un guardia al que le falte esa fila (dato inconsistente)
+   pareciera no existir. Un id que no es de un guardia es `NOT_FOUND` y no un guardia con
+   ceros, que se leería como "guardia sin actividad".
+
+6. **El desbloqueo a mano reinicia `falseAlarmCount`.** Si solo quitara `blockedUntil`, la
+   siguiente falsa alarma volvería a pasar el límite y el desbloqueo duraría un solo
+   incidente. Desbloquear a quien no está bloqueado no es error: deja el mismo estado final.
+
+7. **Un bloqueo vencido no se borra de la base.** Es historial; simplemente deja de salir en
+   `GET /admin/users/blocked`, que filtra por `blockedUntil` en el futuro.
+
+**Pendiente heredado (no es de BE-07).** El enum `TriggerMethod` de la base guarda el doble clic
+de volumen como `shake` (`CodigosJson.metodo`, `nube_mapeadores.dart:31`), nombre que quedó del
+texto antiguo "agitación". Funciona de punta a punta, pero el nombre engaña a quien lea la base.
+Renombrarlo es una migración que toca el front y el backend a la vez, así que se deja anotado
+para acordarlo en equipo y no se cambia aquí.
+
+---
+
 **Decisiones de diseño aún abiertas**
 
 - **Ventana de gracia del refresh (D25):** **cerrada en BE-01 paso 5.** Se eligió aceptar el token ya rotado una vez más y emitir un sucesor nuevo de la misma familia; `REFRESH_GRACE_SECONDS` vale 5 por defecto.

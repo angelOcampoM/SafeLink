@@ -61,6 +61,13 @@ const REALES = new Set([
   // BE-05
   'GET /events/admin/alerts/escalated',
   'POST /admin/alerts/:id/resolve',
+  // BE-07
+  'GET /admin/alerts',
+  'GET /admin/metrics',
+  'GET /admin/metrics/guards/:id',
+  'GET /admin/users',
+  'GET /admin/users/blocked',
+  'DELETE /admin/users/:id/block',
   'PUT /users/me/device-token',
 ]);
 const ROLES: readonly Role[] = ['protected_user', 'guard', 'admin'];
