@@ -589,6 +589,52 @@ implementarla, vuelve a cubrirla solo.
 
 ---
 
+## D51 · Tiempo real en el cliente HTTP (SSE)
+
+**Contexto.** El contrato define cuatro canales en tiempo real (sección 6) y el backend los
+sirve con SSE desde BE-03. En el front, `HttpSafeLinkService.escuchar()` devolvía
+`SERVICE_UNAVAILABLE`, así que contra el backend real todas las pantallas en vivo mostraban un
+error: la alerta activa del usuario, el listado del guardia, el detalle de una alerta y la
+bandeja de escaladas del administrador.
+
+**Decisiones.**
+
+1. **El canal no termina solo.** Mientras alguien escuche, se reconecta. Una pantalla que
+   depende de una alerta en curso no puede quedarse muda porque la red se cayó un segundo;
+   quien ya no lo necesita cancela la suscripción y eso sí cierra la conexión. La espera entre
+   reintentos arranca en 1 s y se duplica hasta 30 s, y vuelve al mínimo en cuanto una conexión
+   funciona.
+
+2. **Un `UNAUTHORIZED` por el canal no cierra la sesión del usuario.** El servidor avisa y
+   cierra cuando vence el access token (D26), lo cual pasa cada pocos minutos: se hace refresh
+   y se reconecta en silencio. Solo si el refresh se rechaza se emite `UNAUTHORIZED` hacia la
+   app, que es lo que la devuelve al login.
+
+3. **Un cliente HTTP propio por intento.** Cerrarlo es lo que aborta un SSE abierto, y hacerlo
+   sobre el cliente compartido cancelaría también las peticiones normales en vuelo.
+
+4. **Al cerrar, primero el cliente y después la suscripción.** Al revés, `cancel()` espera a
+   que termine el socket —y un SSE no termina nunca—, así que una pantalla que se cierra se
+   colgaría al soltar el canal. Lo encontró la prueba de cancelación.
+
+5. **Un error del transporte se absorbe y se trata como "se cortó".** Si se dejara subir,
+   cancelar una pantalla soltaría una excepción que ya no tiene quién la escuche.
+
+6. **El lector del formato SSE es una función pura** (`lib/datos/sse_eventos.dart`): recibe
+   líneas y devuelve eventos. Así el formato se prueba sin servidor. Un evento con JSON roto se
+   descarta en silencio en vez de tumbar el canal, y un evento al que le falta la línea en
+   blanco final (el servidor cortó a media escritura) **no** se emite: un snapshot a medias es
+   peor que esperar la reconexión.
+
+**Nota de pruebas.** Las pruebas del canal usan un `HttpServer` real en loopback, no un cliente
+simulado, porque lo que hay que comprobar es justo lo que un simulado no reproduce: el troceado
+del flujo, la cabecera `Authorization`, que el canal no termine al caerse la conexión y que un
+401 provoque refresh y reconexión. Ese servidor necesita `response.bufferOutput = false`, o
+Dart retiene la respuesta hasta cerrarla y no hay nada "en vivo" que leer (por el mismo motivo
+el backend manda `x-accel-buffering: no`).
+
+---
+
 **Decisiones de diseño aún abiertas**
 
 - **Ventana de gracia del refresh (D25):** **cerrada en BE-01 paso 5.** Se eligió aceptar el token ya rotado una vez más y emitir un sucesor nuevo de la misma familia; `REFRESH_GRACE_SECONDS` vale 5 por defecto.
