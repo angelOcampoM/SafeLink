@@ -37,7 +37,9 @@ void main() {
     expect(find.text('Cámara'), findsOneWidget);
     expect(find.text('Ubicación'), findsOneWidget);
     expect(find.text('Notificaciones'), findsOneWidget);
-    expect(find.textContaining('Puedes cambiar estos permisos'), findsOneWidget);
+    // Avisa de que al continuar el sistema preguntará, y de que se pueden cambiar después.
+    expect(find.textContaining('el teléfono te preguntará'), findsOneWidget);
+    expect(find.textContaining('ajustes del sistema'), findsOneWidget);
   });
 
   testWidgets('"Continuar" lleva al inicio y los permisos no se vuelven a pedir', (tester) async {

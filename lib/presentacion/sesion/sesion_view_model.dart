@@ -5,17 +5,25 @@
 // No importa material.dart. No valida formularios (eso es de Login/Registro).
 
 import '../../datos/auth_repository.dart';
+import '../../datos/permisos_sistema.dart';
 import '../../datos/sesion_guardada.dart';
 import '../../dominio/enums.dart';
 import '../../dominio/usuario.dart';
 import '../comun/view_model.dart';
 
 class SesionViewModel extends ViewModel {
-  SesionViewModel(this._auth, this._guardada, {DateTime Function()? reloj}) : _reloj = reloj ?? DateTime.now;
+  SesionViewModel(
+    this._auth,
+    this._guardada, {
+    DateTime Function()? reloj,
+    PermisosSistema? permisos,
+  })  : _reloj = reloj ?? DateTime.now,
+        _permisos = permisos ?? const PermisosConcedidos();
 
   final AuthRepository _auth;
   final SesionGuardada _guardada;
   final DateTime Function() _reloj;
+  final PermisosSistema _permisos;
 
   Usuario? get usuario => _auth.usuarioActual;
   bool get haySesion => usuario != null;
@@ -88,6 +96,13 @@ class SesionViewModel extends ViewModel {
   }
 
   /// La pantalla de permisos ya se mostró: el router deja pasar al inicio.
+  /// Último estado conocido de los permisos del sistema (para Configuración).
+  EstadoPermisos? estadoPermisos;
+
+  /// U-01 · U-02 · "Continuar": ahora SÍ se los pide al sistema, después de haber explicado
+  /// para qué sirven. La pantalla se marca como vista pase lo que pase con la respuesta:
+  /// negarse deja la app en pie (la alerta viajará sin foto o pendiente de ubicación) y no
+  /// puede dejar a nadie atrapado en la explicación.
   Future<void> permisosVistos() async {
     final id = usuario?.id;
     permisosPendientes = false;
@@ -96,6 +111,14 @@ class SesionViewModel extends ViewModel {
       _permisosVistosPor.add(id);
       await _guardada.marcarPermisosVistos(id);
     }
+    estadoPermisos = await _permisos.pedirLosDeLaAlerta();
+    notifyListeners();
+  }
+
+  /// Lo ya concedido, sin preguntar: lo usa Configuración para mostrar el estado.
+  Future<void> revisarPermisosDelSistema() async {
+    estadoPermisos = await _permisos.estado();
+    notifyListeners();
   }
 
   Future<void> cerrarSesion() async {

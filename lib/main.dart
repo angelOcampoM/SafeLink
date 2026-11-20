@@ -6,7 +6,9 @@
 //
 // Regla de dependencias: presentacion → datos → dominio (dominio no depende de nadie).
 
-import 'package:flutter/foundation.dart' show debugPrint, kProfileMode, kReleaseMode;
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb, kProfileMode, kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
@@ -30,8 +32,11 @@ import 'datos/nube_admin_repository.dart';
 import 'datos/nube_alerta_guardia_repository.dart';
 import 'datos/nube_alerta_usuario_repository.dart';
 import 'datos/nube_auth_repository.dart';
+import 'datos/permisos_sistema.dart';
+import 'datos/permisos_sistema_real.dart';
 import 'datos/safelink_service.dart';
 import 'datos/sensores.dart';
+import 'datos/sensores_reales.dart';
 import 'datos/sensores_simulados.dart';
 import 'datos/servicio_disparo_rapido.dart';
 import 'datos/servicio_disparo_rapido_nativo.dart';
@@ -59,6 +64,10 @@ const usarNube = bool.fromEnvironment('USAR_NUBE') || urlApi != '';
 /// Solo con `usarNube = true`: probabilidad de que falle cada petición (0.0–1.0).
 const tasaFallo = 0.0;
 
+/// ¿Esto corre en un teléfono? Solo ahí existen cámara, GPS y permisos del sistema; en web,
+/// escritorio y pruebas se usan los simulados y la demo sigue funcionando igual.
+bool get enTelefono => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // En release/profile solo se acepta https://; si no, se queda en modo memoria.
@@ -78,6 +87,12 @@ Future<void> main() async {
     servicioDisparoRapido:
         ServicioDisparoRapidoNativo.disponible ? ServicioDisparoRapidoNativo() : null,
     vibrador: ServicioDisparoRapidoNativo.disponible ? const VibradorNativo() : null,
+    // U-06 · U-07: cámara, GPS y rumbo reales en el teléfono; simulados en el resto.
+    camara: enTelefono ? CamaraReal() : null,
+    ubicacion: enTelefono ? UbicacionReal() : null,
+    brujula: enTelefono ? BrujulaReal() : null,
+    // U-01 · U-02: los permisos se los pide al sistema al tocar "Continuar".
+    permisos: enTelefono ? const PermisosSistemaReal() : null,
   );
   // U-02: si quedó una sesión abierta, se entra directo sin pasar por el login.
   await dependencias.sesion.restaurar();
@@ -98,6 +113,7 @@ class Dependencias {
     Brujula? brujula,
     ServicioDisparoRapido? servicioDisparoRapido,
     Vibrador? vibrador,
+    PermisosSistema? permisos,
     void Function()? iniciarSimulaciones,
   })  : sesionGuardada = sesionGuardada ?? MemoriaSesionGuardada(),
         camara = camara ?? CamaraSimulada(),
@@ -105,8 +121,9 @@ class Dependencias {
         brujula = brujula ?? BrujulaSimulada(),
         servicioDisparoRapido = servicioDisparoRapido ?? ServicioDisparoRapidoSimulado(),
         vibrador = vibrador ?? VibradorSimulado(),
+        permisos = permisos ?? const PermisosConcedidos(),
         iniciarSimulaciones = iniciarSimulaciones ?? _nada {
-    sesion = SesionViewModel(auth, this.sesionGuardada);
+    sesion = SesionViewModel(auth, this.sesionGuardada, permisos: this.permisos);
     disparoRapido = DisparoRapido(
       servicio: this.servicioDisparoRapido,
       vibrador: this.vibrador,
@@ -143,6 +160,10 @@ class Dependencias {
     AlmacenTokens? almacenTokens,
     ServicioDisparoRapido? servicioDisparoRapido,
     Vibrador? vibrador,
+    Camara? camara,
+    Ubicacion? ubicacion,
+    Brujula? brujula,
+    PermisosSistema? permisos,
   }) {
     if (usarNube) {
       // Con URL de API: cliente HTTP real; sin ella: servicio simulado en memoria.
@@ -159,6 +180,10 @@ class Dependencias {
         sesionGuardada: sesionGuardada,
         servicioDisparoRapido: servicioDisparoRapido,
         vibrador: vibrador,
+        camara: camara,
+        ubicacion: ubicacion,
+        brujula: brujula,
+        permisos: permisos,
         iniciarSimulaciones: simulado?.iniciarSimulaciones,
       );
     }
@@ -172,6 +197,10 @@ class Dependencias {
       sesionGuardada: sesionGuardada,
       servicioDisparoRapido: servicioDisparoRapido,
       vibrador: vibrador,
+      camara: camara,
+      ubicacion: ubicacion,
+      brujula: brujula,
+      permisos: permisos,
       iniciarSimulaciones: db.iniciarSimulaciones,
     );
   }
@@ -188,6 +217,9 @@ class Dependencias {
   final Camara camara;
   final Ubicacion ubicacion;
   final Brujula brujula;
+
+  /// U-01 · U-02: los permisos del sistema. Reales en el teléfono, concedidos en la demo.
+  final PermisosSistema permisos;
 
   /// U-05: servicio en segundo plano y vibración. En Android son los reales
   /// (`ServicioDisparoRapidoNativo` y `VibradorNativo`); en el resto, simulados.
