@@ -12,6 +12,9 @@
 //   guardTopic(guardId)         cambió algo propio de ese guardia: su ubicación, ignorar una
 //                               alerta (BE-06 agrega cobertura y baja).
 //   alertTopic(alertId)         cualquier cambio de esa alerta (canal guard/alerts/:id).
+//   escalatedTopic              (global) una alerta entró o salió de `escalated` (canal
+//                               admin/alerts/escalated). BE-05 lo publica al escalar; BE-06
+//                               debe publicarlo al resolver.
 import { EventEmitter } from 'node:events';
 
 export type Unsubscribe = () => void;
@@ -25,6 +28,7 @@ export const alertsTopicForUser = (userId: string): string => `alerts:user:${use
 export const dispatchTopic = 'alerts:dispatch';
 export const guardTopic = (guardId: string): string => `guard:${guardId}`;
 export const alertTopic = (alertId: string): string => `alert:${alertId}`;
+export const escalatedTopic = 'alerts:escalated';
 
 export function createMemoryEventBus(): EventBus {
   const emitter = new EventEmitter();

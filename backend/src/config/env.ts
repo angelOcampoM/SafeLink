@@ -63,6 +63,9 @@ export const envSchema = z.object({
   GEOFENCE_METERS: entero(50),
   ACCEPT_TIMEOUT_SECONDS: entero(300),
   CONFIRM_TIMEOUT_SECONDS: entero(900),
+  // BE-05: cada cuántos segundos se revisan las alertas vencidas para escalarlas. 0 lo apaga
+  // (pruebas que escalan a mano). Un retraso de hasta este valor sobre los límites de arriba.
+  ESCALATION_SWEEP_SECONDS: z.coerce.number().int().min(0).max(300).default(15),
   FALSE_ALARM_LIMIT: entero(3),
   BLOCK_DAYS: entero(7),
   LOCATION_UPDATE_SECONDS: entero(5),

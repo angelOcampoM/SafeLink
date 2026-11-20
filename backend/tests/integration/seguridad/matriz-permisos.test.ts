@@ -58,6 +58,9 @@ const REALES = new Set([
   'POST /guard/alerts/:id/arrive',
   'GET /events/guard/alerts',
   'GET /events/guard/alerts/:id',
+  // BE-05
+  'GET /events/admin/alerts/escalated',
+  'POST /admin/alerts/:id/resolve',
   'PUT /users/me/device-token',
 ]);
 const ROLES: readonly Role[] = ['protected_user', 'guard', 'admin'];
@@ -232,7 +235,7 @@ describe('rol x ruta: 2xx si está permitido, 403 FORBIDDEN si no', () => {
   });
 
   it('los stubs permitidos responden el envoltorio { data: { ruta } }', async () => {
-    // GET /admin/metrics es BE-05 (aún stub): conserva la aserción del envoltorio de un stub permitido.
+    // GET /admin/metrics es de BE-07 (aún stub): conserva la aserción del envoltorio de un stub permitido.
     const res = await enviar(app, 'GET', `${API_PREFIX}/admin/metrics`, tokens.admin);
     expect(res.body).toEqual({ data: { ruta: 'GET /admin/metrics' } });
   });

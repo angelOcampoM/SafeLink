@@ -10,6 +10,8 @@ import { createAlertsService, type AlertChange } from './modules/alerts/service.
 import { authRoutes } from './modules/auth/routes.js';
 import { devicesRoutes } from './modules/devices/routes.js';
 import { createDevicesService } from './modules/devices/service.js';
+import { escalationRoutes } from './modules/escalation/routes.js';
+import { createEscalationService, type EscalationService } from './modules/escalation/service.js';
 import { eventsRoutes } from './modules/events/routes.js';
 import { guardRoutes } from './modules/guard/routes.js';
 import { createGuardService } from './modules/guard/service.js';
@@ -23,6 +25,7 @@ import {
   alertsTopicForUser,
   createMemoryEventBus,
   dispatchTopic,
+  escalatedTopic,
   guardTopic,
   type EventBus,
 } from './realtime/event-bus.js';
@@ -35,6 +38,8 @@ import { createPhotoUrlSigner } from './storage/photo-urls.js';
 declare module 'fastify' {
   interface FastifyInstance {
     config: Config;
+    /** Escalamiento automático (BE-05). Solo existe con base de datos; las pruebas llaman a `sweep()`. */
+    escalation?: EscalationService;
   }
 }
 
@@ -168,8 +173,38 @@ export function buildApp(config: Config, deps: AppDependencies = {}): FastifyIns
       onGuardChanged: (guardId) => bus.publish(guardTopic(guardId)),
       onAlertChanged,
     });
-    // Los streams abiertos no deben impedir que la API se apague.
+    // U-09 · A-04 (BE-05, D14): escala las alertas vencidas y avisa a todos los canales afectados.
+    const escalation = createEscalationService({
+      prisma,
+      limits: {
+        acceptTimeoutSeconds: config.ACCEPT_TIMEOUT_SECONDS,
+        confirmTimeoutSeconds: config.CONFIRM_TIMEOUT_SECONDS,
+      },
+      serialize,
+      falseAlarms: { limit: config.FALSE_ALARM_LIMIT, blockDays: config.BLOCK_DAYS },
+      adminNoteMaxLength: config.ADMIN_NOTE_MAX_LENGTH,
+      logger: app.log,
+      // A-04: sale de la bandeja del admin; el detalle del guardia que la atendió la ve resuelta.
+      onResolved: ({ alertId }) => {
+        bus.publish(escalatedTopic);
+        bus.publish(alertTopic(alertId));
+      },
+      onEscalated: ({ alertId, userId, guardId, from }) => {
+        bus.publish(alertsTopicForUser(userId)); // deja de ser su alerta activa: alerts/active emite null
+        bus.publish(alertTopic(alertId)); // el detalle del guardia la ve escalada
+        // Salió de `searching`: desaparece del listado de los guardias (D34).
+        if (from !== 'guard_arrived') bus.publish(dispatchTopic);
+        if (guardId) bus.publish(guardTopic(guardId)); // el guardia que atendía queda libre (D36)
+        bus.publish(escalatedTopic); // entra a la bandeja del admin
+      },
+    });
+    app.decorate('escalation', escalation);
+    app.addHook('onReady', async () => {
+      escalation.start(config.ESCALATION_SWEEP_SECONDS);
+    });
+    // Los streams abiertos y el temporizador no deben impedir que la API se apague.
     app.addHook('preClose', async () => {
+      escalation.stop();
       hub.closeAll();
     });
 
@@ -197,7 +232,8 @@ export function buildApp(config: Config, deps: AppDependencies = {}): FastifyIns
         await api.register(alertsRoutes, { prisma, service: alerts, photos, photoUrls });
         await api.register(guardRoutes, { service: guard });
         await api.register(devicesRoutes, { service: devices });
-        await api.register(eventsRoutes, { prisma, hub, alerts, guard });
+        await api.register(escalationRoutes, { service: escalation });
+        await api.register(eventsRoutes, { prisma, hub, alerts, guard, escalation });
       },
       { prefix: API_PREFIX },
     );

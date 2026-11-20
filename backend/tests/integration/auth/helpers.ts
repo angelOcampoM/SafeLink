@@ -42,6 +42,8 @@ const BASE_PRUEBA = {
   RATE_LIMIT_REFRESH_MAX: '100000',
   RATE_LIMIT_ALERTS_PER_MINUTE: '100000',
   RATE_LIMIT_LOCATIONS_PER_WINDOW: '100000',
+  // BE-05: sin revisión automática; las pruebas de escalamiento llaman a app.escalation.sweep().
+  ESCALATION_SWEEP_SECONDS: '0',
 };
 
 export function configPrueba(extra: Record<string, string> = {}): Config {

@@ -518,6 +518,8 @@ Comportamiento (front):
 
 - `GET /admin/guards`: busca **solo por nombre**, sin distinguir mayúsculas ni acentos (`memoria_admin_repository.dart:20`, `dominio/texto_busqueda.dart`). Orden: activos primero, luego por nombre (`:25-28`). Incluye guardias dados de baja.
 - `resolve`: orden de validación: primero el estado, luego la nota (`memoria_admin_repository.dart:120`). Si `resolution = false_alarm`, el usuario suma 1 a `falseAlarmCount`; si el total ya es `>= FALSE_ALARM_LIMIT`, `blockedUntil = ahora + BLOCK_DAYS` días. Esto se repite en cada falsa alarma posterior, renovando el bloqueo (`regla_alerta.dart:71-82`). Con el total por debajo del límite, el bloqueo existente no se toca. Al resolver se asigna `closedAt` (`memoria_admin_repository.dart:123`).
+- **Implementado en BE-05 (D48):** `resolve` (`backend/src/modules/escalation/`) cumple todo lo anterior, condicionado a `escalated` (dos admins no la resuelven dos veces) y con la falsa alarma en la misma transacción. La nota se valida recortada; el cuerpo admite hasta 2000 caracteres para que el 400 por largo llegue después del 409 por estado. `resolution` fuera de `resolved`, `false_alarm`, `service_incident`: `400 INVALID_STATE` `La resolución no es válida`. Responde con la vista del admin.
+- **Escalamiento automático (BE-05, D14 resuelta, D48):** sin ruta. Cada `ESCALATION_SWEEP_SECONDS` (15) el servidor pasa a `escalated` las `searching` con más de `ACCEPT_TIMEOUT_SECONDS` (motivo `no_response`, sin guardia) y las `guard_arrived` con más de `CONFIRM_TIMEOUT_SECONDS` (motivo `no_confirmation`, conserva al guardia). El estado `no_response` no se usa como paso intermedio. `pending_location` e `in_progress` no escalan.
 - Los guardias dados de baja pierden todas sus sesiones y se cierran sus streams SSE (D8, D25).
 - **Bloqueante para BE-06 (y BE-05, por D14):** la baja de un guardia con una alerta `in_progress` debe, **en la misma transacción**, devolver la alerta a `searching` o escalarla. El front no define este caso.
 
@@ -529,7 +531,7 @@ Comportamiento (front):
 | BE-02 | `/auth/register`, `/users/me/settings`, cliente de la app para sesión y registro |
 | BE-03 | `/alerts`, `/alerts/mine`, `/alerts/:id/locations`, `/alerts/:id/confirm`, foto, canal `alerts/active` |
 | BE-04 | `/guard/*` (8 rutas), canales `guard/alerts` y `guard/alerts/:id`, `PUT /users/me/device-token` (excepción, D42) y el aviso push (sección 10) |
-| BE-05 | Escalamiento automático, `/admin/alerts/:id/resolve`, canal `admin/alerts/escalated`, bloqueo por falsas alarmas |
+| BE-05 | Escalamiento automático, `/admin/alerts/:id/resolve`, canal `admin/alerts/escalated`, bloqueo por falsas alarmas (**implementado**, D48) |
 | BE-06 (tentativa) | `/admin/guards` (6 rutas) |
 | BE-07 (tentativa) | `/admin/alerts`, `/admin/metrics`, `/admin/metrics/guards/:id`, `/admin/users`, `/admin/users/blocked`, `DELETE /admin/users/:id/block` |
 

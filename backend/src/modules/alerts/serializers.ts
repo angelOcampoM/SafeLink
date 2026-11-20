@@ -96,8 +96,8 @@ function point(lat: number | null, lng: number | null): PointJson | null {
 }
 
 /**
- * Vista del DUEÑO de la alerta: la ve completa (D23). El admin tendrá su propia vista
- * en BE-05 (minimización de datos); la del guardia es `serializeGuardAlert`.
+ * Vista del DUEÑO de la alerta: la ve completa (D23). El admin tiene `serializeAdminAlert`
+ * y el guardia `serializeGuardAlert`.
  */
 export function serializeOwnAlert(alert: AlertRecord, options: SerializeOptions): AlertJson {
   const location = point(alert.lat, alert.lng);
@@ -135,6 +135,40 @@ export function serializeOwnAlert(alert: AlertRecord, options: SerializeOptions)
       ),
       options.etaRoundingSeconds,
     ),
+  };
+}
+
+/**
+ * Vista del ADMINISTRADOR (D23: "el admin ve todo"). Bandeja de escaladas (BE-05) y, después,
+ * historial y detalle (BE-06). Incluye ubicación y teléfono aunque la alerta ya no esté activa,
+ * porque es la evidencia para resolverla, y el ETA exacto (sin la cuadrícula del dueño, D47).
+ */
+export function serializeAdminAlert(alert: AlertRecord, options: SerializeOptions): AlertJson {
+  const location = point(alert.lat, alert.lng);
+  const guardLocation = alert.guard?.guardProfile
+    ? point(alert.guard.guardProfile.lastLocationLat, alert.guard.guardProfile.lastLocationLng)
+    : null;
+  return {
+    id: alert.id,
+    userId: alert.userId,
+    userName: alert.user.name,
+    userPhone: alert.user.phone,
+    guardId: alert.guardId,
+    guardName: alert.guard?.name ?? null,
+    status: alert.status,
+    triggerMethod: alert.triggerMethod,
+    photoUrl: options.photoUrl(alert.id, alert.photoKey),
+    evidenceIncomplete: alert.evidenceIncomplete,
+    location,
+    heading: alert.heading,
+    triggeredAt: alert.triggeredAt.toISOString(),
+    acceptedAt: iso(alert.acceptedAt),
+    arrivedAt: iso(alert.arrivedAt),
+    closedAt: iso(alert.closedAt),
+    escalationReason: alert.escalationReason,
+    resolution: alert.resolution,
+    adminNote: alert.adminNote,
+    etaSeconds: etaSeconds(alert.status, guardLocation, location, options.guardMetersPerMinute),
   };
 }
 
