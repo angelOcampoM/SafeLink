@@ -1,7 +1,7 @@
 // Reglas puras de la alerta del usuario protegido (BE-03). Equivalen a
 // lib/dominio/regla_alerta.dart y a la parte de lib/datos/memoria_alerta_usuario_repository.dart
 // que decide estados. Sin consultas: los servicios les pasan los datos ya cargados.
-import { AlertStatus } from '../generated/prisma/enums.js';
+import { AlertStatus, EscalationReason } from '../generated/prisma/enums.js';
 import { haversineMeters, type GeoPoint } from './geo.js';
 
 /** Estados en los que la alerta sigue "activa" para su dueño (enums.dart:32, D15). */
@@ -19,6 +19,69 @@ export function isActiveStatus(status: AlertStatus): boolean {
 /** U-06: sin coordenadas la alerta no se publica a los guardias (memoria_alerta_usuario_repository.dart:31). */
 export function initialStatus(location: GeoPoint | null): AlertStatus {
   return location === null ? AlertStatus.pending_location : AlertStatus.searching;
+}
+
+/** Límites de escalamiento en segundos (ACCEPT_TIMEOUT_SECONDS y CONFIRM_TIMEOUT_SECONDS). */
+export interface EscalationLimits {
+  acceptTimeoutSeconds: number;
+  confirmTimeoutSeconds: number;
+}
+
+/**
+ * U-09 · A-04 · D14 (BE-05): motivo por el que la alerta debe escalarse ya, o `null`.
+ * Equivale a `ReglaAlerta.razonParaEscalar` (regla_alerta.dart:42-54), con un límite propio
+ * para cada caso (el front usa el mismo de demostración para los dos):
+ *   - `searching` sin que nadie acepte en `acceptTimeoutSeconds` -> "sin respuesta";
+ *   - `no_response` (solo existe en datos viejos o de la semilla) -> "sin respuesta";
+ *   - `guard_arrived` sin que el usuario confirme en `confirmTimeoutSeconds` -> "sin confirmación".
+ * Nunca escalan `pending_location` (aún no se publica) ni `in_progress` (D14, D36).
+ * El tiempo se cuenta desde `statusChangedAt`, con la hora del servidor (D24). El límite exacto escala.
+ */
+export function escalationReasonFor(
+  alert: { status: AlertStatus; statusChangedAt: Date },
+  now: Date,
+  limits: EscalationLimits,
+): EscalationReason | null {
+  const elapsedMs = now.getTime() - alert.statusChangedAt.getTime();
+  switch (alert.status) {
+    case AlertStatus.searching:
+    case AlertStatus.no_response:
+      return elapsedMs >= limits.acceptTimeoutSeconds * 1000 ? EscalationReason.no_response : null;
+    case AlertStatus.guard_arrived:
+      return elapsedMs >= limits.confirmTimeoutSeconds * 1000 ? EscalationReason.no_confirmation : null;
+    default:
+      return null;
+  }
+}
+
+export const ALERT_NOT_ESCALATED = 'Esta alerta ya no está escalada';
+
+/**
+ * A-04 (BE-05): mensaje de error de la nota administrativa, o `null` si es válida
+ * (regla_alerta.dart:62-67). Se valida recortada; el máximo es ADMIN_NOTE_MAX_LENGTH.
+ */
+export function adminNoteError(note: string, maxLength: number): string | null {
+  const texto = note.trim();
+  if (texto.length === 0) return 'Escribe una nota administrativa para resolver la alerta';
+  if (texto.length > maxLength) return `La nota no puede pasar de ${String(maxLength)} caracteres`;
+  return null;
+}
+
+/**
+ * A-08 (BE-05): efecto de una falsa alarma sobre el usuario (regla_alerta.dart:71-82 y contrato
+ * 5.4). Suma 1; si el total llega al límite, bloquea `blockDays` días desde ahora (y renueva el
+ * bloqueo en cada falsa alarma posterior). Por debajo del límite NO toca un bloqueo existente:
+ * `blockedUntil` sale `undefined` (en eso el contrato se aparta del mock, que lo borraba).
+ */
+export function applyFalseAlarm(
+  falseAlarmCount: number,
+  now: Date,
+  limit: number,
+  blockDays: number,
+): { falseAlarmCount: number; blockedUntil?: Date } {
+  const total = falseAlarmCount + 1;
+  if (total < limit) return { falseAlarmCount: total };
+  return { falseAlarmCount: total, blockedUntil: new Date(now.getTime() + blockDays * 86_400_000) };
 }
 
 /** A-08: un usuario con bloqueo vigente no puede crear alertas. */

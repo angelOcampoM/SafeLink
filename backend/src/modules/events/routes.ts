@@ -1,6 +1,6 @@
 // Canales en tiempo real (SSE, D3) bajo /api/v1/events/<canal del front>.
-// BE-03 implementa alerts/active y BE-04 guard/alerts y guard/alerts/:id;
-// admin/alerts/escalated (BE-05) se agrega aquí con el mismo SseHub.
+// BE-03 implementa alerts/active, BE-04 guard/alerts y guard/alerts/:id, y BE-05
+// admin/alerts/escalated, todos con el mismo SseHub.
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { findLiveSessionUser } from '../../auth/session.js';
 import type { PrismaClient } from '../../db/prisma.js';
@@ -10,10 +10,12 @@ import {
   alertTopic,
   alertsTopicForUser,
   dispatchTopic,
+  escalatedTopic,
   guardTopic,
 } from '../../realtime/event-bus.js';
 import type { SseHub } from '../../realtime/sse.js';
 import { ALERT_NOT_FOUND, type AlertsService } from '../alerts/service.js';
+import type { EscalationService } from '../escalation/service.js';
 import type { GuardService } from '../guard/service.js';
 
 export interface EventsRoutesOptions {
@@ -21,6 +23,7 @@ export interface EventsRoutesOptions {
   hub: SseHub;
   alerts: AlertsService;
   guard: GuardService;
+  escalation: EscalationService;
 }
 
 /** `exp` del access token ya verificado por `authenticate` (para cerrar el stream a tiempo, D26). */
@@ -32,7 +35,21 @@ function expiraEnMs(app: FastifyInstance, request: FastifyRequest): number {
 }
 
 export async function eventsRoutes(app: FastifyInstance, options: EventsRoutesOptions): Promise<void> {
-  const { prisma, hub, alerts, guard } = options;
+  const { prisma, hub, alerts, guard, escalation } = options;
+
+  // A-04 (BE-05): la bandeja del admin, lista completa de escaladas, la más antigua primero.
+  // Se refresca al escalar (y, en BE-06, al resolver) por el tema global de escaladas.
+  app.get('/events/admin/alerts/escalated', async (request, reply) => {
+    const { id: adminId, sid } = request.user;
+    hub.open(request, reply, {
+      name: 'admin/alerts/escalated',
+      topic: escalatedTopic,
+      snapshot: () => escalation.listEscalated(),
+      sessionAlive: async () => (await findLiveSessionUser(prisma, adminId, sid)) !== null,
+      tokenExpiresAtMs: expiraEnMs(app, request),
+    });
+    return reply;
+  });
 
   // U-07 · U-08 · U-09: la alerta activa del usuario (a lo más una, D15) o null.
   app.get('/events/alerts/active', async (request, reply) => {

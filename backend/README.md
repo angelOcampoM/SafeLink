@@ -206,6 +206,29 @@ curl.exe -N "$base/events/alerts/active" -H "Authorization: Bearer $($login.data
 
 Pruebas: `tests/unit/be03-*.test.ts` (reglas, validación, foto, transporte SSE; no necesitan base) y `tests/integration/alertas/` (contra `safelink_test`).
 
+## BE-05: seguimiento, escalamiento y cierre
+
+`src/modules/escalation/` y el canal del admin en `src/modules/events/`. Detalle en `docs/DECISIONES.md` (D14, D48).
+
+| Qué | Cómo |
+|---|---|
+| Escalamiento automático (U-09, A-04) | Cada `ESCALATION_SWEEP_SECONDS` (15 s; `0` lo apaga): `searching` sin aceptar en `ACCEPT_TIMEOUT_SECONDS` → `escalated` "sin respuesta"; `guard_arrived` sin confirmar en `CONFIRM_TIMEOUT_SECONDS` → `escalated` "sin confirmación" |
+| `POST /admin/alerts/:id/resolve` (A-04, A-08) | El admin resuelve una escalada como `resolved`, `false_alarm` o `service_incident`, con nota. Con falsa alarma suma 1 al usuario y, al llegar a `FALSE_ALARM_LIMIT`, lo bloquea `BLOCK_DAYS` días |
+| `GET /events/admin/alerts/escalated` | SSE: la bandeja del admin, todas las escaladas, la más antigua primero |
+
+Los pasos del issue #55 (ubicación en vivo, compartirla con el guardia, ETA sin revelarlo, llegada por geocerca, cierre con confirmación) ya los cumplen las rutas de BE-03 y BE-04; `tests/integration/seguimiento/criterios-be05.test.ts` lo demuestra criterio por criterio.
+
+```powershell
+# Bandeja del admin en vivo (con el $access de una cuenta admin, ver "Probar la autenticación")
+curl.exe -N "$base/events/admin/alerts/escalated" -H "Authorization: Bearer $access"
+
+# Resolver una escalada
+Invoke-RestMethod -Method Post -Uri "$base/admin/alerts/<id>/resolve" -Headers @{ Authorization = "Bearer $access" } `
+  -ContentType "application/json" -Body (@{ resolution = "false_alarm"; adminNote = "El usuario la activó por error" } | ConvertTo-Json)
+```
+
+Pruebas: `tests/unit/be05-escalamiento.test.ts` y `tests/integration/seguimiento/` (escalamiento, resolución, avisos en tiempo real y criterios del issue #55).
+
 ## BE-04: despacho de alertas al guardia
 
 Rutas del rol `guard` (`src/modules/guard/`, `src/modules/devices/`) y canales SSE (`src/modules/events/`). El contrato completo (cuerpos, errores y códigos) está en `docs/API_CONTRATO.md` (secciones 5.1, 5.3 y 6) y la matriz de permisos en `docs/PERMISOS.md`.

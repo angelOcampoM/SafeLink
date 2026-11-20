@@ -48,6 +48,9 @@ const REALES = new Set([
   'POST /guard/alerts/:id/arrive',
   'GET /events/guard/alerts',
   'GET /events/guard/alerts/:id',
+  // BE-05
+  'GET /events/admin/alerts/escalated',
+  'POST /admin/alerts/:id/resolve',
   'PUT /users/me/device-token',
 ]);
 
@@ -95,8 +98,9 @@ const registro: Registro[] = [];
 
 const GUARD_EMAIL = 'final-guardia@prueba.test';
 const ADMIN_EMAIL = 'final-admin@prueba.test';
-// Ruta que sigue siendo stub después de BE-04 (BE-05 la implementa: entonces hay que moverla a otra).
-const RUTA_STUB = 'POST /admin/alerts/:id/resolve';
+// Ruta que sigue siendo stub después de BE-05 (BE-07 la implementa: entonces hay que moverla a otra).
+// Hasta BE-04 fue POST /admin/alerts/:id/resolve, que BE-05 ya implementa.
+const RUTA_STUB = 'DELETE /admin/users/:id/block';
 let adminToken = '';
 
 beforeAll(async () => {
@@ -169,26 +173,27 @@ describe('POST /auth/session con rate limit (comparte el límite de refresh)', (
   });
 });
 
-// Stub de larga vida: POST /admin/alerts/:id/resolve (A-04, BE-05). POST /guard/alerts/:id/arrive (G-07)
-// fue el stub hasta BE-04 paso 7 y ya es real; por eso el token de estas pruebas es el de admin.
-// Al implementar BE-05 hay que mover RUTA_STUB y estas variantes a otra ruta que siga siendo stub.
-const ID_ALERTA = '3f2b8c1e-9a4d-4e6b-8f10-2c7d5a9b0e11';
-const RUTA = `admin/alerts/${ID_ALERTA}/resolve`;
+// Stub de larga vida: DELETE /admin/users/:id/block (A-08, BE-07). Antes lo fueron
+// POST /guard/alerts/:id/arrive (real desde BE-04 paso 7) y POST /admin/alerts/:id/resolve (real desde
+// BE-05); por eso el token de estas pruebas es el de admin.
+// Al implementar BE-07 hay que mover RUTA_STUB y estas variantes a otra ruta que siga siendo stub.
+const ID_USUARIO = '3f2b8c1e-9a4d-4e6b-8f10-2c7d5a9b0e11';
+const RUTA = `admin/users/${ID_USUARIO}/block`;
 
-describe('normalización de rutas: nada de lo que parezca /api/v1/admin/alerts/:id/resolve llega al handler', () => {
+describe('normalización de rutas: nada de lo que parezca /api/v1/admin/users/:id/block llega al handler', () => {
   const variantes = [
     `/API/V1/${RUTA}`,
     `/api/v1//${RUTA}`,
     `/api/v1/${RUTA}/`,
-    `/api/v1/admin%2Falerts/${ID_ALERTA}/resolve`,
-    `/api/v1/ADMIN/alerts/${ID_ALERTA}/resolve`,
+    `/api/v1/admin%2Fusers/${ID_USUARIO}/block`,
+    `/api/v1/ADMIN/users/${ID_USUARIO}/block`,
     `/api/v1/${RUTA}/%2e`,
     `/api/v1/./${RUTA}`,
   ];
 
-  it.each(variantes)('POST %s con token de admin -> 404 y el stub no se ejecuta', async (ruta) => {
+  it.each(variantes)('DELETE %s con token de admin -> 404 y el stub no se ejecuta', async (ruta) => {
     const antes = ejecuciones;
-    const res = await request(app.server).post(ruta).set('Authorization', `Bearer ${adminToken}`).send({});
+    const res = await request(app.server).delete(ruta).set('Authorization', `Bearer ${adminToken}`);
     expect(res.status).toBe(404);
     expect(res.body.error.code).toBe('NOT_FOUND');
     expect(ejecuciones).toBe(antes);
@@ -197,9 +202,8 @@ describe('normalización de rutas: nada de lo que parezca /api/v1/admin/alerts/:
   it('control: la ruta exacta sí ejecuta el stub', async () => {
     const antes = ejecuciones;
     const res = await request(app.server)
-      .post(`${API_PREFIX}/${RUTA}`)
-      .set('Authorization', `Bearer ${adminToken}`)
-      .send({});
+      .delete(`${API_PREFIX}/${RUTA}`)
+      .set('Authorization', `Bearer ${adminToken}`);
     expect(res.status).toBe(200);
     expect(ejecuciones).toBe(antes + 1);
   });
