@@ -241,10 +241,25 @@ describe('rol x ruta: 2xx si está permitido, 403 FORBIDDEN si no', () => {
     }
   });
 
+  // La ruta se ELIGE sola entre las que siguen siendo stub, en vez de escribirla a mano:
+  // cada tarjeta implementada convierte una en real y una aserción fija se rompería sin que
+  // nada esté mal (ya pasó con GET /admin/metrics al llegar BE-07). Cuando no quede ninguna
+  // stub, la prueba lo dice en vez de fallar.
   it('los stubs permitidos responden el envoltorio { data: { ruta } }', async () => {
-    // GET /admin/metrics es de BE-07 (aún stub): conserva la aserción del envoltorio de un stub permitido.
-    const res = await enviar(app, 'GET', `${API_PREFIX}/admin/metrics`, tokens.admin);
-    expect(res.body).toEqual({ data: { ruta: 'GET /admin/metrics' } });
+    const stub = Object.entries(ROUTE_POLICIES).find(
+      ([clave, politica]) =>
+        !REALES.has(clave) && Array.isArray(politica) && politica.includes('admin'),
+    );
+    if (stub === undefined) {
+      // Las 38 rutas implementadas: no queda ningún stub que comprobar.
+      expect([...REALES].length).toBe(Object.keys(ROUTE_POLICIES).length);
+      return;
+    }
+    const [clave] = stub;
+    const [metodo, ruta] = clave.split(' ') as [string, string];
+    const url = `${API_PREFIX}${ruta.replace(':id', '3f2b8c1e-9a4d-4e6b-8f10-2c7d5a9b0e11')}`;
+    const res = await enviar(app, metodo, url, tokens.admin);
+    expect(res.body, clave).toEqual({ data: { ruta: clave } });
   });
 
   it('cada ruta restringida tiene al menos un rol permitido y un rol rechazado salvo las de ALL_ROLES', () => {

@@ -40,7 +40,23 @@ beforeEach(async () => {
 
 const conToken = (token = adminToken) => ({ Authorization: `Bearer ${token}` });
 
-/** Crea una alerta con lo mínimo y devuelve su id. */
+/**
+ * Estados en los que la base EXIGE que no haya guardia y en los que exige que sí lo haya
+ * (CHECK alerts_guard_absent_chk y alerts_guard_required_chk de las migraciones; Prisma no
+ * los expresa, así que una alerta de prueba incoherente revienta contra Postgres y no al
+ * escribirla). `closed` y `resolved_by_admin` exigen además `closedAt`.
+ */
+const SIN_GUARDIA = ['pending_location', 'searching', 'no_response'];
+const CON_GUARDIA = ['in_progress', 'guard_arrived', 'closed'];
+const CON_CIERRE = ['closed', 'resolved_by_admin'];
+
+/**
+ * Crea una alerta coherente con esos CHECK y devuelve su id.
+ *
+ * Si una prueba pide una combinación que la base prohíbe (por ejemplo `closed` sin guardia)
+ * se falla aquí con un mensaje claro, en vez de dejar que Postgres conteste con el nombre de
+ * la restricción desde dentro de Prisma.
+ */
 async function crearAlerta(datos: {
   receivedAt: string;
   status?: string;
@@ -50,17 +66,31 @@ async function crearAlerta(datos: {
   arrivedAt?: string;
   escalationReason?: string;
 }): Promise<string> {
+  const status = datos.status ?? 'closed';
+  const guardId = datos.guardId === undefined ? guardiaConZona : datos.guardId;
+
+  if (SIN_GUARDIA.includes(status) && guardId !== null) {
+    throw new Error(`La base no permite guardia en estado ${status}`);
+  }
+  if (CON_GUARDIA.includes(status) && guardId === null) {
+    throw new Error(`La base exige guardia en estado ${status}`);
+  }
+
   const a = await env.prisma.alert.create({
     data: {
       userId: datos.userId ?? env.usuarios.protegido.id,
-      guardId: datos.guardId === undefined ? guardiaConZona : datos.guardId,
-      status: (datos.status ?? 'closed') as 'closed',
+      guardId,
+      status: status as 'closed',
       triggerMethod: 'shake', // el enum llama 'shake' al doble clic de volumen (CodigosJson.metodo)
       triggeredAt: new Date(datos.receivedAt),
       receivedAt: new Date(datos.receivedAt),
       statusChangedAt: new Date(datos.receivedAt),
       acceptedAt: datos.acceptedAt ? new Date(datos.acceptedAt) : null,
       arrivedAt: datos.arrivedAt ? new Date(datos.arrivedAt) : null,
+      // Una alerta cerrada sin fecha de cierre no existe en la base.
+      closedAt: CON_CIERRE.includes(status)
+        ? new Date(datos.arrivedAt ?? datos.acceptedAt ?? datos.receivedAt)
+        : null,
       escalationReason: (datos.escalationReason ?? null) as null,
     },
   });
@@ -87,7 +117,8 @@ describe('GET /admin/alerts', () => {
   });
 
   it('incluye las alertas activas, no solo las cerradas (contrato 5)', async () => {
-    await crearAlerta({ receivedAt: '2026-03-01T12:00:00Z', status: 'searching' });
+    // Sin guardia: la base lo exige en `searching` (alerts_guard_absent_chk).
+    await crearAlerta({ receivedAt: '2026-03-01T12:00:00Z', status: 'searching', guardId: null });
     const res = await historial();
     expect(res.body.data).toHaveLength(1);
     expect((res.body.data as { status: string }[])[0]?.status).toBe('searching');
@@ -115,7 +146,8 @@ describe('GET /admin/alerts', () => {
 
   it('filtra por guardia, por usuario y por estado, y los combina', async () => {
     const mia = await crearAlerta({ receivedAt: '2026-03-01T12:00:00Z', status: 'escalated' });
-    await crearAlerta({ receivedAt: '2026-03-02T12:00:00Z', guardId: null });
+    // `searching` es un estado en el que la base SÍ permite que no haya guardia.
+    await crearAlerta({ receivedAt: '2026-03-02T12:00:00Z', status: 'searching', guardId: null });
     await crearAlerta({ receivedAt: '2026-03-03T12:00:00Z', status: 'closed' });
 
     const porGuardia = await historial(`?guardId=${guardiaConZona}`);
@@ -213,7 +245,7 @@ describe('GET /admin/metrics', () => {
   });
 
   it('una alerta sin guardia cuenta en "Sin zona asignada"', async () => {
-    await crearAlerta({ receivedAt: '2026-03-01T18:00:00Z', guardId: null });
+    await crearAlerta({ receivedAt: '2026-03-01T18:00:00Z', status: 'searching', guardId: null });
     const res = await metricas();
     expect(res.body.data.alertsByZone).toEqual([{ zone: 'Sin zona asignada', count: 1 }]);
   });
@@ -244,7 +276,7 @@ describe('GET /admin/metrics/guards/:id', () => {
       acceptedAt: '2026-03-01T18:00:20Z',
       arrivedAt: '2026-03-01T18:04:20Z',
     });
-    await crearAlerta({ receivedAt: '2026-03-02T18:00:00Z', guardId: null });
+    await crearAlerta({ receivedAt: '2026-03-02T18:00:00Z', status: 'searching', guardId: null });
 
     const res = await porGuardia(guardiaConZona);
     expect(res.status).toBe(200);
@@ -385,11 +417,13 @@ describe('TZ_SHIFTS distinto', () => {
     try {
       const token = (await login(otro.app, otro.usuarios.admin.email)).body.data
         .accessToken as string;
+      // `searching` para no tener que inventarle guardia ni cierre: lo que mide esta prueba
+      // es la HORA en que cae la alerta, no su estado.
       await otro.prisma.alert.create({
         data: {
           userId: otro.usuarios.protegido.id,
-          status: 'closed',
-          triggerMethod: 'shake', // el enum llama 'shake' al doble clic de volumen (CodigosJson.metodo)
+          status: 'searching',
+          triggerMethod: 'shake',
           triggeredAt: new Date('2026-01-15T02:00:00Z'),
           receivedAt: new Date('2026-01-15T02:00:00Z'),
           statusChangedAt: new Date('2026-01-15T02:00:00Z'),
