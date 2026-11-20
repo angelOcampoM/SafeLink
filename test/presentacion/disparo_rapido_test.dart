@@ -114,4 +114,51 @@ void main() {
 
     expect(alertas.creadas, isEmpty, reason: 'la primera pulsación se olvidó al apagar');
   });
+
+  // U-05 · El acceso que tiene que dar el sistema (en Android, Ajustes → Accesibilidad).
+  // Sin él el botón de volumen no hace nada, así que la app tiene que poder decirlo.
+  group('acceso del sistema', () {
+    test('con el sistema listo, al activar no falta nada', () async {
+      await disparo.activar();
+      expect(disparo.faltaAccesoDelSistema, isFalse);
+    });
+
+    test('si el sistema no está listo, activar lo deja marcado', () async {
+      servicio.listo = false;
+      await disparo.activar();
+      expect(
+        disparo.faltaAccesoDelSistema,
+        isTrue,
+        reason: 'el atajo está encendido pero el sistema no entrega las pulsaciones',
+      );
+    });
+
+    test('al volver de Ajustes, revisar vuelve a preguntar y lo limpia', () async {
+      servicio.listo = false;
+      await disparo.activar();
+      expect(disparo.faltaAccesoDelSistema, isTrue);
+
+      servicio.listo = true; // la persona lo activó en Ajustes
+      await disparo.revisarAccesoDelSistema();
+      expect(disparo.faltaAccesoDelSistema, isFalse);
+    });
+
+    test('revisar con el atajo apagado no cambia nada', () async {
+      servicio.listo = false;
+      await disparo.revisarAccesoDelSistema();
+      expect(disparo.faltaAccesoDelSistema, isFalse);
+    });
+
+    test('desactivar olvida el aviso: ya no aplica', () async {
+      servicio.listo = false;
+      await disparo.activar();
+      await disparo.desactivar();
+      expect(disparo.faltaAccesoDelSistema, isFalse);
+    });
+
+    test('abrir los ajustes del sistema llega al servicio', () async {
+      await disparo.abrirAjustesDelSistema();
+      expect(servicio.vecesAbiertoAjustes, 1);
+    });
+  });
 }

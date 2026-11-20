@@ -46,19 +46,36 @@ class DisparoRapido extends ViewModel {
   /// La notificación permanente del servicio en segundo plano.
   bool get notificacionVisible => _servicio.notificacionVisible;
 
+  /// `true` cuando el atajo está activado en la app pero el sistema todavía no deja
+  /// llegar las pulsaciones (en Android: falta activarlo en Ajustes → Accesibilidad).
+  /// Mientras sea `true`, el botón de volumen no hace nada y hay que decírselo al usuario.
+  bool faltaAccesoDelSistema = false;
+
   /// Enciende el servicio y empieza a escuchar el botón.
   Future<void> activar() async {
     if (activo) return;
     await _servicio.iniciar();
     _regla.reiniciar();
     _sub ??= _servicio.pulsaciones.listen(_alPulsar);
+    faltaAccesoDelSistema = !await _servicio.listoEnElSistema();
     notifyListeners();
   }
+
+  /// Vuelve a preguntarle al sistema (al volver de Ajustes, por ejemplo).
+  Future<void> revisarAccesoDelSistema() async {
+    if (!activo) return;
+    faltaAccesoDelSistema = !await _servicio.listoEnElSistema();
+    notifyListeners();
+  }
+
+  /// Lleva a la pantalla del sistema donde se concede el acceso.
+  Future<void> abrirAjustesDelSistema() => _servicio.abrirAjustesDelSistema();
 
   /// Apaga el servicio: ya no llegan pulsaciones ni se registran alertas.
   Future<void> desactivar() async {
     await _servicio.detener();
     _regla.reiniciar();
+    faltaAccesoDelSistema = false;
     await _sub?.cancel();
     _sub = null;
     notifyListeners();

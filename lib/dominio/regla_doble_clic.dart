@@ -4,7 +4,12 @@
 // No hace: no escucha el botón (eso es ServicioDisparoRapido) ni crea alertas.
 
 class ReglaDobleClic {
-  ReglaDobleClic({this.ventana = const Duration(milliseconds: 600)});
+  ReglaDobleClic({this.ventana = ventanaPorDefecto});
+
+  /// Ventana por defecto del doble clic. La comparte el servicio nativo de Android
+  /// (`ServicioDisparoRapidoNativo` se la pasa a Kotlin al iniciar) para que las dos
+  /// capas cuenten con el mismo tiempo y no haya dos reglas distintas.
+  static const Duration ventanaPorDefecto = Duration(milliseconds: 600);
 
   /// Tiempo máximo entre las dos pulsaciones para que cuenten como doble clic.
   final Duration ventana;
