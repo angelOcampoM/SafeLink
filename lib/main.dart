@@ -34,6 +34,7 @@ import 'datos/safelink_service.dart';
 import 'datos/sensores.dart';
 import 'datos/sensores_simulados.dart';
 import 'datos/servicio_disparo_rapido.dart';
+import 'datos/servicio_disparo_rapido_nativo.dart';
 import 'datos/servicio_disparo_rapido_simulado.dart';
 import 'datos/sesion_guardada.dart';
 import 'datos/url_api.dart';
@@ -71,6 +72,12 @@ Future<void> main() async {
     urlApi: urlSegura ? urlApi : '',
     sesionGuardada: DispositivoSesionGuardada(),
     almacenTokens: DispositivoAlmacenTokens(),
+    // U-05: en Android las pulsaciones llegan del servicio de accesibilidad real, que
+    // funciona con la pantalla bloqueada. En las demás plataformas (y en las pruebas)
+    // se queda el simulado: null significa "usa el de siempre".
+    servicioDisparoRapido:
+        ServicioDisparoRapidoNativo.disponible ? ServicioDisparoRapidoNativo() : null,
+    vibrador: ServicioDisparoRapidoNativo.disponible ? const VibradorNativo() : null,
   );
   // U-02: si quedó una sesión abierta, se entra directo sin pasar por el login.
   await dependencias.sesion.restaurar();
@@ -134,6 +141,8 @@ class Dependencias {
     SesionGuardada? sesionGuardada,
     String urlApi = '',
     AlmacenTokens? almacenTokens,
+    ServicioDisparoRapido? servicioDisparoRapido,
+    Vibrador? vibrador,
   }) {
     if (usarNube) {
       // Con URL de API: cliente HTTP real; sin ella: servicio simulado en memoria.
@@ -148,6 +157,8 @@ class Dependencias {
         admin: NubeAdminRepository(servicio),
         config: config,
         sesionGuardada: sesionGuardada,
+        servicioDisparoRapido: servicioDisparoRapido,
+        vibrador: vibrador,
         iniciarSimulaciones: simulado?.iniciarSimulaciones,
       );
     }
@@ -159,6 +170,8 @@ class Dependencias {
       admin: MemoriaAdminRepository(db),
       config: config,
       sesionGuardada: sesionGuardada,
+      servicioDisparoRapido: servicioDisparoRapido,
+      vibrador: vibrador,
       iniciarSimulaciones: db.iniciarSimulaciones,
     );
   }
@@ -176,7 +189,8 @@ class Dependencias {
   final Ubicacion ubicacion;
   final Brujula brujula;
 
-  /// U-05: servicio en segundo plano y vibración, hoy simulados.
+  /// U-05: servicio en segundo plano y vibración. En Android son los reales
+  /// (`ServicioDisparoRapidoNativo` y `VibradorNativo`); en el resto, simulados.
   final ServicioDisparoRapido servicioDisparoRapido;
   final Vibrador vibrador;
   late final DisparoRapido disparoRapido;

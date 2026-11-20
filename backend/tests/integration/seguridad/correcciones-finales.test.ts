@@ -51,6 +51,13 @@ const REALES = new Set([
   // BE-05
   'GET /events/admin/alerts/escalated',
   'POST /admin/alerts/:id/resolve',
+  // BE-07
+  'GET /admin/alerts',
+  'GET /admin/metrics',
+  'GET /admin/metrics/guards/:id',
+  'GET /admin/users',
+  'GET /admin/users/blocked',
+  'DELETE /admin/users/:id/block',
   'PUT /users/me/device-token',
 ]);
 
@@ -98,9 +105,13 @@ const registro: Registro[] = [];
 
 const GUARD_EMAIL = 'final-guardia@prueba.test';
 const ADMIN_EMAIL = 'final-admin@prueba.test';
-// Ruta que sigue siendo stub después de BE-05 (BE-07 la implementa: entonces hay que moverla a otra).
-// Hasta BE-04 fue POST /admin/alerts/:id/resolve, que BE-05 ya implementa.
-const RUTA_STUB = 'DELETE /admin/users/:id/block';
+// Ruta que sigue siendo stub después de BE-07: la ÚNICA que queda de las 38 de la política
+// (PUT /admin/guards/:id/coverage, A-03, la implementa BE-06). Cuando BE-06 la implemente no
+// quedará ninguna ruta stub y estas pruebas tendrán que apuntar a una ruta real que responda
+// 404 ante un id inexistente, o registrar una ruta de prueba propia fuera de ROUTE_POLICIES.
+// Historial de esta variable: POST /guard/alerts/:id/arrive (real desde BE-04),
+// POST /admin/alerts/:id/resolve (real desde BE-05), DELETE /admin/users/:id/block (real desde BE-07).
+const RUTA_STUB = 'PUT /admin/guards/:id/coverage';
 let adminToken = '';
 
 beforeAll(async () => {
@@ -173,27 +184,25 @@ describe('POST /auth/session con rate limit (comparte el límite de refresh)', (
   });
 });
 
-// Stub de larga vida: DELETE /admin/users/:id/block (A-08, BE-07). Antes lo fueron
-// POST /guard/alerts/:id/arrive (real desde BE-04 paso 7) y POST /admin/alerts/:id/resolve (real desde
-// BE-05); por eso el token de estas pruebas es el de admin.
-// Al implementar BE-07 hay que mover RUTA_STUB y estas variantes a otra ruta que siga siendo stub.
-const ID_USUARIO = '3f2b8c1e-9a4d-4e6b-8f10-2c7d5a9b0e11';
-const RUTA = `admin/users/${ID_USUARIO}/block`;
+// La misma RUTA_STUB de arriba, escrita con un id concreto. El token de estas pruebas es el
+// de admin porque la cobertura es del admin (A-03).
+const ID_GUARDIA = '3f2b8c1e-9a4d-4e6b-8f10-2c7d5a9b0e11';
+const RUTA = `admin/guards/${ID_GUARDIA}/coverage`;
 
-describe('normalización de rutas: nada de lo que parezca /api/v1/admin/users/:id/block llega al handler', () => {
+describe('normalización de rutas: nada de lo que parezca /api/v1/admin/guards/:id/coverage llega al handler', () => {
   const variantes = [
     `/API/V1/${RUTA}`,
     `/api/v1//${RUTA}`,
     `/api/v1/${RUTA}/`,
-    `/api/v1/admin%2Fusers/${ID_USUARIO}/block`,
-    `/api/v1/ADMIN/users/${ID_USUARIO}/block`,
+    `/api/v1/admin%2Fguards/${ID_GUARDIA}/coverage`,
+    `/api/v1/ADMIN/guards/${ID_GUARDIA}/coverage`,
     `/api/v1/${RUTA}/%2e`,
     `/api/v1/./${RUTA}`,
   ];
 
-  it.each(variantes)('DELETE %s con token de admin -> 404 y el stub no se ejecuta', async (ruta) => {
+  it.each(variantes)('PUT %s con token de admin -> 404 y el stub no se ejecuta', async (ruta) => {
     const antes = ejecuciones;
-    const res = await request(app.server).delete(ruta).set('Authorization', `Bearer ${adminToken}`);
+    const res = await request(app.server).put(ruta).set('Authorization', `Bearer ${adminToken}`).send({});
     expect(res.status).toBe(404);
     expect(res.body.error.code).toBe('NOT_FOUND');
     expect(ejecuciones).toBe(antes);
@@ -202,8 +211,9 @@ describe('normalización de rutas: nada de lo que parezca /api/v1/admin/users/:i
   it('control: la ruta exacta sí ejecuta el stub', async () => {
     const antes = ejecuciones;
     const res = await request(app.server)
-      .delete(`${API_PREFIX}/${RUTA}`)
-      .set('Authorization', `Bearer ${adminToken}`);
+      .put(`${API_PREFIX}/${RUTA}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({});
     expect(res.status).toBe(200);
     expect(ejecuciones).toBe(antes + 1);
   });

@@ -15,6 +15,16 @@ abstract interface class ServicioDisparoRapido {
   Future<void> iniciar();
 
   Future<void> detener();
+
+  /// ¿El sistema va a dejar llegar las pulsaciones?
+  ///
+  /// En Android no basta con encender el servicio desde la app: la persona tiene que
+  /// activarlo en Ajustes → Accesibilidad, y mientras no lo haga el botón no hace nada.
+  /// Donde no haga falta ningún permiso del sistema, `true`.
+  Future<bool> listoEnElSistema();
+
+  /// Abre la pantalla del sistema donde se concede ese acceso. Donde no haga falta, nada.
+  Future<void> abrirAjustesDelSistema();
 }
 
 /// U-05: el teléfono confirma por vibración que la alerta salió.

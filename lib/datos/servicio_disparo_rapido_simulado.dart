@@ -27,6 +27,17 @@ class ServicioDisparoRapidoSimulado implements ServicioDisparoRapido {
   @override
   Future<void> detener() async => _enEjecucion = false;
 
+  /// En la simulación no hay sistema que dar permiso; las pruebas lo cambian para
+  /// reproducir un Android con el servicio de accesibilidad apagado.
+  bool listo = true;
+  int vecesAbiertoAjustes = 0;
+
+  @override
+  Future<bool> listoEnElSistema() async => listo;
+
+  @override
+  Future<void> abrirAjustesDelSistema() async => vecesAbiertoAjustes++;
+
   /// Solo en demo y pruebas: finge una pulsación del botón de bajar volumen.
   /// Con el servicio detenido no llega nada, igual que en el teléfono.
   void pulsar(DateTime cuando) {

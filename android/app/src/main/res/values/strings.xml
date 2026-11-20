@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- U-05 · Texto que Android muestra en Ajustes → Accesibilidad al explicar el servicio. -->
+    <string name="accesibilidad_volumen_descripcion">Permite enviar una alerta de SafeLink con dos pulsaciones del botón de volumen, incluso con la pantalla bloqueada. SafeLink no lee el contenido de otras aplicaciones.</string>
+    <string name="accesibilidad_volumen_nombre">SafeLink · botón de emergencia</string>
+</resources>

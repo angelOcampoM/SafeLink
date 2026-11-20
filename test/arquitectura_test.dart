@@ -36,10 +36,44 @@ void main() {
     expect(culpables, isEmpty);
   });
 
-  test('lib/datos no depende de presentación ni de Flutter', () {
+  test('lib/datos no depende de presentación', () {
     final culpables = [
       for (final f in dartEn('lib/datos'))
-        if (importsDe(f).any((l) => l.contains('presentacion/') || l.contains('package:flutter'))) nombre(f),
+        if (importsDe(f).any((l) => l.contains('presentacion/'))) nombre(f),
+    ];
+    expect(culpables, isEmpty);
+  });
+
+  // De `package:flutter`, la capa de datos solo puede tocar la puerta al sistema operativo
+  // (`services.dart`: canales nativos; `foundation.dart`: kIsWeb y tipos base). Nada de
+  // interfaz: un repositorio o un adaptador no pinta. La lista es cerrada a propósito, así
+  // que sumar otra importación de Flutter aquí obliga a cambiar esta prueba y discutirlo.
+  const flutterPermitidoEnDatos = [
+    'package:flutter/services.dart',
+    'package:flutter/foundation.dart',
+  ];
+
+  test('lib/datos solo usa de Flutter la puerta al sistema, nunca la interfaz', () {
+    final culpables = <String>[];
+    for (final f in dartEn('lib/datos')) {
+      for (final linea in importsDe(f)) {
+        if (!linea.contains('package:flutter/')) continue;
+        if (flutterPermitidoEnDatos.any(linea.contains)) continue;
+        culpables.add('${nombre(f)}: ${linea.trim()}');
+      }
+    }
+    expect(culpables, isEmpty,
+        reason:
+            'La capa de datos no conoce la interfaz: solo services.dart y foundation.dart',);
+  });
+
+  test('ningún archivo de lib/datos importa material, widgets ni cupertino', () {
+    final culpables = [
+      for (final f in dartEn('lib/datos'))
+        if (importsDe(f).any((l) =>
+            l.contains('package:flutter/material.dart') ||
+            l.contains('package:flutter/widgets.dart') ||
+            l.contains('package:flutter/cupertino.dart'),)) nombre(f),
     ];
     expect(culpables, isEmpty);
   });

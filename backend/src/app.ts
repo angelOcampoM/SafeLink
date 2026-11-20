@@ -228,7 +228,7 @@ export function buildApp(config: Config, deps: AppDependencies = {}): FastifyIns
           },
         });
         await api.register(authRoutes, { prisma });
-        await api.register(adminRoutes, { prisma });
+        await api.register(adminRoutes, { prisma, serialize });
         await api.register(alertsRoutes, { prisma, service: alerts, photos, photoUrls });
         await api.register(guardRoutes, { service: guard });
         await api.register(devicesRoutes, { service: devices });

@@ -76,12 +76,32 @@ class _ConfiguracionPageState extends State<ConfiguracionPage> {
                             ),
                           ),
                         ),
-                        const Padding(
-                          padding: EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, AppSpacing.md),
-                          child: SlBanner(
-                            icon: Icons.lock_outline_rounded,
-                            message: 'Funciona incluso con la pantalla bloqueada. Mientras esté activa verás una notificación permanente.',
-                          ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(
+                              AppSpacing.md, 0, AppSpacing.md, AppSpacing.md,),
+                          // U-05: si el atajo está activado pero el sistema todavía no deja
+                          // llegar las pulsaciones, el botón de volumen no hace NADA. Decirlo
+                          // aquí es la diferencia entre un atajo que falla en silencio y uno
+                          // que el usuario puede arreglar en dos toques.
+                          child: vm.faltaAccesoDelSistema
+                              ? SlBanner(
+                                  type: SlBannerType.warning,
+                                  title: 'Falta un paso en el sistema',
+                                  message:
+                                      'Activa SafeLink en Ajustes → Accesibilidad. Hasta entonces el '
+                                      'doble clic de volumen no enviará la alerta.',
+                                  action: SlButton(
+                                    label: 'Abrir Ajustes',
+                                    onPressed: vm.concederAccesoDelSistema,
+                                  ),
+                                )
+                              : const SlBanner(
+                                  icon: Icons.lock_outline_rounded,
+                                  message:
+                                      'Funciona incluso con la pantalla bloqueada. Mientras esté '
+                                      'activa, el sistema deja visible que SafeLink está escuchando '
+                                      'el botón de volumen.',
+                                ),
                         ),
                       ],
                     ),

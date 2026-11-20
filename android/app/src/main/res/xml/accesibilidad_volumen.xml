@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  U-05 · Configuración del AccessibilityService que escucha las teclas de volumen.
+  flagRequestFilterKeyEvents + canRequestFilterKeyEvents: sin los dos, onKeyEvent()
+  nunca recibe KEYCODE_VOLUME_UP ni KEYCODE_VOLUME_DOWN.
+  No se piden tipos de evento de contenido: el servicio no lee otras apps.
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagRequestFilterKeyEvents"
+    android:canRequestFilterKeyEvents="true"
+    android:description="@string/accesibilidad_volumen_descripcion"
+    android:notificationTimeout="100"
+    android:settingsActivity="com.utez.safelink.MainActivity" />

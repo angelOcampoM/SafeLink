@@ -87,7 +87,7 @@ Las URLs de esta guía son `http://`, no `https://`. Android (API 28 o superior)
 - Ya se agregó `<application android:usesCleartextTraffic="true" />` **solo** en `android/app/src/debug/AndroidManifest.xml` (builds de depuración). El manifest `main` no lo tiene, así que un release no permite `http://`.
 - **Pendiente de confirmar en un teléfono real:** no se ha comprobado en un dispositivo físico si hacía falta (Dart usa `dart:io` y quizá no aplique la política de cleartext de Android). Forma parte de la verificación final (sección 9).
 
-Hallazgo: el permiso `android.permission.INTERNET` está declarado solo en los manifests `debug` y `profile` (`android/app/src/debug/AndroidManifest.xml` y `android/app/src/profile/AndroidManifest.xml`). `android/app/src/main/AndroidManifest.xml` no lo tiene. Un build **release** no podría conectarse a la red. Hay que agregarlo al manifest `main` antes de generar un APK de entrega. Es un cambio en `android/`, fuera del alcance de este paso: queda como pendiente a confirmar con la responsable.
+Hallazgo, **resuelto en BE-07**: `android.permission.INTERNET` estaba declarado solo en los manifests `debug` y `profile`, así que un build **release** no podía conectarse a la red. Ya está en `android/app/src/main/AndroidManifest.xml`, junto con los dos de siempre. Eso **no** habilita tráfico en claro: `usesCleartextTraffic` sigue solo en el manifest `debug`, de modo que un release continúa exigiendo `https://`.
 
 ## 6. Ejecutar la app contra el backend
 
@@ -288,4 +288,58 @@ Todo esto es **[Recomendación, no verificada]**: no existe aún en `lib/` ni en
 - Para probar el registro del token sin Firebase, basta `PUT /users/me/device-token` con cualquier cadena válida con la sesión de `guardia@safelink.mx`; el token no se valida contra FCM al registrarlo.
 - Probar un envío real exige una cuenta de servicio y un teléfono con la app integrada con Firebase: **pendiente**, no se ha hecho. Casos de plan que solo se verifican en dispositivo: ver `docs/PLAN_DE_PRUEBAS.md`.
 
-Qué esperar según el estado real (BE-04): el backend ya implementa la sesión (`login`, `refresh`, `logout`, `me`, `session`), el registro y los ajustes, las alertas del usuario, la administración básica de guardias (alta, lectura, edición y baja), las rutas y canales del guardia y el token de dispositivo (ver `docs/PERMISOS.md`). **Lo que aún no existe en el backend:** `PUT /admin/guards/:id/coverage`, la resolución de escaladas y el canal `admin/alerts/escalated` (BE-05), y el historial y métricas del admin y gestión de usuarios (BE-07); esas pantallas del admin mostrarán `NOT_FOUND`. **Lo que falta en el front:** el `escuchar()` real todavía emite `SERVICE_UNAVAILABLE`, así que las pantallas que dependen de tiempo real lo mostrarán hasta la tarjeta del front (D45); lo mismo para el cliente HTTP de las rutas del guardia. Nada de esto es un fallo de conexión.
+Qué esperar según el estado real (BE-07): el backend ya implementa **37 de las 38 rutas** del contrato: la sesión (`login`, `refresh`, `logout`, `me`, `session`), el registro y los ajustes, las alertas del usuario, la administración de guardias (alta, lectura, edición y baja), las rutas y canales del guardia, el token de dispositivo, el escalamiento y la resolución de escaladas con el canal `admin/alerts/escalated` (BE-05) y el historial, las métricas y la gestión de usuarios del admin (BE-07; ver `docs/PERMISOS.md`). **Lo único que aún no existe en el backend:** `PUT /admin/guards/:id/coverage` (A-03, BE-06), así que la pantalla de cobertura del admin mostrará `NOT_FOUND`. **Lo que falta en el front:** el `escuchar()` real todavía emite `SERVICE_UNAVAILABLE`, así que las pantallas que dependen de tiempo real lo mostrarán hasta la tarjeta del front (D45); lo mismo para el cliente HTTP de las rutas del guardia. Nada de esto es un fallo de conexión.
+
+---
+
+## 11. Doble clic de volumen con la pantalla bloqueada (U-05)
+
+Agregado en BE-07. La implementación nativa está portada del repositorio que compartió el
+profesor (`BOTON-ALERTA-PERMISOS/alerta_utez`) y vive en:
+
+| Archivo | Qué hace |
+|---|---|
+| `android/app/src/main/kotlin/com/utez/safelink/VolumenAccessibilityService.kt` | Escucha las teclas físicas de volumen a nivel de sistema y emite **cada pulsación** a Flutter |
+| `android/app/src/main/kotlin/com/utez/safelink/MainActivity.kt` | Los dos canales (`com.utez.safelink/volumen` y `/volumen_eventos`) |
+| `android/app/src/main/res/xml/accesibilidad_volumen.xml` | `flagRequestFilterKeyEvents`: sin esto `onKeyEvent` nunca recibe las teclas de volumen |
+| `lib/datos/servicio_disparo_rapido_nativo.dart` | La implementación real del contrato `ServicioDisparoRapido` |
+
+Quién decide si hubo doble clic sigue siendo `ReglaDobleClic` (`lib/dominio/`), que ya estaba
+probada: el nativo solo reporta pulsaciones. Las dos capas comparten la ventana de 600 ms
+(`ReglaDobleClic.ventanaPorDefecto`, que Flutter le pasa a Kotlin al iniciar).
+
+### Activarlo en el teléfono (hay que hacerlo a mano, una vez)
+
+Android **no deja** que la app encienda un servicio de accesibilidad: es una decisión de la
+persona. En la app, Configuración → *Alerta por doble clic de volumen*; si el sistema todavía
+no dio el acceso, aparece un aviso amarillo con el botón **Abrir Ajustes**. También a mano:
+
+> Ajustes → Accesibilidad → Apps instaladas → **SafeLink · botón de emergencia** → Activar
+
+En algunos fabricantes (Xiaomi, Huawei, Oppo) hay que además quitarle la optimización de
+batería a SafeLink para que el servicio no se duerma.
+
+### Qué comprobar
+
+1. Activa el atajo en Configuración y confirma que el aviso amarillo **desaparece**.
+2. Bloquea la pantalla y pulsa volumen dos veces seguidas (menos de 600 ms).
+3. El teléfono vibra, la app pasa al frente y queda una alerta nueva.
+4. Pulsa volumen **una sola vez**: no debe pasar nada y el volumen debe cambiar normalmente.
+5. Apaga el atajo y repite el doble clic: no debe enviarse nada.
+
+### Diferencias a propósito con el código del profesor
+
+1. **El nativo emite cada pulsación, no el doble.** Así la regla del doble clic queda en un
+   solo lugar (el dominio, con sus pruebas) en vez de dos.
+2. **No se queda con las teclas de volumen.** El original devolvía `true` para todas, así que
+   mientras el servicio estaba encendido el teléfono no podía cambiar el volumen. Aquí solo se
+   consume la pulsación que completa el doble clic.
+3. **No usa `vibration` ni `shared_preferences` para esto:** la vibración es
+   `HapticFeedback.heavyImpact()` del propio Flutter, así que no se agregó ninguna dependencia.
+
+### Lo que sigue sin estar (no es U-05)
+
+La foto y el rumbo de la alerta (U-06) siguen simulados: el repositorio del profesor **no
+incluye cámara** (ni el paquete ni el permiso en el manifiesto), así que eso no se pudo tomar
+de ahí. En iOS el atajo no puede funcionar con el teléfono bloqueado: Apple no deja a una app
+de terceros interceptar el volumen (eso es exclusivo de funciones del sistema como SOS).

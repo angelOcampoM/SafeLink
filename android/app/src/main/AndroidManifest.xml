@@ -1,4 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- La app habla con la API por red en cualquier variante. Estaba declarado solo en los
+         manifests debug y profile, así que un APK de release no podía conectarse
+         (hallazgo de docs/CONEXION_DISPOSITIVO.md §5). No permite tráfico en claro: eso
+         sigue siendo solo de debug (usesCleartextTraffic). -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+
     <application
         android:allowBackup="false"
         android:label="safelink"
@@ -26,6 +32,22 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- U-05 · Servicio que escucha el doble clic de volumen, también con la pantalla
+             bloqueada. BIND_ACCESSIBILITY_SERVICE lo exige Android; la persona lo activa a
+             mano en Ajustes → Accesibilidad (la app no puede encenderlo). -->
+        <service
+            android:name=".VolumenAccessibilityService"
+            android:exported="false"
+            android:label="@string/accesibilidad_volumen_nombre"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accesibilidad_volumen"/>
+        </service>
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
