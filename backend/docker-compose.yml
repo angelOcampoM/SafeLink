@@ -67,6 +67,8 @@ services:
       LOCATION_UPDATE_SECONDS:
       WAIT_METERS_PER_MINUTE:
       GUARD_METERS_PER_MINUTE:
+      ETA_ROUNDING_SECONDS:
+      ETA_GUARD_GRID_METERS:
       COVERAGE_RADIUS_MIN_METERS:
       COVERAGE_RADIUS_MAX_METERS:
       ADMIN_NOTE_MAX_LENGTH:
@@ -77,10 +79,20 @@ services:
       PUBLIC_API_URL:
       SSE_PING_SECONDS:
       SSE_MAX_CONNECTIONS_PER_USER:
+      PUSH_PROVIDER:
+      FCM_PROJECT_ID:
+      PUSH_MAX_ATTEMPTS:
+      PUSH_MAX_TOKENS_PER_ALERT:
+      # Con PUSH_PROVIDER=fcm: ruta DENTRO del contenedor del JSON de la cuenta de servicio, que se
+      # monta como volumen de solo lectura desde fuera del repo (ver README). No se copia a la imagen.
+      FCM_SERVICE_ACCOUNT_FILE:
       # Ruta dentro del contenedor; los archivos viven en el volumen safelink_fotos.
       PHOTO_DIR: /app/storage/fotos
     volumes:
       - safelink_fotos:/app/storage/fotos
+      # Con PUSH_PROVIDER=fcm: monta el JSON (guardado fuera del repo) de solo lectura y apunta
+      # FCM_SERVICE_ACCOUNT_FILE a la ruta del contenedor. Ejemplo:
+      # - /ruta/segura/fuera/del/repo/cuenta-fcm.json:/run/secrets/fcm-service-account.json:ro
     ports:
       # Solo local por defecto; API_BIND=0.0.0.0 para probar con el teléfono en la LAN.
       - "${API_BIND:-127.0.0.1}:${PORT:-3000}:3000"

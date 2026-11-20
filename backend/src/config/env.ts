@@ -68,6 +68,11 @@ export const envSchema = z.object({
   LOCATION_UPDATE_SECONDS: entero(5),
   WAIT_METERS_PER_MINUTE: entero(100),
   GUARD_METERS_PER_MINUTE: entero(250),
+  // D47: el ETA que ve el dueño se redondea hacia arriba a este múltiplo (segundos) (mínimo 30) y se calcula
+  // con la posición del guardia ajustada al centro de una celda de ETA_GUARD_GRID_METERS (mínimo 100).
+  // Redondeo + celda dificultan, no eliminan, deducir al guardia con ubicaciones falsas: solo revelan la celda.
+  ETA_ROUNDING_SECONDS: entero(60).pipe(z.number().min(30)),
+  ETA_GUARD_GRID_METERS: entero(250).pipe(z.number().min(100)),
   COVERAGE_RADIUS_MIN_METERS: entero(500),
   COVERAGE_RADIUS_MAX_METERS: entero(10000),
   ADMIN_NOTE_MAX_LENGTH: entero(300),
@@ -84,6 +89,18 @@ export const envSchema = z.object({
   // streams puede tener abiertos un mismo usuario (al pasarse se cierra el más antiguo).
   SSE_PING_SECONDS: entero(25).pipe(z.number().max(300)),
   SSE_MAX_CONNECTIONS_PER_USER: entero(3).pipe(z.number().max(20)),
+  // Push (D43): 'none' no envía nada. Con 'fcm' hacen falta el proyecto de Firebase y la RUTA a
+  // la cuenta de servicio (un JSON fuera del repo; el archivo nunca se versiona).
+  PUSH_PROVIDER: z.enum(['none', 'fcm']).default('none'),
+  // Vacías (como en .env.example) cuentan como ausentes.
+  FCM_PROJECT_ID: z.string().optional().transform((v) => (v?.trim() ? v.trim() : undefined)),
+  FCM_SERVICE_ACCOUNT_FILE: z.string().optional().transform((v) => (v?.trim() ? v.trim() : undefined)),
+  // Intentos totales por token ante 429, 5xx o error de red.
+  PUSH_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(5).default(2),
+  // Tope de tokens por alerta (D44). FCM v1 manda un mensaje por token, así que el tope acota las
+  // peticiones y el tiempo de un solo aviso; 500 era también el tamaño de lote del envío multicast
+  // de FCM. Si se rebasa, se prioriza a los guardias más cercanos.
+  PUSH_MAX_TOKENS_PER_ALERT: z.coerce.number().int().min(1).max(500).default(500),
 });
 
 export type Config = z.infer<typeof envSchema>;
@@ -116,6 +133,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     throw new ConfigError([
       'COVERAGE_RADIUS_MIN_METERS: no puede ser mayor que COVERAGE_RADIUS_MAX_METERS',
     ]);
+  }
+  // Con PUSH_PROVIDER=fcm hacen falta el proyecto y la ruta de la cuenta de servicio (no va en el
+  // esquema como refinamiento porque la semilla usa envSchema.pick, que no admite refinamientos).
+  if (cfg.PUSH_PROVIDER === 'fcm') {
+    const faltantes = (['FCM_PROJECT_ID', 'FCM_SERVICE_ACCOUNT_FILE'] as const)
+      .filter((nombre) => !cfg[nombre])
+      .map((nombre) => `${nombre}: es obligatoria con PUSH_PROVIDER=fcm`);
+    if (faltantes.length > 0) throw new ConfigError(faltantes);
   }
   return cfg;
 }

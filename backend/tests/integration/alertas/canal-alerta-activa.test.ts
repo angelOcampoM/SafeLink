@@ -5,6 +5,7 @@
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { crearEntorno, login, logout, type Entorno } from '../auth/helpers.js';
+import { asignarGuardia, prepararPerfilGuardia, tokenDe } from '../flujo/guardia-flujo.js';
 import { abrirSse, type ConexionSse } from '../sse-helpers.js';
 
 const API = '/api/v1';
@@ -85,10 +86,9 @@ describe('GET /events/alerts/active', () => {
   it('U-09: al confirmar la atención el canal manda null (vuelve el botón de alerta)', async () => {
     const creada = await crear();
     const id = creada.body.data.id as string;
-    await env.prisma.alert.update({
-      where: { id },
-      data: { status: 'guard_arrived', guardId: env.usuarios.guardia.id, acceptedAt: new Date(), arrivedAt: new Date() },
-    });
+    // D46: el guardia llega por las rutas reales (PUT /guard/location, accept y arrive).
+    await prepararPerfilGuardia(env, env.usuarios.guardia.id);
+    await asignarGuardia(env, await tokenDe(env, env.usuarios.guardia.email), id, 'guard_arrived');
     const c = await abrir();
     expect(((await c.siguiente()) as { data: { status: string } }).data.status).toBe('guard_arrived');
 

@@ -39,6 +39,37 @@ export interface VisibilityContext {
   skipStatusCheck?: boolean;
 }
 
+/**
+ * Datos del guardia que decide la visibilidad (D22); un solo armado para todos los usos
+ * (listado, detalle, accept y push).
+ */
+export function toVisibilityGuard(
+  user: { id: string; isActive: boolean },
+  profile: {
+    shiftStart: string;
+    shiftEnd: string;
+    coverageCenterLat: number | null;
+    coverageCenterLng: number | null;
+    coverageRadiusMeters: number | null;
+  },
+): VisibilityGuard {
+  return {
+    id: user.id,
+    active: user.isActive,
+    shiftStart: profile.shiftStart,
+    shiftEnd: profile.shiftEnd,
+    coverage:
+      profile.coverageCenterLat !== null &&
+      profile.coverageCenterLng !== null &&
+      profile.coverageRadiusMeters !== null
+        ? {
+            center: { lat: profile.coverageCenterLat, lng: profile.coverageCenterLng },
+            radiusMeters: profile.coverageRadiusMeters,
+          }
+        : null,
+  };
+}
+
 export function isAssignedTo(alert: Pick<VisibilityAlert, 'guardId'>, guardId: string): boolean {
   return alert.guardId !== null && alert.guardId === guardId;
 }

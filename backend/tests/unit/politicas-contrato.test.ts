@@ -27,8 +27,9 @@ const canalesFront = (() => {
 })();
 
 // Rutas del backend que el front no llama por su nombre, cada una con su decisión documentada:
-// refresh (D8) y la foto con URL firmada (BE-03, D2: la app la recibe ya armada en photoUrl).
-const EXTRAS = ['POST /auth/refresh', 'GET /alerts/:id/photo'];
+// refresh (D8), la foto con URL firmada (BE-03, D2: la app la recibe ya armada en photoUrl) y el
+// token push del dispositivo del guardia (BE-04, D42).
+const EXTRAS = ['POST /auth/refresh', 'GET /alerts/:id/photo', 'PUT /users/me/device-token'];
 
 const claves = Object.keys(ROUTE_POLICIES);
 const clavesEvents = claves.filter((k) => k.startsWith('GET /events/'));
@@ -60,7 +61,7 @@ describe('Contrato de políticas de acceso front <-> backend (BE-01 paso 6)', ()
       expect(claves).toContain(extra);
     }
     expect(claves).toHaveLength(rutasFront.length + canalesFront.length + EXTRAS.length);
-    expect(claves).toHaveLength(37);
+    expect(claves).toHaveLength(38);
   });
 
   it('la ruta de la foto es pública: la autoriza la firma de la URL, no el token (D2)', () => {
@@ -68,7 +69,7 @@ describe('Contrato de políticas de acceso front <-> backend (BE-01 paso 6)', ()
   });
 
   it('todas las claves siguen el formato "MÉTODO /ruta" y los canales SSE son GET', () => {
-    for (const k of claves) expect(k, k).toMatch(/^(GET|POST|PUT|PATCH|DELETE) \/[a-z/:]+$/);
+    for (const k of claves) expect(k, k).toMatch(/^(GET|POST|PUT|PATCH|DELETE) \/[a-z/:-]+$/);
     for (const k of clavesEvents) expect(k.startsWith('GET ')).toBe(true);
   });
 });

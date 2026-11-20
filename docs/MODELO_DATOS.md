@@ -1,8 +1,8 @@
 # SafeLink — Modelo de datos
 
 **Historias que cubre:** U-01 a U-09, G-01 a G-07, A-01 a A-08 (modelo transversal del backend).
-**Tarjeta:** BE-01, paso 3 (`feat(BE-01): modelo de datos, migración inicial y semillas`).
-**Fuentes verificadas:** `backend/prisma/schema.prisma`, `backend/prisma/migrations/20261112024720_init/migration.sql`, `backend/prisma/migrations/20261112030815_restricciones_extra/migration.sql`, `backend/prisma/migrations/20261112042801_refresh_family_started_at/migration.sql`, `backend/prisma/seed.ts`, `lib/dominio/regla_alerta.dart`, `lib/datos/memoria_base_datos.dart`. Decisiones relacionadas en `docs/DECISIONES.md` (D1, D2, D5, D8, D10, D13, D14, D15, D17, D18, D23, D24, D25); formas JSON en `docs/API_CONTRATO.md`.
+**Tarjeta:** BE-01, paso 3 (`feat(BE-01): modelo de datos, migración inicial y semillas`). BE-04 (paso 12) agrega la tabla `device_tokens`, la asignación de guardia en `alerts` y el detalle de `alert_ignores` y de la última ubicación del guardia (G-02, G-03, G-05, G-06, G-07; D35, D36, D42).
+**Fuentes verificadas:** `backend/prisma/schema.prisma`, `backend/prisma/migrations/20261112024720_init/migration.sql`, `backend/prisma/migrations/20261112030815_restricciones_extra/migration.sql`, `backend/prisma/migrations/20261112042801_refresh_family_started_at/migration.sql`, `backend/prisma/migrations/20261118170000_guard_assignment/migration.sql`, `backend/prisma/migrations/20261118180000_device_tokens/migration.sql`, `backend/prisma/seed.ts`, `lib/dominio/regla_alerta.dart`, `lib/datos/memoria_base_datos.dart`. Decisiones relacionadas en `docs/DECISIONES.md` (D1, D2, D5, D8, D10, D13, D14, D15, D17, D18, D23, D24, D25, D27, D35 a D44, D47); formas JSON en `docs/API_CONTRATO.md`.
 
 Si este documento y el código discrepan, gana el código y se reporta; no se corrige a ciegas.
 
@@ -10,8 +10,8 @@ Si este documento y el código discrepan, gana el código y se reporta; no se co
 
 ## 1. Resumen y convenciones
 
-- Motor: PostgreSQL 16, gestionado con Prisma. La migración inicial es `20261112024720_init`; incluye a mano lo que Prisma no puede expresar (CHECK e índice único parcial). Una segunda migración, `20261112030815_restricciones_extra`, agrega más CHECK (sección 9).
-- Seis tablas: `users`, `guard_profiles`, `alerts`, `alert_ignores`, `alert_status_history`, `refresh_tokens`.
+- Motor: PostgreSQL 16, gestionado con Prisma. La migración inicial es `20261112024720_init`; incluye a mano lo que Prisma no puede expresar (CHECK e índice único parcial). Una segunda migración, `20261112030815_restricciones_extra`, agrega más CHECK (sección 9). Las migraciones de BE-04 (`20261118170000_guard_assignment` y `20261118180000_device_tokens`) están en la sección 10.
+- Siete tablas: `users`, `guard_profiles`, `alerts`, `alert_ignores`, `alert_status_history`, `refresh_tokens`, `device_tokens`.
 - Tablas y columnas en `snake_case`; el JSON de la API en `camelCase` (el mapeo lo hace Prisma con `@map` / `@@map`).
 - Identificadores: UUID generados por la base (`gen_random_uuid()`); en JSON viajan como string (D10). La semilla usa UUID v5 deterministas.
 - Fechas: `timestamptz(3)` (milisegundos), siempre UTC. La API las devuelve en ISO 8601 con `Z`.
@@ -45,6 +45,7 @@ erDiagram
     users ||--o{ refresh_tokens : "user_id"
     refresh_tokens |o--o{ refresh_tokens : "parent_id"
     refresh_tokens |o--o{ refresh_tokens : "replaced_by_id"
+    users ||--o{ device_tokens : "user_id (token push del guardia)"
 
     users {
         uuid id PK
@@ -119,6 +120,14 @@ erDiagram
         timestamptz revoked_at
         uuid replaced_by_id FK
     }
+    device_tokens {
+        uuid id PK
+        uuid user_id FK
+        text token UK
+        uuid family_id "sid de la sesion, sin FK"
+        timestamptz created_at
+        timestamptz last_seen_at
+    }
 ```
 
 Cardinalidades en palabras:
@@ -129,6 +138,8 @@ Cardinalidades en palabras:
 - `alert_ignores` es una tabla de unión guardia–alerta (llave compuesta).
 - Una alerta tiene 0..N filas de historial de estados.
 - Un usuario tiene 0..N refresh tokens; cada token puede apuntar a su predecesor (`parent_id`) y a su sucesor (`replaced_by_id`).
+- Un guardia tiene 0..N tokens de dispositivo (`device_tokens`); cada uno pertenece a una sesión (`family_id` = `sid`), que no es una fila propia sino un valor repetido en `refresh_tokens`, por eso no hay FK hacia ella.
+- Un guardia atiende **a lo más una alerta a la vez** (`in_progress` o `guard_arrived`; índice parcial `alerts_one_active_per_guard_idx`, sección 4).
 
 ---
 
@@ -169,9 +180,11 @@ Cubre G-01 a G-07 (disponibilidad, cobertura, ubicación) y A-02/A-03 (alta y co
 | `coverage_center_lng` | `double precision` | sí | — | CHECK −180..180 | Longitud del centro de cobertura | `coverageCenter.lng` |
 | `coverage_radius_meters` | `integer` | sí | — | CHECK `> 0` (el rango real se valida en la app) | Radio de cobertura en metros | `coverageRadiusMeters` |
 | `zone` | `text` | sí | — | CHECK `guard_profiles_zone_len_chk` (≤ 100) | Etiqueta de zona; **no** se usa para decidir visibilidad (D22) | `zone` |
-| `last_location_lat` | `double precision` | sí | — | CHECK −90..90 | Última latitud reportada | `lastLocation.lat` |
+| `last_location_lat` | `double precision` | sí | — | CHECK −90..90 | Última latitud reportada con `PUT /guard/location` (BE-04, G-06) | `lastLocation.lat` |
 | `last_location_lng` | `double precision` | sí | — | CHECK −180..180 | Última longitud reportada | `lastLocation.lng` |
-| `last_location_at` | `timestamptz(3)` | sí | — | — | Cuándo se reportó la última ubicación | `lastLocationAt` |
+| `last_location_at` | `timestamptz(3)` | sí | — | — | Cuándo se reportó, con la **hora del servidor** (no la del dispositivo) | `lastLocationAt` |
+
+Las tres columnas `last_location_*` las escribe solo `PUT /guard/location` (no exige turno vigente, D38) y las usan: la geocerca de `arrive` (D37; sin última ubicación, `422` con `remainingMeters: null`), la distancia del listado priorizado (sin ella se usa el centro de cobertura), el ETA de `alerts` (D27) y el orden de los destinatarios del push cuando se rebasa el tope (D44). Se guardan solo la última posición, sin historial.
 
 Los nombres exactos de los campos anidados (`coverageCenter`, `lastLocation`) y los datos del usuario que acompañan al perfil (`name`, `email`, `isActive`…) se toman de la forma `GuardProfile` / `Guard` de `docs/API_CONTRATO.md`; las columnas de coordenadas se agrupan en un objeto `{ lat, lng }` al serializar.
 
@@ -191,7 +204,7 @@ Cubre U-03 a U-09, G-02 a G-06, A-04 a A-08.
 |---|---|---|---|---|---|---|
 | `id` | `uuid` | no | `gen_random_uuid()` | PK | Identificador | `id` |
 | `user_id` | `uuid` | no | — | FK `users(id)` Restrict; índice `alerts_user_id_idx`; parte del índice único parcial | Usuario que dispara | `userId` |
-| `guard_id` | `uuid` | sí | — | FK `users(id)` Restrict; índice `alerts_guard_id_idx`; CHECK `alerts_guard_not_user_chk` (≠ `user_id`); CHECK `alerts_guard_required_chk` (obligatorio en `in_progress`, `guard_arrived` y `closed`) | Guardia asignado; nulo hasta que alguien acepta | `guardId` |
+| `guard_id` | `uuid` | sí | — | FK `users(id)` Restrict; índice `alerts_guard_id_idx`; CHECK `alerts_guard_not_user_chk` (≠ `user_id`); CHECK `alerts_guard_required_chk` (obligatorio en `in_progress`, `guard_arrived` y `closed`); CHECK `alerts_guard_absent_chk` (BE-04, D35: nulo en `pending_location`, `searching` y `no_response`); índice único parcial `alerts_one_active_per_guard_idx` (BE-04, D36: un guardia, una alerta en `in_progress` o `guard_arrived`) | Guardia asignado; nulo hasta que alguien acepta | `guardId` |
 | `status` | `alert_status` | no | — | índice `alerts_status_idx`; condiciona el índice parcial | Estado actual (sección 6) | `status` |
 | `trigger_method` | `trigger_method` | no | — | — | Cómo se disparó | `triggerMethod` |
 | `photo_key` | `text` | sí | — | CHECK `alerts_photo_key_format_chk` (nulo o UUID en minúsculas) | Llave de la foto en `PhotoStorage` (D2) | **interno** (alimenta `photoUrl`) |
@@ -217,7 +230,7 @@ Cubre U-03 a U-09, G-02 a G-06, A-04 a A-08.
 | `userName` | `users.name` del dueño (`alerts.user_id`) |
 | `userPhone` | `users.phone` del dueño, con la minimización de D23 (el guardia solo lo ve si es el asignado y la alerta sigue activa) |
 | `guardName` | `users.name` del guardia (`alerts.guard_id`); `null` sin guardia |
-| `etaSeconds` | **Se calcula en cada lectura, sin columna (D27).** Solo con la alerta en `in_progress`: distancia Haversine entre `guard_profiles.last_location_lat/lng` y `alerts.lat/lng`, entre `GUARD_METERS_PER_MINUTE`, convertida a segundos y redondeada a entero. `null` si falta alguna de las dos ubicaciones o la alerta no está en `in_progress` |
+| `etaSeconds` | **Se calcula en cada lectura, sin columna (D27).** Solo con la alerta en `in_progress`: distancia Haversine entre `guard_profiles.last_location_lat/lng` y `alerts.lat/lng`, entre `GUARD_METERS_PER_MINUTE`, convertida a segundos y redondeada a entero. `null` si falta alguna de las dos ubicaciones o la alerta no está en `in_progress`. En la vista del **dueño** (D47) la posición del guardia se ajusta antes al centro de una celda de `ETA_GUARD_GRID_METERS` y el resultado se redondea hacia arriba a un múltiplo de `ETA_ROUNDING_SECONDS`; guardia y admin ven el valor exacto |
 | `photoUrl` | `PhotoStorage.url(alerts.photo_key)`; `null` sin foto (D2). Se conserva para el guardia asignado aunque la alerta ya no esté activa (D23) |
 
 Además, para la lista priorizada, `distanceMeters`, `waitingMinutes` y `score` se calculan con `received_at` (D24), no se guardan.
@@ -226,7 +239,7 @@ Notas de uso de las marcas de tiempo: ver sección 6.
 
 ### 3.4 `alert_ignores`
 
-Cubre G-05 (el guardia ignora una alerta: `POST /guard/alerts/:id/ignore`, D5). Equivale a `datos/memoria_base_datos.dart:47-48`.
+Cubre G-03 (el guardia ignora una alerta: `POST /guard/alerts/:id/ignore`, D5, D39). Equivale a `datos/memoria_base_datos.dart:47-48`.
 
 | Columna | Tipo | Nulo | Default | Restricción / índice | Descripción | JSON |
 |---|---|---|---|---|---|---|
@@ -234,7 +247,9 @@ Cubre G-05 (el guardia ignora una alerta: `POST /guard/alerts/:id/ignore`, D5). 
 | `alert_id` | `uuid` | no | — | PK compuesta; FK `alerts(id)` Cascade | Alerta ignorada | **interno** |
 | `created_at` | `timestamptz(3)` | no | `CURRENT_TIMESTAMP` | — | Cuándo la ignoró | **interno** |
 
-Se usa solo para filtrar lo que ve cada guardia (visibilidad de D22); no se expone.
+Se usa solo para filtrar lo que ve cada guardia (visibilidad de D22) y los destinatarios del push (D44); no se expone.
+
+Cómo la escribe BE-04 (D39): `createMany` con `skipDuplicates`, así que ignorar dos veces no duplica ni da error. **No se guarda** si la alerta está asignada al propio guardia. Una carrera entre `ignore` y `accept` del mismo guardia puede dejar una fila de una alerta que luego él mismo acepta; al liberar una alerta (baja, escalada o reasignación) BE-05/BE-06 deben borrar la fila de `alert_ignores` del guardia que la tenía (pendiente en `docs/DECISIONES.md`).
 
 ### 3.5 `alert_status_history`
 
@@ -249,7 +264,7 @@ Cubre A-05 (consulta de historial y trazabilidad) y las métricas de BE-07 (D5).
 | `actor_id` | `uuid` | sí | — | FK `users(id)` SetNull | Quién hizo el cambio; nulo si lo hizo el sistema (escalamiento) | **interno** |
 | `at` | `timestamptz(3)` | no | `CURRENT_TIMESTAMP` | — | Momento del cambio | **interno** |
 
-Estado actual de la implementación: el esquema y la semilla ya contemplan el historial; la escritura en cada transición se implementa con las rutas de alertas (BE-03 a BE-05). Hasta entonces solo la semilla lo llena.
+Estado actual de la implementación: el esquema y la semilla contemplan el historial. BE-03 escribe una fila en cada transición del usuario (actor = el usuario) y BE-04 en `accept` (`searching → in_progress`) y en `arrive` (`in_progress → guard_arrived`), con el guardia como actor y dentro de la misma transacción que el cambio de estado. Las transiciones de BE-05 (escalamiento y resolución) se escribirán con esa tarjeta.
 
 ### 3.6 `refresh_tokens`
 
@@ -269,6 +284,29 @@ Cubre las sesiones (D8, D25). **Toda la tabla es interna**: ningún campo viaja 
 | `revoked_at` | `timestamptz(3)` | sí | — | — | Revocación (logout, baja, reutilización, hermano de gracia sin usar) |
 | `replaced_by_id` | `uuid` | sí | — | FK `refresh_tokens(id)` SetNull | Sucesor emitido en la rotación (para la ventana de gracia, D25) |
 
+### 3.7 `device_tokens`
+
+Cubre G-02 (recepción del aviso push) y el endpoint `PUT /users/me/device-token` (BE-04, D42). **Toda la tabla es interna**: el token es un dato sensible, nunca se devuelve en una respuesta ni se escribe en los logs. Migración `20261118180000_device_tokens`.
+
+| Columna | Tipo | Nulo | Default | Restricción / índice | Descripción |
+|---|---|---|---|---|---|
+| `id` | `uuid` | no | `gen_random_uuid()` | PK | Identificador |
+| `user_id` | `uuid` | no | — | FK `users(id)` **Cascade** (`device_tokens_user_id_fkey`); índice `device_tokens_user_id_idx` | Guardia dueño del token (solo el rol `guard` puede registrarlo) |
+| `token` | `text` | no | — | **único** (`device_tokens_token_key`); CHECK `device_tokens_token_len_chk` (1 a 512 caracteres) | Token de FCM/APNs. La API además solo acepta `[A-Za-z0-9_:.-]` (esquema zod, no CHECK) |
+| `family_id` | `uuid` | no | — | índice `device_tokens_family_id_idx`; **sin FK** | `sid` de la sesión que lo registró (la familia no es una fila propia, sino un valor repetido en `refresh_tokens`) |
+| `created_at` | `timestamptz(3)` | no | `CURRENT_TIMESTAMP` | — | Primer registro |
+| `last_seen_at` | `timestamptz(3)` | no | `CURRENT_TIMESTAMP` | — | Último registro (el upsert lo refresca) |
+
+Reglas de vida del dato (D42):
+
+- **Registro:** upsert por `token`. Si el token ya existía (incluso de otro usuario) se **reasigna** al usuario y a la sesión actuales (`user_id`, `family_id`, `last_seen_at`). Toma el mismo lock de familia que `logout` y la rotación y exige sesión viva (si no, `401`), para no dejar un token huérfano tras un logout concurrente.
+- **Borrado al revocar:** al revocar una familia de refresh tokens se borran los `device_tokens` con ese `family_id` (`logout`, reutilización de un refresh detectada, refresh de un usuario inactivo, gracia no disponible; `backend/src/auth/tokens.ts`). `revokeAllUserFamilies` borra **todos** los tokens del usuario.
+- **Borrado en cascada:** al borrar el usuario (solo limpieza manual o `db:reset`; los usuarios se dan de baja de forma lógica).
+- **Borrado por el proveedor:** el despachador del push borra los tokens que FCM declara inválidos, solo los de ese envío y de sus destinatarios (`deleteTokensOf`, D43, D44).
+- **Quién cuenta para enviar:** solo tokens de usuarios activos con al menos un refresh token de su familia sin revocar y sin vencer (`findLiveDevices`).
+- **No se borran** los tokens de familias que vencen sin revocarse (no se usan, pero quedan; pendiente de limpieza periódica) ni los de un guardia dado de baja con `deactivateGuard` (BE-02 no revoca sus sesiones; pendiente de BE-06). Ver los riesgos aceptados en D42.
+- Sin `platform`: el contrato de `context_desarrollo.md` solo manda `{ token }`.
+
 ---
 
 ## 4. Restricciones e índices
@@ -286,7 +324,7 @@ Cubre las sesiones (D8, D25). **Toda la tabla es interna**: ningún campo viaja 
 | `alerts` | `alerts_heading_chk` | `heading` nulo o 0..359 | — |
 | `alerts` | `alerts_admin_note_len_chk` | `admin_note` nulo o ≤ 1000 caracteres | D17 / tope de cordura |
 
-Los nueve CHECK de la segunda migración (`restricciones_extra`) están en la sección 9.
+Los nueve CHECK de la segunda migración (`restricciones_extra`) están en la sección 9; los de BE-04 (`alerts_guard_absent_chk`, `device_tokens_token_len_chk`) en la sección 10.
 
 **Únicos:** `users_email_key` (`users.email`), `refresh_tokens_token_hash_key` (`refresh_tokens.token_hash`), y las llaves primarias (incluida la compuesta `(guard_id, alert_id)` de `alert_ignores`).
 
@@ -299,7 +337,16 @@ CREATE UNIQUE INDEX "alerts_one_active_per_user_idx" ON "alerts"("user_id")
 
 Garantiza **una sola alerta activa por usuario**, aun con dos peticiones simultáneas. Refleja el supuesto del front "nadie tiene dos a la vez" (`memoria_base_datos.dart:116-117`). La violación debe traducirse en `409 INVALID_STATE` (D22). Prisma no puede expresar índices parciales, así que **vive solo en la migración**: si alguien regenera la migración desde el esquema, hay que conservarlo.
 
-**Índices no únicos:** `alerts_status_idx`, `alerts_guard_id_idx`, `alerts_user_id_idx`, `alerts_received_at_idx`, `alert_status_history_alert_id_at_idx (alert_id, at)`, `refresh_tokens_user_id_idx`, `refresh_tokens_family_id_idx`. `alert_ignores` no tiene índice aparte sobre `alert_id`; la PK compuesta cubre las búsquedas por `guard_id`.
+**Segundo índice único parcial (BE-04, D36):**
+
+```sql
+CREATE UNIQUE INDEX "alerts_one_active_per_guard_idx" ON "alerts"("guard_id")
+  WHERE "status" IN ('in_progress', 'guard_arrived');
+```
+
+Un guardia solo puede atender una alerta a la vez, aun con dos `accept` simultáneos. La API revisa antes y responde `409 INVALID_STATE` `Ya estás atendiendo otra alerta`; si el índice falla en una carrera (`P2002`), la API lo traduce al mismo `409`. Escalar desde `guard_arrived` deja `guard_id` pero el índice libera al guardia. Igual que el de D15, **vive solo en la migración** (Prisma no expresa índices parciales).
+
+**Índices no únicos:** `alerts_status_idx`, `alerts_guard_id_idx`, `alerts_user_id_idx`, `alerts_received_at_idx`, `alert_status_history_alert_id_at_idx (alert_id, at)`, `refresh_tokens_user_id_idx`, `refresh_tokens_family_id_idx`, `device_tokens_user_id_idx`, `device_tokens_family_id_idx`. Único de `device_tokens`: `device_tokens_token_key`. `alert_ignores` no tiene índice aparte sobre `alert_id`; la PK compuesta cubre las búsquedas por `guard_id`.
 
 **Qué se valida en la aplicación y no en la base, y por qué:**
 
@@ -322,6 +369,7 @@ Garantiza **una sola alerta activa por usuario**, aun con dos peticiones simult�
 | `alert_status_history.actor_id` → `users` | **SetNull** | Se conserva la transición aunque el actor desaparezca (queda como "sistema") |
 | `refresh_tokens.user_id` → `users` | **Cascade** | Las sesiones no sobreviven al usuario |
 | `refresh_tokens.parent_id` / `replaced_by_id` → `refresh_tokens` | **SetNull** | Una limpieza de tokens viejos no debe fallar por la cadena de rotación |
+| `device_tokens.user_id` → `users` | **Cascade** | El token push no tiene sentido sin su usuario. Además la aplicación los borra al revocar la familia de sesión (`family_id`, sin FK) y al declararlos inválido el proveedor (D42, D43) |
 
 Todas las FK usan `ON UPDATE CASCADE`. Como los usuarios no se borran en operación normal, Cascade y SetNull solo actúan en limpiezas manuales o en `db:reset`.
 
@@ -358,8 +406,8 @@ Las dos últimas flechas **no las ejecuta ningún código del front**; se muestr
 |---|---|---|---|
 | (creación) → `pending_location` / `searching` | Usuario | `memoria_alerta_usuario_repository.dart:31` (según haya o no ubicación) | `triggered_at` (dispositivo), `received_at` y `status_changed_at` (servidor) |
 | `pending_location` → `searching` | Usuario (envía ubicación) | `memoria_alerta_usuario_repository.dart:55` | `status_changed_at` |
-| `searching` → `in_progress` | Guardia (aceptar) | `memoria_alerta_guardia_repository.dart:61` | `accepted_at`, `guard_id`, `status_changed_at` (`etaSeconds` se calcula en cada lectura, D27) |
-| `in_progress` → `guard_arrived` | Guardia (llegué, con geocerca) | `memoria_alerta_guardia_repository.dart:94` | `arrived_at`, `status_changed_at` |
+| `searching` → `in_progress` | Guardia (aceptar) | `memoria_alerta_guardia_repository.dart:61` | `accepted_at`, `guard_id`, `status_changed_at` (`etaSeconds` se calcula en cada lectura, D27). BE-04: `UPDATE … WHERE status = 'searching' AND guard_id IS NULL` atómico (D35) y fila en `alert_status_history` en la misma transacción |
+| `in_progress` → `guard_arrived` | Guardia (llegué, con geocerca) | `memoria_alerta_guardia_repository.dart:94` | `arrived_at`, `status_changed_at`. BE-04: `UPDATE … WHERE status = 'in_progress' AND guard_id = <él>` y fila de historial (D40) |
 | `guard_arrived` → `closed` | Usuario (confirma atención) | `memoria_alerta_usuario_repository.dart:68` | `closed_at`, `status_changed_at` |
 | `searching` / `guard_arrived` → `escalated` | Sistema (temporizador) | `memoria_base_datos.dart:189-203` | `escalation_reason`, `status_changed_at`; **no** se llena `closed_at` |
 | `escalated` → `resolved_by_admin` | Admin | `memoria_admin_repository.dart:123` | `closed_at`, `resolution`, `admin_note`, `status_changed_at` |
@@ -466,7 +514,26 @@ Esto reduce lo que la sección 4 deja a la capa de servicio (coherencia `status`
 
 ---
 
-## 10. Discrepancias encontradas
+## 10. Migraciones de BE-04
+
+Nombres verificados contra cada `migration.sql`. Ambas agregan a mano lo que Prisma no puede expresar (CHECK e índice parcial).
+
+**`20261118170000_guard_assignment`** (D35, D36):
+
+| Tabla | Objeto | Regla |
+|---|---|---|
+| `alerts` | CHECK `alerts_guard_absent_chk` | `status NOT IN ('pending_location', 'searching', 'no_response') OR guard_id IS NULL`: sin guardia mientras la alerta no se ha aceptado o ya no está asignada. Cierra en la base el pendiente "`guard_id` en estados sin guardia"; la visibilidad por `guard_id` depende de esto |
+| `alerts` | Índice único parcial `alerts_one_active_per_guard_idx` | `ON alerts (guard_id) WHERE status IN ('in_progress', 'guard_arrived')`: un guardia, una alerta en atención |
+
+Consecuencia para BE-05 y BE-06: cualquier vuelta a `searching` o paso a `no_response` debe poner `guard_id = null` **en la misma sentencia**, o el CHECK falla (`23514`).
+
+**`20261118180000_device_tokens`** (D42): crea la tabla `device_tokens` (sección 3.7) con `device_tokens_pkey`, `device_tokens_token_key` (único), `device_tokens_user_id_idx`, `device_tokens_family_id_idx`, la FK `device_tokens_user_id_fkey` (`ON DELETE CASCADE ON UPDATE CASCADE`) y el CHECK `device_tokens_token_len_chk` (`char_length(token) BETWEEN 1 AND 512`).
+
+BE-04 **no** agrega columnas a `guard_profiles`: las columnas `last_location_lat`, `last_location_lng` y `last_location_at` ya venían de la migración inicial (sección 3.2); BE-04 es quien las escribe. Tampoco hay columna para el ETA (D27).
+
+---
+
+## 11. Discrepancias encontradas
 
 1. **Tope de la nota del admin:** el contrato dice 300 (`ADMIN_NOTE_MAX_LENGTH`) y la base 1000; es intencional (sección 4), no un error.
 2. **D14 sigue abierta:** la semilla incluye transiciones (`searching → escalated` directo y `searching → no_response`) que la tabla de `regla_alerta.dart` solo permite parcialmente; se mantiene hasta BE-05.

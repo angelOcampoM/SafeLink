@@ -7,6 +7,11 @@
 //   alertsTopicForUser(userId)  la alerta activa de ese usuario cambió (BE-03 la publica al
 //                               crear, mover y confirmar; BE-04 y BE-05 deben publicarla al
 //                               aceptar, marcar llegada, escalar y resolver).
+//   dispatchTopic               (global) una alerta entró o salió de `searching`, o cambió su
+//                               ubicación estando en `searching` (D34).
+//   guardTopic(guardId)         cambió algo propio de ese guardia: su ubicación, ignorar una
+//                               alerta (BE-06 agrega cobertura y baja).
+//   alertTopic(alertId)         cualquier cambio de esa alerta (canal guard/alerts/:id).
 import { EventEmitter } from 'node:events';
 
 export type Unsubscribe = () => void;
@@ -17,6 +22,9 @@ export interface EventBus {
 }
 
 export const alertsTopicForUser = (userId: string): string => `alerts:user:${userId}`;
+export const dispatchTopic = 'alerts:dispatch';
+export const guardTopic = (guardId: string): string => `guard:${guardId}`;
+export const alertTopic = (alertId: string): string => `alert:${alertId}`;
 
 export function createMemoryEventBus(): EventBus {
   const emitter = new EventEmitter();

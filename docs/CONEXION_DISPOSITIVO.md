@@ -1,7 +1,7 @@
 # Conectar un teléfono Android físico al backend
 
 Cubre: D4 (conexión de la app a un dispositivo físico) y las historias U-02 y G-01 (inicio de sesión).
-Tarjeta: BE-01 (paso 7, `docs(BE-01): guía para conectar un dispositivo físico`).
+Tarjeta: BE-01 (paso 7, `docs(BE-01): guía para conectar un dispositivo físico`). La sección 10 (push del guardia, G-02, D45) se agregó en BE-04 (paso 12).
 
 > Estado: la app ya tiene un cliente HTTP mínimo (`lib/datos/http_safelink_service.dart`), que se activa con `--dart-define=API_URL=...`. Sin `API_URL` la app sigue en modo simulado (memoria).
 
@@ -202,4 +202,90 @@ Antes: teléfono con depuración USB y la hora automática activadas, conectado 
 7. [ ] Cierra sesión. Esperado: vuelve al login; al reabrir la app ya no restaura la sesión.
 8. [ ] Al terminar: `HOST` y `API_BIND` de vuelta en `127.0.0.1`, regla de firewall eliminada, `adb reverse --remove tcp:3000` si ya no la usas.
 
-Qué esperar de lo que aún no existe: hoy el backend solo implementa `login`, `refresh`, `logout`, `me` y `session` (ver `docs/PERMISOS.md`). Las pantallas que usen rutas pendientes (alertas, guardia, administración, ajustes) mostrarán un error `NOT_FOUND`, y todas las que dependan de tiempo real mostrarán `SERVICE_UNAVAILABLE`, hasta las tarjetas BE-02 a BE-07. Eso es normal en esta tarjeta y no es un fallo de conexión.
+## 10. Notificaciones push del guardia (guía para la tarjeta del front)
+
+Cubre: G-02 (recepción de la alerta), soporte de G-03 y G-05. Tarjeta: BE-04 (paso 12). Decisión: D45, el cliente HTTP de `/guard/*`, el `escuchar()` real, Firebase/FCM, el canal de alarma y los permisos van en **una tarjeta aparte del front**; en BE-04 solo se documentan aquí. **No se tocó `lib/`.**
+
+Cómo leer esta sección:
+
+- **[Backend]** lo que el servidor hace hoy, verificado contra el código (`backend/src/notifications/`, `backend/src/modules/devices/`). Formato completo del mensaje en `docs/API_CONTRATO.md`, sección 10.
+- **[Recomendación, no verificada]** lo que sugiere la documentación de Flutter, Firebase y Android/iOS, **no comprobado en este repo**: el front aún no integra Firebase y el backend nunca se probó contra FCM real (D43). Verifícalo contra la documentación vigente de cada plataforma antes de implementarlo.
+
+### 10.1 Qué necesita el equipo antes de empezar
+
+- Un proyecto de Firebase con Cloud Messaging habilitado y una app Android (y una iOS si aplica) registradas.
+- **[Backend]** Una cuenta de servicio con permiso para enviar mensajes. El backend la lee de `FCM_SERVICE_ACCOUNT_FILE` (ruta a un JSON **fuera del repo**) con `PUSH_PROVIDER=fcm` y `FCM_PROJECT_ID`. Ver `backend/README.md`.
+- **La configuración de Firebase del cliente no se sube al repo:** `google-services.json` (Android) y `GoogleService-Info.plist` (iOS) quedan fuera de git, igual que el JSON de la cuenta de servicio. Cada integrante los descarga de su consola de Firebase. El `.gitignore` de la raíz ya ignora `android/app/google-services.json` e `ios/Runner/GoogleService-Info.plist`: colócalos exactamente en esas rutas y confirma con `git status` que no aparecen. Ni la cuenta de servicio ni estos archivos se pegan en `.env`, en issues ni en capturas.
+
+### 10.2 Flujo del token de dispositivo
+
+**[Backend]** `PUT /users/me/device-token`, solo rol `guard`, cuerpo `{ "token": "<token FCM>" }`, responde `200 { "data": null }`.
+
+Flujo que el cliente debe seguir:
+
+1. Iniciar sesión como guardia (`POST /auth/login`).
+2. Pedir permiso de notificaciones (sección 10.4) y obtener el token FCM del dispositivo.
+3. Enviar el token con `PUT /users/me/device-token`.
+4. Volver a registrarlo en cada uno de estos casos (**[Recomendación, no verificada]** para la parte de la API de Firebase; lo del servidor está verificado):
+   - cuando Firebase notifique un token nuevo (`onTokenRefresh` en el SDK de Flutter): FCM rota tokens y el anterior deja de servir;
+   - después de cada `POST /auth/login` nuevo: el servidor asocia el token a la sesión (`sid`) que lo registró, y solo un login crea una sesión nueva (`/auth/refresh` y `/auth/session` conservan el mismo `sid`, así que no hace falta registrarlo ahí);
+   - al abrir la app como guardia, para refrescar `last_seen_at` (idempotente: repetirlo no duplica).
+5. En **logout** el servidor borra los tokens de esa sesión; la app no necesita un "desregistrar". También se borran al revocar la sesión por reutilización del refresh. Aun así, conviene borrar el token local de Firebase en el cliente al cerrar sesión **[Recomendación, no verificada]**.
+
+Reglas del servidor que el cliente debe conocer **[Backend]**:
+
+- Formato: 1 a 512 caracteres de `A-Z a-z 0-9 _ : . -`, sin recortar espacios. Otro formato responde `400 INVALID_STATE` `El token del dispositivo no es válido`.
+- `401 UNAUTHORIZED` si la sesión ya fue revocada: no reintentar en bucle; ir a login.
+- `403 FORBIDDEN` si la cuenta no es guardia.
+- `429 TOO_MANY_REQUESTS` (30 por minuto por usuario por defecto): respetar `Retry-After`.
+- Si el mismo token se registra desde otra cuenta, **se reasigna** a la última: el teléfono que cambia de cuenta deja de recibir avisos de la anterior. Es un riesgo aceptado (D42): quien obtenga el token push de otro guardia puede quitarle sus avisos (no expone datos); no usarlo como mecanismo de cambio de cuenta.
+- Un guardia puede tener varios dispositivos (varios tokens). Un token inválido para FCM se borra solo del lado del servidor tras un envío fallido; vuelve a quedar registrado en cuanto el cliente lo registre de nuevo.
+
+### 10.3 Qué recibe la app
+
+**[Backend]** Mensaje **solo de datos**, valores en texto:
+
+```json
+{ "type": "alert", "alertId": "<uuid>", "urgent": "false" }
+```
+
+- `urgent` es `"true"` si la alerta se disparó con doble clic de volumen (`shake`).
+- No trae nombre, teléfono ni ubicación: hay que pedir el detalle al servidor.
+- En Android el mensaje no incluye bloque de notificación: **la app debe construir la notificación local** al recibirlo (en primer plano y, con un manejador de segundo plano, en segundo plano). **[Recomendación, no verificada]** para el manejador de segundo plano y de app terminada: es la forma habitual de FCM, pero el comportamiento con la app cerrada depende del fabricante y de las restricciones de batería.
+- En iOS el mensaje trae `aps.alert` con título `SafeLink` y cuerpo `Nueva alerta cerca de ti` (texto fijo del backend) y `sound: default`; el sistema lo muestra si la app tiene permiso.
+- Prioridad `HIGH` en Android y `apns-priority: 10` en iOS; vida del mensaje en Android = `ACCEPT_TIMEOUT_SECONDS` (300 s por defecto): un aviso que llega después de ese tiempo ya no tiene sentido.
+
+### 10.4 Android: canal de alarma, pantalla completa y permisos
+
+Todo esto es **[Recomendación, no verificada]**: no existe aún en `lib/` ni en `android/` de este repo.
+
+- **Permiso de notificaciones (Android 13+):** declarar `POST_NOTIFICATIONS` en el manifest y pedirlo en tiempo de ejecución. Sin él, no se muestra la notificación local. El guardia no ve pantalla de permisos al iniciar sesión (decisión del 01/11 en `docs/PLAN_DE_PRUEBAS.md`), así que hay que decidir dónde se pide.
+- **Canal de notificación de alta importancia:** crear un canal para alertas (importancia alta, sonido de alarma, vibración, visibilidad pública en pantalla de bloqueo) y usarlo al construir la notificación cuando `urgent == "true"`; para `urgent == "false"` basta un canal de importancia alta normal. Los canales no se pueden endurecer después de creados (el usuario los controla): define bien el nombre y la importancia desde el inicio.
+- **Pantalla completa (full-screen intent):** para mostrar la alerta sobre la pantalla de bloqueo, declarar `USE_FULL_SCREEN_INTENT`. A partir de Android 14 es un permiso especial que el usuario puede revocar; hay que comprobarlo y llevarlo a su pantalla de ajustes si falta. Sin él, se degrada a una notificación emergente.
+- **Silencio y No molestar:** que suene con el teléfono en silencio depende del canal y de que el usuario no lo haya silenciado; el caso "Recepción en Android con el teléfono en silencio" del plan (G-02) solo se puede comprobar en un dispositivo físico.
+- **Optimización de batería:** algunos fabricantes retrasan o descartan mensajes con la app cerrada; documentar la excepción de batería para el guardia.
+- **Red:** el manifest `main` aún no declara `INTERNET` (hallazgo de la sección 5); un build release no tendría red ni push hasta resolverlo.
+
+### 10.5 iOS
+
+**[Recomendación, no verificada]** (no hay proyecto iOS configurado para push en este repo):
+
+- Habilitar las capacidades Push Notifications y Background Modes (Remote notifications) y subir la llave APNs a Firebase.
+- Pedir el permiso de notificaciones en tiempo de ejecución (alertas y sonido).
+- **[Backend]** El texto visible lo manda el servidor en `aps.alert` y es genérico, así que lo que muestra iOS es `SafeLink` / `Nueva alerta cerca de ti`. El `alertId` y `urgent` llegan como datos. iOS no tiene full-screen intent; las alertas críticas (que saltan el silencio) exigen un permiso especial de Apple que este backend no usa.
+
+### 10.6 Qué hacer al tocar el aviso
+
+1. Leer `alertId` de los datos y llevar al guardia a la pantalla de detalle de esa alerta. Si no hay sesión, ir a login y reanudar después.
+2. Pedir `GET /guard/alerts/:id` (o abrir el canal `guard/alerts/:id`). **Nunca confiar en el push para autorizar o mostrar datos:** el servidor revalida visibilidad, turno, cobertura y que no esté ignorada.
+3. `404 NOT_FOUND` (`La alerta ya no existe`): otro guardia la tomó, se escaló, la cerraron o ya no es visible para este guardia. Mostrar que ya no está disponible.
+4. Si sigue en `searching`, el guardia puede aceptar (`POST /guard/alerts/:id/accept`) o ignorarla (`POST /guard/alerts/:id/ignore`). `409 ALERT_TAKEN` significa que otro llegó antes.
+5. El push es un complemento: el listado en vivo viene del canal `guard/alerts` (SSE), que el cliente debe reconectar al abrirse la app (D26).
+
+### 10.7 Cómo probar sin FCM
+
+- Con `PUSH_PROVIDER=none` (por defecto) el backend no envía nada; las alertas se ven solo por el canal SSE y `GET /guard/alerts/:id`.
+- Para probar el registro del token sin Firebase, basta `PUT /users/me/device-token` con cualquier cadena válida con la sesión de `guardia@safelink.mx`; el token no se valida contra FCM al registrarlo.
+- Probar un envío real exige una cuenta de servicio y un teléfono con la app integrada con Firebase: **pendiente**, no se ha hecho. Casos de plan que solo se verifican en dispositivo: ver `docs/PLAN_DE_PRUEBAS.md`.
+
+Qué esperar según el estado real (BE-04): el backend ya implementa la sesión (`login`, `refresh`, `logout`, `me`, `session`), el registro y los ajustes, las alertas del usuario, la administración básica de guardias (alta, lectura, edición y baja), las rutas y canales del guardia y el token de dispositivo (ver `docs/PERMISOS.md`). **Lo que aún no existe en el backend:** `PUT /admin/guards/:id/coverage`, la resolución de escaladas y el canal `admin/alerts/escalated` (BE-05), y el historial y métricas del admin y gestión de usuarios (BE-07); esas pantallas del admin mostrarán `NOT_FOUND`. **Lo que falta en el front:** el `escuchar()` real todavía emite `SERVICE_UNAVAILABLE`, así que las pantallas que dependen de tiempo real lo mostrarán hasta la tarjeta del front (D45); lo mismo para el cliente HTTP de las rutas del guardia. Nada de esto es un fallo de conexión.

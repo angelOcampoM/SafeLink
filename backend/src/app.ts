@@ -6,11 +6,26 @@ import { tooManyRequests } from './errors/app-error.js';
 import { createFrameworkErrorHandler, registerErrorHandling } from './http/error-handler.js';
 import { adminRoutes } from './modules/admin/routes.js';
 import { alertsRoutes } from './modules/alerts/routes.js';
-import { createAlertsService } from './modules/alerts/service.js';
+import { createAlertsService, type AlertChange } from './modules/alerts/service.js';
 import { authRoutes } from './modules/auth/routes.js';
+import { devicesRoutes } from './modules/devices/routes.js';
+import { createDevicesService } from './modules/devices/service.js';
 import { eventsRoutes } from './modules/events/routes.js';
+import { guardRoutes } from './modules/guard/routes.js';
+import { createGuardService } from './modules/guard/service.js';
+import { createAlertDispatcher } from './notifications/dispatcher.js';
+import { createFcmNotifier } from './notifications/fcm-notifier.js';
+import { createNoopNotifier } from './notifications/noop-notifier.js';
+import type { PushLogger, PushNotifier } from './notifications/push-notifier.js';
 import { authPluginRoot } from './plugins/auth.js';
-import { alertsTopicForUser, createMemoryEventBus, type EventBus } from './realtime/event-bus.js';
+import {
+  alertTopic,
+  alertsTopicForUser,
+  createMemoryEventBus,
+  dispatchTopic,
+  guardTopic,
+  type EventBus,
+} from './realtime/event-bus.js';
 import { createSseHub } from './realtime/sse.js';
 import { healthRoutes } from './routes/health.js';
 import { registerRouteGuards } from './security/guards.js';
@@ -30,6 +45,23 @@ export interface AppDependencies {
   prisma?: PrismaClient;
   /** Bus de eventos del tiempo real (D3); por defecto, uno en memoria. */
   bus?: EventBus;
+  /** Notificador push (D43); por defecto se arma según PUSH_PROVIDER. Inyectarlo enciende el despachador (D44). */
+  push?: PushNotifier;
+}
+
+function buildPushNotifier(config: Config, logger: PushLogger): PushNotifier {
+  if (config.PUSH_PROVIDER !== 'fcm') return createNoopNotifier(logger);
+  // Un Config armado sin loadConfig podría omitirlos: se falla en vez de caer en silencio al no-op.
+  if (!config.FCM_PROJECT_ID || !config.FCM_SERVICE_ACCOUNT_FILE) {
+    throw new Error('PUSH_PROVIDER=fcm requiere FCM_PROJECT_ID y FCM_SERVICE_ACCOUNT_FILE');
+  }
+  return createFcmNotifier({
+    projectId: config.FCM_PROJECT_ID,
+    serviceAccountFile: config.FCM_SERVICE_ACCOUNT_FILE,
+    maxAttempts: config.PUSH_MAX_ATTEMPTS,
+    ttlSeconds: config.ACCEPT_TIMEOUT_SECONDS,
+    logger,
+  });
 }
 
 export function buildApp(config: Config, deps: AppDependencies = {}): FastifyInstance {
@@ -64,6 +96,8 @@ export function buildApp(config: Config, deps: AppDependencies = {}): FastifyIns
           },
   });
   app.decorate('config', config);
+  // Con PUSH_PROVIDER=fcm, una cuenta de servicio ausente o inválida lanza aquí y la API no arranca.
+  const push: PushNotifier = deps.push ?? buildPushNotifier(config, app.log);
   registerErrorHandling(app, { isProduction: config.NODE_ENV === 'production' });
   // Las respuestas de la API no se cachean (llevan tokens y datos personales). Va en la raíz
   // para cubrir también el 404 de rutas inexistentes bajo el prefijo.
@@ -91,14 +125,48 @@ export function buildApp(config: Config, deps: AppDependencies = {}): FastifyIns
       publicApiUrl: config.PUBLIC_API_URL ?? `http://127.0.0.1:${String(config.PORT)}/api/v1`,
       ttlSeconds: config.PHOTO_URL_TTL_SECONDS,
     });
+    const serialize = {
+      photoUrl: (alertId: string, photoKey: string | null) =>
+        photoKey ? photoUrls.url(alertId, photoKey) : null,
+      guardMetersPerMinute: config.GUARD_METERS_PER_MINUTE,
+      etaRoundingSeconds: config.ETA_ROUNDING_SECONDS,
+      guardGridMeters: config.ETA_GUARD_GRID_METERS,
+    };
+    // Un solo cableado de avisos de alerta para los servicios del usuario y del guardia.
+    const devices = createDevicesService({ prisma });
+    // Aviso push (D44): sin PUSH_PROVIDER=fcm ni doble inyectado el notificador es el no-op, así que
+    // el despachador se apaga y no gasta consultas. BE-06 reutiliza `alertDispatcher.dispatchAlert`.
+    const alertDispatcher = createAlertDispatcher({
+      prisma,
+      push,
+      devices,
+      logger: app.log,
+      timeZone: config.TZ_SHIFTS,
+      maxTokensPerAlert: config.PUSH_MAX_TOKENS_PER_ALERT,
+      enabled: deps.push !== undefined || config.PUSH_PROVIDER === 'fcm',
+    });
+    const onAlertChanged = ({ userId, alertId, dispatch, published }: AlertChange): void => {
+      bus.publish(alertsTopicForUser(userId));
+      bus.publish(alertTopic(alertId));
+      if (dispatch) bus.publish(dispatchTopic);
+      // Fire-and-forget, después del commit: la respuesta no espera al push.
+      if (published) alertDispatcher.notifyPublished(alertId);
+    };
     const alerts = createAlertsService({
       prisma,
-      serialize: {
-        photoUrl: (alertId, photoKey) => (photoKey ? photoUrls.url(alertId, photoKey) : null),
-        guardMetersPerMinute: config.GUARD_METERS_PER_MINUTE,
-      },
+      serialize,
       triggeredAtToleranceSeconds: config.TRIGGERED_AT_TOLERANCE_SECONDS,
+      onAlertChanged,
+    });
+    const guard = createGuardService({
+      prisma,
+      serialize,
+      timeZone: config.TZ_SHIFTS,
+      geofenceMeters: config.GEOFENCE_METERS,
+      waitMetersPerMinute: config.WAIT_METERS_PER_MINUTE,
       onUserAlertChanged: (userId) => bus.publish(alertsTopicForUser(userId)),
+      onGuardChanged: (guardId) => bus.publish(guardTopic(guardId)),
+      onAlertChanged,
     });
     // Los streams abiertos no deben impedir que la API se apague.
     app.addHook('preClose', async () => {
@@ -127,7 +195,9 @@ export function buildApp(config: Config, deps: AppDependencies = {}): FastifyIns
         await api.register(authRoutes, { prisma });
         await api.register(adminRoutes, { prisma });
         await api.register(alertsRoutes, { prisma, service: alerts, photos, photoUrls });
-        await api.register(eventsRoutes, { prisma, hub, alerts });
+        await api.register(guardRoutes, { service: guard });
+        await api.register(devicesRoutes, { service: devices });
+        await api.register(eventsRoutes, { prisma, hub, alerts, guard });
       },
       { prefix: API_PREFIX },
     );

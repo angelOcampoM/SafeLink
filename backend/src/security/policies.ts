@@ -23,6 +23,8 @@ export const ROUTE_POLICIES: Readonly<Record<string, RoutePolicy>> = Object.free
   'POST /auth/logout': ALL_ROLES,
   'GET /auth/me': ALL_ROLES,
   'POST /auth/session': 'custom',
+  // EXCEPCIÓN (BE-04, D42): no existe en el front. Token push del dispositivo; solo guard.
+  'PUT /users/me/device-token': GUARD,
   'PATCH /users/me/settings': USER,
 
   // Usuario protegido

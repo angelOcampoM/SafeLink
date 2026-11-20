@@ -38,6 +38,16 @@ export function clampTriggeredAt(triggeredAt: Date, receivedAt: Date, toleranceS
 export const CONFIRM_ONLY_AFTER_ARRIVAL = 'Solo puedes confirmar cuando el guardia ya llegó';
 export const ALERT_NOT_ACTIVE = 'Tu alerta ya no está activa';
 export const ALREADY_HAS_ACTIVE_ALERT = 'Ya tienes una alerta activa';
+/** D36: un guardia con una alerta in_progress o guard_arrived no acepta otra. */
+export const GUARD_ALREADY_ATTENDING = 'Ya estás atendiendo otra alerta';
+/** G-07: la llegada solo se registra con la alerta en `in_progress` y asignada al guardia (D40). */
+export const ALERT_NOT_IN_ATTENDANCE = 'Esta alerta ya no está en atención';
+
+/** Estados en los que la alerta está asignada y en atención por su guardia (D36). */
+export const ATTENDED_STATUSES: readonly AlertStatus[] = [
+  AlertStatus.in_progress,
+  AlertStatus.guard_arrived,
+];
 
 /** U-09: solo se confirma con el guardia en el lugar (regla_alerta.dart:34-37). */
 export function canUserConfirm(alert: { status: AlertStatus; guardId: string | null }): boolean {
@@ -68,4 +78,15 @@ export function etaSeconds(
   // Igual que ReglaEta.segundos: distancia o velocidad no positivas dan 0.
   if (meters <= 0 || guardMetersPerMinute <= 0) return 0;
   return Math.round((meters / guardMetersPerMinute) * 60);
+}
+
+/**
+ * D47: redondea el ETA hacia arriba al siguiente múltiplo de `stepSeconds` (solo para el dueño).
+ * Un ETA exacto cambia ~4 m por segundo y permitiría triangular al guardia. Redondear solo la
+ * salida no basta (una búsqueda binaria encontraría el borde del escalón): se combina con
+ * `snapToGrid` sobre la entrada, y así lo más que se revela es la celda. 0 se queda en 0 (ya llegó o está encima) y `null` pasa igual; un paso <= 1 no redondea.
+ */
+export function roundEtaUp(eta: number | null, stepSeconds: number): number | null {
+  if (eta === null || stepSeconds <= 1) return eta;
+  return Math.ceil(eta / stepSeconds) * stepSeconds;
 }

@@ -1,7 +1,9 @@
 // Forma `AlertaJson` del front (nube_mapeadores.dart:117-165, contrato 4.4). Se envían
 // SIEMPRE todas las claves (con null si no aplican). Campo por campo: jamás spread del
 // registro, para que un campo interno (receivedAt, photoKey, statusChangedAt) no se filtre.
-import { etaSeconds } from '../../domain/alert-rules.js';
+import { ATTENDED_STATUSES, etaSeconds, isActiveStatus, roundEtaUp } from '../../domain/alert-rules.js';
+import { snapToGrid } from '../../domain/geo.js';
+import { isAssignedTo } from '../../domain/guard-visibility.js';
 import type {
   AlertStatus,
   EscalationReason,
@@ -75,6 +77,16 @@ export interface SerializeOptions {
   photoUrl: (alertId: string, photoKey: string | null) => string | null;
   /** GUARD_METERS_PER_MINUTE para el ETA (D27). */
   guardMetersPerMinute: number;
+  /**
+   * ETA_ROUNDING_SECONDS (D47): solo la vista del dueño. Obligatorio para que ningún servicio
+   * nuevo le entregue al dueño el ETA exacto por olvido.
+   */
+  etaRoundingSeconds: number;
+  /**
+   * ETA_GUARD_GRID_METERS (D47): tamaño de la celda a cuyo centro se ajusta la posición del
+   * guardia antes del ETA del dueño. Obligatorio por el mismo motivo que `etaRoundingSeconds`.
+   */
+  guardGridMeters: number;
 }
 
 const iso = (d: Date | null): string | null => (d ? d.toISOString() : null);
@@ -84,8 +96,8 @@ function point(lat: number | null, lng: number | null): PointJson | null {
 }
 
 /**
- * Vista del DUEÑO de la alerta: la ve completa (D23). El guardia y el admin tendrán
- * sus propias vistas en BE-04 y BE-05 (minimización de datos).
+ * Vista del DUEÑO de la alerta: la ve completa (D23). El admin tendrá su propia vista
+ * en BE-05 (minimización de datos); la del guardia es `serializeGuardAlert`.
  */
 export function serializeOwnAlert(alert: AlertRecord, options: SerializeOptions): AlertJson {
   const location = point(alert.lat, alert.lng);
@@ -104,6 +116,58 @@ export function serializeOwnAlert(alert: AlertRecord, options: SerializeOptions)
     photoUrl: options.photoUrl(alert.id, alert.photoKey),
     evidenceIncomplete: alert.evidenceIncomplete,
     location,
+    heading: alert.heading,
+    triggeredAt: alert.triggeredAt.toISOString(),
+    acceptedAt: iso(alert.acceptedAt),
+    arrivedAt: iso(alert.arrivedAt),
+    closedAt: iso(alert.closedAt),
+    escalationReason: alert.escalationReason,
+    resolution: alert.resolution,
+    adminNote: alert.adminNote,
+    // D47: al dueño se le ajusta la posición del guardia al centro de su celda y el ETA se
+    // redondea hacia arriba; el guardia y el admin reciben el valor exacto.
+    etaSeconds: roundEtaUp(
+      etaSeconds(
+        alert.status,
+        guardLocation ? snapToGrid(guardLocation, options.guardGridMeters) : null,
+        location,
+        options.guardMetersPerMinute,
+      ),
+      options.etaRoundingSeconds,
+    ),
+  };
+}
+
+/**
+ * Vista del GUARDIA (D23, minimización de datos). `userPhone` solo lo recibe el guardia
+ * asignado mientras la atiende (in_progress o guard_arrived, D36); `location` solo existe con la alerta activa
+ * (después es dato personal sin función operativa); `photoUrl` se conserva como evidencia.
+ * El ETA se calcula con la ubicación real, antes de ocultarla.
+ */
+export function serializeGuardAlert(
+  alert: AlertRecord,
+  viewerGuardId: string,
+  options: SerializeOptions,
+): AlertJson {
+  const active = isActiveStatus(alert.status);
+  // El teléfono solo llega mientras el guardia asignado la atiende (D23, D36), no en cualquier activa.
+  const attended = ATTENDED_STATUSES.includes(alert.status);
+  const location = point(alert.lat, alert.lng);
+  const guardLocation = alert.guard?.guardProfile
+    ? point(alert.guard.guardProfile.lastLocationLat, alert.guard.guardProfile.lastLocationLng)
+    : null;
+  return {
+    id: alert.id,
+    userId: alert.userId,
+    userName: alert.user.name,
+    userPhone: attended && isAssignedTo(alert, viewerGuardId) ? alert.user.phone : null,
+    guardId: alert.guardId,
+    guardName: alert.guard?.name ?? null,
+    status: alert.status,
+    triggerMethod: alert.triggerMethod,
+    photoUrl: options.photoUrl(alert.id, alert.photoKey),
+    evidenceIncomplete: alert.evidenceIncomplete,
+    location: active ? location : null,
     heading: alert.heading,
     triggeredAt: alert.triggeredAt.toISOString(),
     acceptedAt: iso(alert.acceptedAt),

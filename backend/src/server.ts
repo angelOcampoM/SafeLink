@@ -18,7 +18,15 @@ async function main(): Promise<void> {
     process.exit(1);
   }
   const prisma = createPrisma(config.DATABASE_URL);
-  const app = buildApp(config, { prisma });
+  let app: ReturnType<typeof buildApp>;
+  try {
+    app = buildApp(config, { prisma });
+  } catch (e) {
+    // Solo el mensaje (nombra el campo, nunca contenido); sin stack.
+    console.error(`No se pudo iniciar la API: ${e instanceof Error ? e.message : 'error desconocido'}`);
+    await prisma.$disconnect();
+    process.exit(1);
+  }
   app.addHook('onClose', async () => {
     await prisma.$disconnect();
   });

@@ -1,7 +1,7 @@
 # Permisos por rol
 
 Cubre: U-02, G-01 (sesión), G-04, G-05 (visibilidad del guardia), A-01 a A-08 (acceso de administración) y la minimización de datos (D23).
-Tarjeta: BE-01 (paso 6, `feat(BE-01): permisos por rol deny-by-default`). Las rutas de BE-02 a BE-07 se agregan después, pero su política ya está registrada.
+Tarjeta: BE-01 (paso 6, `feat(BE-01): permisos por rol deny-by-default`). Las rutas de BE-02 a BE-07 se agregan después, pero su política ya está registrada. BE-04 (paso 12) documenta las filas 12 a 19, 34, 35 y 38 (guardia, canales del guardia y token de dispositivo; G-02, G-03, G-04, G-05, G-06, G-07).
 
 Fuente de verdad en el código: `backend/src/security/policies.ts` (`ROUTE_POLICIES`). Si este documento y ese archivo discrepan, gana el código: avisa para corregir el documento.
 
@@ -38,7 +38,7 @@ Códigos: sin token, token inválido, sesión revocada o usuario inactivo = `401
 
 ## 3. Matriz rol × ruta
 
-Leyenda: ✅ permitido (sujeto a la regla de la última columna), 401 = no autenticado, 403 = rol incorrecto. Las rutas son relativas a `/api/v1`. 37 entradas: 31 rutas del front, `POST /auth/refresh` (excepción aprobada, D8), `GET /alerts/:id/photo` (excepción, D30) y 4 canales SSE.
+Leyenda: ✅ permitido (sujeto a la regla de la última columna), 401 = no autenticado, 403 = rol incorrecto. Las rutas son relativas a `/api/v1`. 38 entradas: 31 rutas del front, `POST /auth/refresh` (excepción aprobada, D8), `GET /alerts/:id/photo` (excepción, D30), `PUT /users/me/device-token` (excepción, D42) y 4 canales SSE.
 
 La columna "Regla de propiedad o visibilidad" describe lo que define el contrato y las decisiones (D9, D22, D23); se implementa en la tarjeta indicada. Un recurso ajeno responde `404 NOT_FOUND`, nunca 403.
 
@@ -55,14 +55,14 @@ La columna "Regla de propiedad o visibilidad" describe lo que define el contrato
 | 9 | `GET /alerts/mine` | 401 | ✅ | 403 | 403 | Solo alertas propias | BE-03 |
 | 10 | `POST /alerts/:id/locations` | 401 | ✅ | 403 | 403 | `assertOwnsAlert` | BE-03 |
 | 11 | `POST /alerts/:id/confirm` | 401 | ✅ | 403 | 403 | `assertOwnsAlert` | BE-03 |
-| 12 | `GET /guard/me` | 401 | 403 | ✅ | 403 | Solo el propio perfil | BE-04 |
-| 13 | `GET /guard/history` | 401 | 403 | ✅ | 403 | Solo alertas con `guardId` propio y no activas; sin `userPhone` ni `location` (D23) | BE-04 |
+| 12 | `GET /guard/me` | 401 | 403 | ✅ | 403 | Solo el propio perfil (id del token); sin perfil, 404 | BE-04 |
+| 13 | `GET /guard/history` | 401 | 403 | ✅ | 403 | Solo alertas con `guardId` propio y no activas; sin `userPhone` ni `location` (D23); `photoUrl` y `adminNote` visibles (D41) | BE-04 |
 | 14 | `GET /guard/metrics` | 401 | 403 | ✅ | 403 | Sobre la misma lista que el historial | BE-04 |
-| 15 | `PUT /guard/location` | 401 | 403 | ✅ | 403 | Solo su propia ubicación | BE-04 |
-| 16 | `GET /guard/alerts/:id` | 401 | 403 | ✅ | 403 | `assertGuardCanSee` (D22) | BE-04 |
-| 17 | `POST /guard/alerts/:id/accept` | 401 | 403 | ✅ | 403 | `assertGuardCanSee` con `skipStatusCheck`; visible y no `searching` = 409 `ALERT_TAKEN` | BE-04 |
-| 18 | `POST /guard/alerts/:id/ignore` | 401 | 403 | ✅ | 403 | `assertGuardCanSee` (alerta visible para él) | BE-04 |
-| 19 | `POST /guard/alerts/:id/arrive` | 401 | 403 | ✅ | 403 | `assertAssignedGuard` antes de estado y geocerca | BE-04 |
+| 15 | `PUT /guard/location` | 401 | 403 | ✅ | 403 | Solo su propia ubicación (id del token); no exige turno (D38). Rate limit por usuario | BE-04 |
+| 16 | `GET /guard/alerts/:id` | 401 | 403 | ✅ | 403 | Asignada a él o disponible para él (D22); si no, 404 con el mismo cuerpo que una inexistente (D40) | BE-04 |
+| 17 | `POST /guard/alerts/:id/accept` | 401 | 403 | ✅ | 403 | Visibilidad **sin** la condición de estado: no visible = 404; visible y no `searching` = 409 `ALERT_TAKEN`; ya atiende otra = 409 `INVALID_STATE` (D36) | BE-04 |
+| 18 | `POST /guard/alerts/:id/ignore` | 401 | 403 | ✅ | 403 | Alerta visible para él (sin filtrar por ignorada, D39); no visible = 404; asignada a él = 200 sin efecto | BE-04 |
+| 19 | `POST /guard/alerts/:id/arrive` | 401 | 403 | ✅ | 403 | `assertAssignedGuard` (404 si no es el asignado) antes de estado (409) y geocerca (422); un guardia ajeno nunca recibe `remainingMeters` | BE-04 |
 | 20 | `GET /admin/guards` | 401 | 403 | 403 | ✅ | Sin restricción adicional | BE-06 |
 | 21 | `POST /admin/guards` | 401 | 403 | 403 | ✅ | Crea siempre rol `guard` | BE-06 |
 | 22 | `GET /admin/guards/:id` | 401 | 403 | 403 | ✅ | `assertIsGuardTarget` | BE-06 |
@@ -77,14 +77,17 @@ La columna "Regla de propiedad o visibilidad" describe lo que define el contrato
 | 31 | `GET /admin/users/blocked` | 401 | 403 | 403 | ✅ | Solo bloqueados vigentes | BE-07 |
 | 32 | `DELETE /admin/users/:id/block` | 401 | 403 | 403 | ✅ | `NOT_FOUND` si el id no es de un `protected_user` | BE-07 |
 | 33 | `GET /events/alerts/active` (SSE) | 401 | ✅ | 403 | 403 | Solo la alerta activa propia | BE-03 |
-| 34 | `GET /events/guard/alerts` (SSE) | 401 | 403 | ✅ | 403 | Visibilidad reevaluada por guardia en cada emisión (D22) | BE-04 |
-| 35 | `GET /events/guard/alerts/:id` (SSE) | 401 | 403 | ✅ | 403 | `assertGuardCanSee`; si deja de ser visible, evento `NOT_FOUND` y cierre | BE-04 |
+| 34 | `GET /events/guard/alerts` (SSE) | 401 | 403 | ✅ | 403 | Visibilidad reevaluada por guardia en cada emisión y en cada ping (D22, D34); `userPhone` siempre `null` | BE-04 |
+| 35 | `GET /events/guard/alerts/:id` (SSE) | 401 | 403 | ✅ | 403 | Misma regla que la fila 16 (`assertGuardCanSee`); si deja de ser visible o el `:id` no es UUID, evento `NOT_FOUND` y cierre (no 404 HTTP) | BE-04 |
 | 36 | `GET /events/admin/alerts/escalated` (SSE) | 401 | 403 | 403 | ✅ | Solo alertas `escalated` | BE-05 |
 | 37 | `GET /alerts/:id/photo` | ✅ | ✅ | ✅ | ✅ | Pública; la autoriza la firma HMAC de la URL, que solo emite el servidor a quien puede ver la alerta. Cualquier fallo, 404 (D30) | BE-03 |
+| 38 | `PUT /users/me/device-token` | 401 | 403 | ✅ | 403 | Solo el token del propio guardia, ligado a su sesión (`sid`); sesión revocada = 401; el token nunca se devuelve ni se registra. Un `protected_user` o `admin` recibe 403 antes de validar el cuerpo. Rate limit por usuario (D42) | BE-04 |
 
 En los canales SSE, 401 y 403 se responden como HTTP normal antes de abrir el stream (D22). Nunca se acepta el token en el query string.
 
-Estado de implementación hoy: tienen handler las rutas de BE-01 y BE-02 (auth, ajustes y guardias) y las de BE-03: filas 8 a 11, 33 y 37 (`backend/src/modules/alerts/` y `backend/src/modules/events/`). El resto está en `ROUTE_POLICIES` pero la ruta aún no existe; hasta entonces responde 404 por ser inexistente, no por permisos.
+Estado de implementación hoy: tienen handler las rutas de BE-01 y BE-02 (auth, ajustes y guardias), las de BE-03 (filas 8 a 11, 33 y 37; `backend/src/modules/alerts/` y `backend/src/modules/events/`) y las de BE-04 (filas 12 a 19, 34, 35 y 38; `backend/src/modules/guard/`, `backend/src/modules/devices/` y `backend/src/modules/events/`). El resto (filas 25 a 32 y 36) está en `ROUTE_POLICIES` pero la ruta aún no existe; hasta entonces responde 404 por ser inexistente, no por permisos. Nota: las filas 20 a 24 (alta, lectura, edición y baja de guardias) ya tienen handler desde BE-02 aunque la columna "Tarjeta" diga BE-06; `PUT /admin/guards/:id/coverage` (fila 25) aún no existe.
+
+El aviso push (`docs/API_CONTRATO.md`, sección 10) no es una ruta y no tiene política: lo envía el servidor solo a guardias con sesión viva y visibilidad de la alerta (`isAlertAvailableToGuard`); el cliente nunca debe usarlo como autorización.
 
 ## 4. Reglas de propiedad y visibilidad
 
@@ -156,3 +159,4 @@ Desde `backend/`: `npm test`. Archivos relacionados con permisos y sesión que e
 - `backend/tests/integration/seguridad/deny-by-default.test.ts` (el arranque aborta si una ruta no tiene política)
 - `backend/tests/unit/politicas-contrato.test.ts` (política central contra el contrato)
 - `backend/tests/unit/geo-turno-visibilidad.test.ts` (Haversine, turnos y visibilidad del guardia)
+- BE-04: `backend/tests/integration/guardia/guardia-lectura.test.ts` ("permisos de las 4 rutas del guardia"), `guardia-aceptar.test.ts`, `guardia-ignorar.test.ts`, `guardia-llegada.test.ts`, `guardia-ubicacion.test.ts`, `canal-guard-alerts.test.ts` y `canal-guard-alerta-detalle.test.ts` (cada una trae su bloque de permisos) y `backend/tests/integration/dispositivos/device-token.test.ts` ("permisos")

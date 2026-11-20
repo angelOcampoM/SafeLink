@@ -187,7 +187,8 @@ const REGISTRO: AlertRecord = {
   guard: { name: 'Carlos Hernández López', guardProfile: { lastLocationLat: 18.85, lastLocationLng: -99.18 } },
 };
 
-const OPCIONES = { photoUrl: (_id: string, key: string | null) => (key ? `/foto/${key}` : null), guardMetersPerMinute: 250 };
+const OPCIONES = { photoUrl: (_id: string, key: string | null) => (key ? `/foto/${key}` : null), guardMetersPerMinute: 250, etaRoundingSeconds: 1, guardGridMeters: 0 };
+// ^ redondeo 1 y celda 0 (snapToGrid no mueve el punto): estas pruebas esperan el ETA exacto; D47 se prueba en be04-llegada-eta.
 
 describe('serializeOwnAlert (contrato 4.4)', () => {
   it('envía exactamente las 20 claves del front', () => {

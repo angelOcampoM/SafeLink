@@ -4,7 +4,7 @@
 //   - al conectar se manda el snapshot actual; después, uno nuevo con cada aviso del bus;
 //   - `: ping` periódico, que además revisa que la sesión siga viva (logout o baja, D25);
 //   - al llegar el `exp` del access token se avisa UNAUTHORIZED y se cierra (D26);
-//   - máximo de conexiones por usuario: al pasarse se cierra la MÁS ANTIGUA (D26);
+//   - máximo de conexiones por (usuario, canal): al pasarse se cierra la MÁS ANTIGUA (D26, D34);
 //   - un error ya abierto el stream viaja como `data: {"error":...}` y se cierra.
 // El 401/403 se resuelve ANTES de abrir el stream (hooks de security/guards.ts).
 import type { FastifyReply, FastifyRequest } from 'fastify';
@@ -18,8 +18,17 @@ export interface SseOptions {
 }
 
 export interface SseChannel<T> {
-  /** Tema del bus que dispara un snapshot nuevo. */
-  topic: string;
+  /**
+   * Nombre fijo del canal (no por recurso: guard/alerts/:id usa uno solo); el límite de
+   * conexiones se cuenta por (usuario, nombre). Obligatorio para que dos canales no compartan cupo.
+   */
+  name: string;
+  /** Tema del bus que dispara un snapshot nuevo (un solo tema). */
+  topic?: string;
+  /** Varios temas del bus (D34); se combinan con `topic` si se dan los dos. */
+  topics?: readonly string[];
+  /** Manda un snapshot nuevo en cada ping (refleja el paso del tiempo, D34). */
+  refreshOnPing?: boolean;
   /** Snapshot completo del canal para este usuario. */
   snapshot: () => Promise<T>;
   /** ¿Sigue viva la sesión? (usuario activo y familia `sid` sin revocar). */
@@ -29,6 +38,7 @@ export interface SseChannel<T> {
 }
 
 interface OpenStream {
+  channelName: string;
   close: (error?: AppError) => void;
 }
 
@@ -75,7 +85,9 @@ export function createSseHub(bus: EventBus, options: SseOptions): SseHub {
       };
       const evento = (cuerpo: unknown): void => escribir(`data: ${JSON.stringify(cuerpo)}\n\n`);
 
+      const channelName = channel.name;
       const stream: OpenStream = {
+        channelName,
         close(error) {
           if (cerrado) return;
           if (error) evento(errorBody(error));
@@ -99,18 +111,28 @@ export function createSseHub(bus: EventBus, options: SseOptions): SseHub {
           try {
             evento({ data: await channel.snapshot() });
           } catch (error) {
-            request.log.error({ err: error }, 'SSE: no se pudo leer el snapshot');
+            // Un AppError (p. ej. NOT_FOUND porque la alerta ya no es visible) es esperado.
+            if (error instanceof AppError) request.log.info({ code: error.code }, 'SSE: snapshot rechazado');
+            else request.log.error({ err: error }, 'SSE: no se pudo leer el snapshot');
             stream.close(error instanceof AppError ? error : internalError());
           }
         });
       };
 
-      const dejarDeEscuchar = bus.subscribe(channel.topic, mandarSnapshot);
+      const temas = new Set([...(channel.topic ? [channel.topic] : []), ...(channel.topics ?? [])]);
+      const bajas = [...temas].map((tema) => bus.subscribe(tema, mandarSnapshot));
+      const dejarDeEscuchar = (): void => {
+        for (const baja of bajas) baja();
+      };
 
       const ping = setInterval(() => {
         void channel
           .sessionAlive()
-          .then((viva) => (viva ? escribir(': ping\n\n') : stream.close(unauthorizedError())))
+          .then((viva) => {
+            if (!viva) return stream.close(unauthorizedError());
+            escribir(': ping\n\n');
+            if (channel.refreshOnPing) mandarSnapshot();
+          })
           .catch(() => stream.close(internalError()));
       }, options.pingSeconds * 1000);
       ping.unref();
@@ -123,14 +145,13 @@ export function createSseHub(bus: EventBus, options: SseOptions): SseHub {
 
       raw.on('close', () => stream.close());
 
-      // D26: al pasarse del máximo se cierra la conexión más antigua, no se rechaza la nueva.
+      // D26/D34: al pasarse del máximo del canal se cierra la conexión más antigua de ese
+      // canal, no se rechaza la nueva ni se tocan los otros canales del usuario.
       porUsuario.set(userId, [...(porUsuario.get(userId) ?? []), stream]);
       // close() reemplaza la lista del usuario: se vuelve a leer en cada vuelta.
-      for (
-        let abiertos = porUsuario.get(userId) ?? [];
-        abiertos.length > options.maxConnectionsPerUser;
-        abiertos = porUsuario.get(userId) ?? []
-      ) {
+      const delCanal = (): OpenStream[] =>
+        (porUsuario.get(userId) ?? []).filter((s) => s.channelName === channelName);
+      for (let abiertos = delCanal(); abiertos.length > options.maxConnectionsPerUser; abiertos = delCanal()) {
         abiertos[0]?.close();
       }
 

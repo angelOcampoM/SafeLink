@@ -1,7 +1,9 @@
 // Modelo de datos de SafeLink (BE-01, paso 3).
 // Tablas y columnas en snake_case (@@map / @map); modelos y campos en camelCase.
 // Los CHECK y el índice único parcial de alerts NO se pueden expresar aquí: viven
-// en el SQL de la migración inicial (prisma/migrations/*_init/migration.sql).
+// en el SQL de la migración inicial (prisma/migrations/*_init/migration.sql) y, para la
+// asignación de guardia (CHECK alerts_guard_absent_chk e índice alerts_one_active_per_guard_idx,
+// D35 y D36), en prisma/migrations/*_guard_assignment/migration.sql.
 // Todas las fechas son timestamptz (UTC). Los IDs son UUID generados por la base.
 
 generator client {
@@ -82,6 +84,7 @@ model User {
   ignores       AlertIgnore[]
   statusChanges AlertStatusHistory[]
   refreshTokens RefreshToken[]
+  deviceTokens  DeviceToken[]
 
   @@map("users")
 }
@@ -196,4 +199,23 @@ model RefreshToken {
   @@index([userId])
   @@index([familyId])
   @@map("refresh_tokens")
+}
+
+// Token push del dispositivo del guardia (D42). Solo se envía a los que tienen la sesión viva.
+model DeviceToken {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  // Dato sensible: nunca se registra en logs ni se devuelve en una respuesta. Máximo 512 (CHECK).
+  token      String   @unique
+  // Sesión (sid) que lo registró; logout y revocación de la familia lo borran. Sin FK: la familia
+  // no es una fila propia, sino un valor repetido en refresh_tokens.
+  familyId   String   @map("family_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  lastSeenAt DateTime @default(now()) @map("last_seen_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+  @@map("device_tokens")
 }

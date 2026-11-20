@@ -31,12 +31,29 @@ export const ALERT_NOT_FOUND = 'La alerta ya no existe';
 /** Nombre del índice parcial de D15 (migración init). */
 const ONE_ACTIVE_INDEX = 'alerts_one_active_per_user_idx';
 
+/**
+ * Aviso de cambio de una alerta. `dispatch` es verdadero si la alerta entró a `searching` o se
+ * movió estando en `searching` (cambia el listado de los guardias, D34); salir de `searching`
+ * lo publican accept/ignore (guardia) o la escalada (BE-05).
+ */
+export interface AlertChange {
+  userId: string;
+  alertId: string;
+  dispatch: boolean;
+  /**
+   * Verdadero solo si la alerta ENTRÓ a `searching` en este cambio (nace con ubicación o pasa de
+   * `pending_location` a `searching`). Es lo que dispara el push (D44); moverse estando en
+   * `searching` no lo dispara. Ausente cuenta como falso.
+   */
+  published?: boolean;
+}
+
 export interface AlertsServiceDeps {
   prisma: PrismaClient;
   serialize: SerializeOptions;
   triggeredAtToleranceSeconds: number;
-  /** Avisa que cambió la alerta activa de un usuario (canal alerts/active). */
-  onUserAlertChanged?: (userId: string) => void;
+  /** Avisa que cambió una alerta (canales alerts/active, guard/alerts y guard/alerts/:id). */
+  onAlertChanged?: (change: AlertChange) => void;
   /** Reloj inyectable para las pruebas. */
   now?: () => Date;
 }
@@ -52,7 +69,7 @@ function esAlertaActivaDuplicada(error: unknown): boolean {
 export function createAlertsService(deps: AlertsServiceDeps) {
   const { prisma, serialize, triggeredAtToleranceSeconds } = deps;
   const now = deps.now ?? (() => new Date());
-  const avisar = (userId: string): void => deps.onUserAlertChanged?.(userId);
+  const avisar = (change: AlertChange): void => deps.onAlertChanged?.(change);
 
   /** Alerta del usuario o NOT_FOUND (una ajena no revela que existe, D9). */
   async function alertaPropia(userId: string, alertId: string) {
@@ -110,7 +127,8 @@ export function createAlertsService(deps: AlertsServiceDeps) {
           });
           return alert;
         });
-        avisar(userId);
+        const publicada = creada.status === AlertStatus.searching;
+        avisar({ userId, alertId: creada.id, dispatch: publicada, published: publicada });
         return serializeOwnAlert(creada, serialize);
       } catch (error) {
         if (esAlertaActivaDuplicada(error)) throw invalidState(ALREADY_HAS_ACTIVE_ALERT);
@@ -165,7 +183,14 @@ export function createAlertsService(deps: AlertsServiceDeps) {
           });
         }
       });
-      avisar(userId);
+      // Entra a la lista de los guardias al pasar a searching, o se mueve estando en ella.
+      // El push (published) solo al entrar a searching, no al moverse estando en ella (D44).
+      avisar({
+        userId,
+        alertId,
+        dispatch: next === AlertStatus.searching,
+        published: cambiaEstado && next === AlertStatus.searching,
+      });
       return null;
     },
 
@@ -192,7 +217,8 @@ export function createAlertsService(deps: AlertsServiceDeps) {
         });
         return tx.alert.findUniqueOrThrow({ where: { id: alertId }, include: ALERT_INCLUDE });
       });
-      avisar(userId);
+      // Se confirma desde guard_arrived: ya no estaba en searching, no toca el listado.
+      avisar({ userId, alertId, dispatch: false });
       return serializeOwnAlert(cerrada, serialize);
     },
   };
