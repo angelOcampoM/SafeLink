@@ -288,7 +288,7 @@ Todo esto es **[Recomendación, no verificada]**: no existe aún en `lib/` ni en
 - Para probar el registro del token sin Firebase, basta `PUT /users/me/device-token` con cualquier cadena válida con la sesión de `guardia@safelink.mx`; el token no se valida contra FCM al registrarlo.
 - Probar un envío real exige una cuenta de servicio y un teléfono con la app integrada con Firebase: **pendiente**, no se ha hecho. Casos de plan que solo se verifican en dispositivo: ver `docs/PLAN_DE_PRUEBAS.md`.
 
-Qué esperar según el estado real (BE-07): el backend ya implementa **37 de las 38 rutas** del contrato: la sesión (`login`, `refresh`, `logout`, `me`, `session`), el registro y los ajustes, las alertas del usuario, la administración de guardias (alta, lectura, edición y baja), las rutas y canales del guardia, el token de dispositivo, el escalamiento y la resolución de escaladas con el canal `admin/alerts/escalated` (BE-05) y el historial, las métricas y la gestión de usuarios del admin (BE-07; ver `docs/PERMISOS.md`). **Lo único que aún no existe en el backend:** `PUT /admin/guards/:id/coverage` (A-03, BE-06), así que la pantalla de cobertura del admin mostrará `NOT_FOUND`. **Lo que falta en el front:** el `escuchar()` real todavía emite `SERVICE_UNAVAILABLE`, así que las pantallas que dependen de tiempo real lo mostrarán hasta la tarjeta del front (D45); lo mismo para el cliente HTTP de las rutas del guardia. Nada de esto es un fallo de conexión.
+Qué esperar según el estado real (BE-07): el backend ya implementa **37 de las 38 rutas** del contrato: la sesión (`login`, `refresh`, `logout`, `me`, `session`), el registro y los ajustes, las alertas del usuario, la administración de guardias (alta, lectura, edición y baja), las rutas y canales del guardia, el token de dispositivo, el escalamiento y la resolución de escaladas con el canal `admin/alerts/escalated` (BE-05) y el historial, las métricas y la gestión de usuarios del admin (BE-07; ver `docs/PERMISOS.md`). **Lo único que aún no existe en el backend:** `PUT /admin/guards/:id/coverage` (A-03, BE-06), así que la pantalla de cobertura del admin mostrará `NOT_FOUND`. **El tiempo real ya funciona:** `escuchar()` abre el canal SSE de verdad (`GET /events/<canal>`), reconecta solo con espera creciente y, cuando el servidor cierra el canal porque venció el access token (D26), hace refresh y vuelve a conectar sin que la pantalla se entere. **Lo que falta en el front** son los sensores reales del teléfono (la foto y el rumbo de U-06 siguen simulados) y los mapas de G-06 y A-03, que necesitan una clave de Google Maps.
 
 ---
 
@@ -343,3 +343,40 @@ La foto y el rumbo de la alerta (U-06) siguen simulados: el repositorio del prof
 incluye cámara** (ni el paquete ni el permiso en el manifiesto), así que eso no se pudo tomar
 de ahí. En iOS el atajo no puede funcionar con el teléfono bloqueado: Apple no deja a una app
 de terceros interceptar el volumen (eso es exclusivo de funciones del sistema como SOS).
+
+---
+
+## 12. Sensores y permisos reales (U-01, U-02, U-06, U-07)
+
+Agregado junto con BE-06/BE-07. En un teléfono la app ya usa cámara, GPS y rumbo de verdad;
+en web, escritorio y pruebas sigue con los simulados (lo decide `enTelefono` en `main.dart`).
+
+| Archivo | Qué hace |
+|---|---|
+| `lib/datos/sensores_reales.dart` | `CamaraReal`, `UbicacionReal` y `BrujulaReal` (geolocator + camera) |
+| `lib/datos/permisos_sistema_real.dart` | Pide cámara, ubicación y notificaciones (permission_handler) |
+
+### Qué comprobar en el teléfono
+
+1. **Permisos.** Regístrate con una cuenta nueva: aparece la pantalla que explica los tres
+   accesos. Al tocar **Continuar**, el sistema pregunta uno por uno.
+2. **Niégalos todos a propósito.** La app debe seguir funcionando: se entra al inicio y el
+   botón de pánico sigue ahí. La alerta saldrá sin foto y sin ubicación.
+3. **Concédelos y envía una alerta.** En el detalle debe aparecer la foto y la ubicación. En
+   el backend, `GET /admin/alerts` debe traer `photoUrl` y `location` con valores.
+4. **Rumbo.** Con el teléfono quieto el GPS no da rumbo fiable y llega `null`: eso es correcto,
+   no un fallo. Camina unos metros antes de disparar para verlo con valor.
+5. **Seguimiento (U-07).** Con la alerta activa, camina: la ubicación debe actualizarse (el
+   filtro es de 10 metros, así que moverse en el sitio no manda nada).
+
+### Lo que falta y por qué
+
+| Pendiente | Qué hace falta |
+|---|---|
+| Mapas de verdad (G-06, A-03) | Una clave de Google Maps y `google_maps_flutter`. Hoy se ve `MapPlaceholder` con los mismos datos |
+| Aviso push al guardia (G-02) | Un proyecto de Firebase (`google-services.json`) y `PUSH_PROVIDER=fcm` en el backend |
+| Gráficas del panel (A-06) | `fl_chart` si el equipo lo decide; hoy los números se muestran sin gráfica |
+| Ubicación en segundo plano | Android obliga a pedirla en un paso aparte y posterior al permiso normal |
+
+Las tres primeras necesitan credenciales o una decisión del equipo, no código: no son algo que
+se pueda cerrar sin eso.

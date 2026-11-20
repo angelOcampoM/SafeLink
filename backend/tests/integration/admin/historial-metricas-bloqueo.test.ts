@@ -409,39 +409,15 @@ describe('DELETE /admin/users/:id/block', () => {
   });
 });
 
-// ── La zona horaria de las métricas es configurable ───────────────────
+// ── La zona horaria de las métricas ──────────────────────────────────
+//
+// Aquí NO se levanta un segundo entorno con otro TZ_SHIFTS: `abrirDb()` toma un
+// `pg_advisory_lock` sobre la base de pruebas, así que un segundo entorno dentro de una
+// prueba se queda esperando el bloqueo que ella misma tiene y la suite muere por tiempo
+// (así se rompió develop tras el PR #67). Que la zona es lo que decide la hora ya está
+// probado sin base en tests/unit/be07-metricas-y-filtro.test.ts, comparando
+// America/Mexico_City contra UTC sobre el mismo instante.
 
-describe('TZ_SHIFTS distinto', () => {
-  it('con TZ_SHIFTS=UTC la misma alerta cae en otra hora', async () => {
-    const otro = await crearEntorno({ TZ_SHIFTS: 'UTC' });
-    try {
-      const token = (await login(otro.app, otro.usuarios.admin.email)).body.data
-        .accessToken as string;
-      // `searching` para no tener que inventarle guardia ni cierre: lo que mide esta prueba
-      // es la HORA en que cae la alerta, no su estado.
-      await otro.prisma.alert.create({
-        data: {
-          userId: otro.usuarios.protegido.id,
-          status: 'searching',
-          triggerMethod: 'shake',
-          triggeredAt: new Date('2026-01-15T02:00:00Z'),
-          receivedAt: new Date('2026-01-15T02:00:00Z'),
-          statusChangedAt: new Date('2026-01-15T02:00:00Z'),
-        },
-      });
-      const res = await request(otro.app.server)
-        .get(`${API}/admin/metrics`)
-        .set({ Authorization: `Bearer ${token}` });
-      expect(res.body.data.alertsByHour[2]).toBe(1);
-      expect(res.body.data.alertsByHour[20]).toBe(0);
-    } finally {
-      await otro.cerrar();
-    }
-  }, 120_000);
-});
-
-// El nombre de la zona por defecto queda escrito aquí para que un cambio de TZ_SHIFTS
-// en la configuración de pruebas no pase desapercibido.
 describe('configuración', () => {
   it('las pruebas de arriba suponen TZ_SHIFTS = America/Mexico_City', () => {
     expect(env.app.config.TZ_SHIFTS).toBe(TZ);

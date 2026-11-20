@@ -9,7 +9,9 @@
 // un 401, hace UN refresh compartido (single-flight) y reintenta una vez.
 // Nunca escribe tokens en logs.
 // Foto de la alerta (U-06, D2): `postConArchivo` la manda como multipart.
-// Tiempo real (SSE): llega en BE-03/BE-04; por ahora `escuchar` informa que no está.
+// Tiempo real (SSE, D3): `escuchar` abre `GET /events/<canal>` y se mantiene conectado.
+// Reconecta sola con espera creciente, y cuando el servidor cierra el canal porque venció el
+// access token (D26) hace refresh y vuelve a conectar sin que la pantalla se entere.
 
 import 'dart:async';
 import 'dart:convert';
@@ -20,6 +22,7 @@ import '../dominio/errores.dart';
 import 'almacen_tokens.dart';
 import 'cliente_api.dart';
 import 'nube_mapeadores.dart';
+import 'sse_eventos.dart';
 
 enum _EstadoRefresh { listo, rechazado, falloRed }
 
@@ -38,6 +41,14 @@ class HttpSafeLinkService extends ClienteApi {
   /// Rutas sin Bearer; además son las que devuelven accessToken/refreshToken.
   static const _publicas = {'/auth/login', '/auth/register', '/auth/refresh'};
 
+  /// Canales del contrato (sección 6). `guard/alerts/:id` lleva el id de la alerta.
+  static final _canalConId = RegExp(r'^guard/alerts/[^/]+$');
+  static const _canalesFijos = {'alerts/active', 'guard/alerts', 'admin/alerts/escalated'};
+
+  /// Espera entre reintentos de un canal: arranca en 1 s y se duplica hasta 30 s.
+  static const _esperaMinima = Duration(seconds: 1);
+  static const _esperaMaxima = Duration(seconds: 30);
+
   final String _base;
   final http.Client _http;
   final AlmacenTokens _almacen;
@@ -48,13 +59,150 @@ class HttpSafeLinkService extends ClienteApi {
 
   Json get _sinConexion => {'error': ErrorJson.aJson(const ServicioNoDisponibleError())};
 
+  /// Canal en tiempo real (D3). El flujo **no termina solo**: mientras alguien escuche, se
+  /// reconecta. Una pantalla que depende de una alerta en curso no puede quedarse muda porque
+  /// el túnel se cayó un segundo; quien deja de necesitarlo cancela la suscripción.
   @override
-  Stream<Json> escuchar(String canal) => Stream.value({
-        'error': {
-          'code': 'SERVICE_UNAVAILABLE',
-          'message': 'Tiempo real disponible en una tarjeta posterior',
+  Stream<Json> escuchar(String canal) {
+    if (!_canalesFijos.contains(canal) && !_canalConId.hasMatch(canal)) {
+      return Stream.value({'error': ErrorJson.aJson(const NoEncontradoError('Canal desconocido'))});
+    }
+
+    var cancelado = false;
+    var espera = _esperaMinima;
+    StreamSubscription<Json>? suscripcion;
+    http.Client? conexion;
+    late final StreamController<Json> control;
+
+    /// Cierra la conexión en curso, si hay.
+    ///
+    /// El ORDEN importa: primero se cierra el cliente HTTP y después se cancela la
+    /// suscripción. Al revés, `cancel()` se queda esperando a que el socket termine —y un SSE
+    /// no termina nunca—, así que una pantalla que se cierra se colgaría al soltar el canal.
+    Future<void> cerrarConexion() async {
+      final cliente = conexion;
+      conexion = null;
+      cliente?.close(); // aborta el flujo HTTP abierto
+      final sub = suscripcion;
+      suscripcion = null;
+      await sub?.cancel();
+    }
+
+    /// Un intento: devuelve `true` si hay que reconectar, `false` si el canal se termina.
+    Future<bool> unIntento() async {
+      // Cliente propio por intento: cerrarlo es lo que aborta un SSE abierto, y hacerlo sobre
+      // el cliente compartido cancelaría también las peticiones normales en vuelo.
+      final cliente = http.Client();
+      conexion = cliente;
+      final http.StreamedResponse respuesta;
+      try {
+        final peticion = http.Request('GET', Uri.parse('$_base/events/$canal'))
+          ..followRedirects = false
+          ..headers['Accept'] = 'text/event-stream'
+          ..headers['Cache-Control'] = 'no-store';
+        if (_accessToken != null) peticion.headers['Authorization'] = 'Bearer $_accessToken';
+        // El tiempo máximo aplica solo a abrir el canal: el flujo después vive indefinidamente.
+        respuesta = await cliente.send(peticion).timeout(tiempoMaximo);
+      } on Object {
+        cliente.close();
+        if (!cancelado) control.add(_sinConexion);
+        return true;
+      }
+      if (cancelado) {
+        cliente.close();
+        return false;
+      }
+
+      if (respuesta.statusCode == 401) {
+        cliente.close();
+        // D26: el token venció o la sesión ya no vale. Un refresh y se reintenta.
+        final refresh = await _refrescar();
+        if (refresh.estado == _EstadoRefresh.listo) return true; // reconecta callado
+        if (refresh.estado == _EstadoRefresh.rechazado) {
+          if (!cancelado) {
+            control.add({'error': ErrorJson.aJson(const SinSesionError())});
+            await control.close();
+          }
+          return false; // la sesión se perdió de verdad: que la app lo vea y cierre sesión
+        }
+        control.add(refresh.error ?? _sinConexion);
+        return true;
+      }
+      if (respuesta.statusCode != 200) {
+        cliente.close();
+        if (!cancelado) control.add(await _errorDeRespuesta(respuesta));
+        return true;
+      }
+
+      // Conexión buena: la espera vuelve al mínimo para que el siguiente corte reaccione rápido.
+      espera = _esperaMinima;
+      final terminado = Completer<bool>();
+      // Un error del transporte (se cayó la red, o nosotros abortamos el socket al cancelar)
+      // significa "se cortó": se absorbe aquí para que el flujo simplemente termine y la
+      // reconexión la decida el bucle. Si se dejara subir, cancelar una pantalla soltaría una
+      // excepción que ya nadie escucha.
+      final lineas = respuesta.stream
+          .toStringStream()
+          .transform(const LineSplitter())
+          .handleError((Object _) {});
+      suscripcion = eventosSse(lineas).listen(
+        (evento) {
+          if (cancelado) return;
+          // El servidor avisa UNAUTHORIZED y cierra cuando vence el token (D26): eso se
+          // resuelve con un refresh, no mostrándole al usuario que se quedó sin sesión.
+          if (_esNoAutorizado(evento)) return; // el cierre del stream dispara la reconexión
+          control.add(evento);
         },
-      });
+        onError: (Object _) {
+          if (!terminado.isCompleted) terminado.complete(true);
+        },
+        onDone: () {
+          if (!terminado.isCompleted) terminado.complete(true);
+        },
+        cancelOnError: true,
+      );
+      final reconectar = await terminado.future;
+      await cerrarConexion();
+      return reconectar && !cancelado;
+    }
+
+    Future<void> bucle() async {
+      while (!cancelado) {
+        final seguir = await unIntento();
+        if (!seguir || cancelado) return;
+        await Future<void>.delayed(espera);
+        // Espera creciente, con techo: un servidor caído no recibe una petición por segundo.
+        final siguiente = espera * 2;
+        espera = siguiente > _esperaMaxima ? _esperaMaxima : siguiente;
+      }
+    }
+
+    control = StreamController<Json>(
+      onListen: () => unawaited(bucle()),
+      onCancel: () async {
+        cancelado = true;
+        await cerrarConexion();
+      },
+    );
+    return control.stream;
+  }
+
+  /// ¿El evento es el aviso de sesión vencida que manda el servidor antes de cerrar (D26)?
+  static bool _esNoAutorizado(Json evento) {
+    final error = evento['error'];
+    return error is Map && error['code'] == 'UNAUTHORIZED';
+  }
+
+  /// Envoltorio de error de una respuesta que no es 200 al abrir el canal.
+  Future<Json> _errorDeRespuesta(http.StreamedResponse respuesta) async {
+    try {
+      final cuerpo = jsonDecode(await respuesta.stream.bytesToString());
+      if (cuerpo is Map && cuerpo['error'] is Map) return Json.from(cuerpo);
+    } on Object {
+      // Respuesta que no es JSON del backend (un proxy, por ejemplo).
+    }
+    return _sinConexion;
+  }
 
   @override
   Future<Json> enviar(String metodo, String ruta, {Json? cuerpo, Map<String, String>? query}) =>

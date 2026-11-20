@@ -5,6 +5,7 @@ import { ok } from '../../http/envelope.js';
 import { parse, parseIdParam } from '../../http/validate.js';
 import type { SerializeOptions } from '../alerts/serializers.js';
 import {
+  coverageBodySchema,
   createGuardBodySchema,
   guardsQuerySchema,
   historyQuerySchema,
@@ -23,7 +24,7 @@ export interface AdminRoutesOptions {
  * Gestión de guardias (A-01, A-02 · BE-02) y, además, historial, métricas y desbloqueo
  * (A-05 a A-08 · BE-07). El acceso lo decide la política central
  * (src/security/policies.ts): estas rutas son solo para el rol admin.
- * La cobertura (PUT /admin/guards/:id/coverage) es A-03 y toca a BE-06.
+ * La cobertura (PUT /admin/guards/:id/coverage, A-03) es BE-06.
  */
 export async function adminRoutes(app: FastifyInstance, options: AdminRoutesOptions): Promise<void> {
   const { config } = app;
@@ -37,6 +38,10 @@ export async function adminRoutes(app: FastifyInstance, options: AdminRoutesOpti
     hasher,
     serialize: options.serialize,
     timeZone: config.TZ_SHIFTS,
+    coverageRadius: {
+      min: config.COVERAGE_RADIUS_MIN_METERS,
+      max: config.COVERAGE_RADIUS_MAX_METERS,
+    },
   });
 
   app.get('/admin/guards', async (request) => {
@@ -65,6 +70,13 @@ export async function adminRoutes(app: FastifyInstance, options: AdminRoutesOpti
   app.delete('/admin/guards/:id', async (request) => {
     const id = parseIdParam((request.params as { id?: unknown }).id);
     return ok(await service.deactivateGuard(id));
+  });
+
+  // A-03 · Cobertura del guardia (turno, centro, radio y zona).
+  app.put('/admin/guards/:id/coverage', async (request) => {
+    const id = parseIdParam((request.params as { id?: unknown }).id);
+    const body = parse(coverageBodySchema, request.body);
+    return ok(await service.updateCoverage(id, body));
   });
 
   // A-05 · Historial con filtros (contrato 4.8). Un filtro inválido es 400 INVALID_STATE.

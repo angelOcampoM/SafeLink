@@ -19,6 +19,13 @@ dependencies:
   http: ^1.6.0
   # U-02: la sesión sobrevive a cerrar la app (almacenamiento del teléfono).
   shared_preferences: ^2.5.6
+  # U-01 · U-02: pedir al sistema cámara, ubicación y notificaciones.
+  permission_handler: ^12.0.1
+  # U-06 · U-07 · G-06: GPS real. `Position.heading` también da el rumbo, así que
+  # no hace falta un paquete aparte de brújula.
+  geolocator: ^14.1.2
+  # U-06: la foto automática de la alerta, sin que el usuario tenga que encuadrar.
+  camera: ^0.12.1
 
 dev_dependencies:
   flutter_test:

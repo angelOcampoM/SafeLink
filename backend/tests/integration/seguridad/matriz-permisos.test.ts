@@ -61,6 +61,8 @@ const REALES = new Set([
   // BE-05
   'GET /events/admin/alerts/escalated',
   'POST /admin/alerts/:id/resolve',
+  // BE-06
+  'PUT /admin/guards/:id/coverage',
   // BE-07
   'GET /admin/alerts',
   'GET /admin/metrics',

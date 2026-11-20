@@ -557,6 +557,132 @@ para acordarlo en equipo y no se cambia aquí.
 
 ---
 
+## D50 · Alcance de BE-06: cobertura del guardia
+
+**Contexto.** `PUT /admin/guards/:id/coverage` (A-03) era la última de las 38 rutas de la
+política sin implementar. Define el turno, el centro, el radio y la zona del guardia: es el
+dato con el que el despacho decide a qué guardias les llega una alerta y la etiqueta con la que
+las métricas agrupan por zona.
+
+**Decisiones.**
+
+1. **El esquema valida la forma; las tres reglas de negocio están en el servicio.** El radio
+   mínimo y el máximo son configuración (`COVERAGE_RADIUS_MIN_METERS` y
+   `COVERAGE_RADIUS_MAX_METERS`), así que el esquema no puede conocerlos: el mensaje de error
+   lleva el valor configurado, no uno escrito en el código.
+
+2. **El orden de validación es turno, radio y zona**, el mismo del front. El formulario del
+   administrador muestra un error a la vez: si el backend contestara primero por la zona, la
+   persona corregiría algo distinto a lo que le marcó la app.
+
+3. **`NOT_FOUND` gana al cuerpo inválido.** Primero se comprueba que el id sea de un guardia y
+   después se valida el cuerpo, igual que en el resto de `/admin/guards/:id`.
+
+4. **El radio viaja como entero** (`z.int`), porque el front lo castea con `as int?` y un
+   `4000.0` lo rompería (sección 1 del contrato).
+
+**Consecuencia para las pruebas de seguridad.** Ya no queda ninguna ruta stub: las pruebas de
+normalización de `correcciones-finales.test.ts` pasan a usar una ruta **real** con `:id`
+(`GET /admin/metrics/guards/:id`) y comparan 404 contra 200, en vez de contar ejecuciones de un
+stub. El registro de stubs se deja puesto: si alguien agrega una clave a la política antes de
+implementarla, vuelve a cubrirla solo.
+
+---
+
+## D51 · Tiempo real en el cliente HTTP (SSE)
+
+**Contexto.** El contrato define cuatro canales en tiempo real (sección 6) y el backend los
+sirve con SSE desde BE-03. En el front, `HttpSafeLinkService.escuchar()` devolvía
+`SERVICE_UNAVAILABLE`, así que contra el backend real todas las pantallas en vivo mostraban un
+error: la alerta activa del usuario, el listado del guardia, el detalle de una alerta y la
+bandeja de escaladas del administrador.
+
+**Decisiones.**
+
+1. **El canal no termina solo.** Mientras alguien escuche, se reconecta. Una pantalla que
+   depende de una alerta en curso no puede quedarse muda porque la red se cayó un segundo;
+   quien ya no lo necesita cancela la suscripción y eso sí cierra la conexión. La espera entre
+   reintentos arranca en 1 s y se duplica hasta 30 s, y vuelve al mínimo en cuanto una conexión
+   funciona.
+
+2. **Un `UNAUTHORIZED` por el canal no cierra la sesión del usuario.** El servidor avisa y
+   cierra cuando vence el access token (D26), lo cual pasa cada pocos minutos: se hace refresh
+   y se reconecta en silencio. Solo si el refresh se rechaza se emite `UNAUTHORIZED` hacia la
+   app, que es lo que la devuelve al login.
+
+3. **Un cliente HTTP propio por intento.** Cerrarlo es lo que aborta un SSE abierto, y hacerlo
+   sobre el cliente compartido cancelaría también las peticiones normales en vuelo.
+
+4. **Al cerrar, primero el cliente y después la suscripción.** Al revés, `cancel()` espera a
+   que termine el socket —y un SSE no termina nunca—, así que una pantalla que se cierra se
+   colgaría al soltar el canal. Lo encontró la prueba de cancelación.
+
+5. **Un error del transporte se absorbe y se trata como "se cortó".** Si se dejara subir,
+   cancelar una pantalla soltaría una excepción que ya no tiene quién la escuche.
+
+6. **El lector del formato SSE es una función pura** (`lib/datos/sse_eventos.dart`): recibe
+   líneas y devuelve eventos. Así el formato se prueba sin servidor. Un evento con JSON roto se
+   descarta en silencio en vez de tumbar el canal, y un evento al que le falta la línea en
+   blanco final (el servidor cortó a media escritura) **no** se emite: un snapshot a medias es
+   peor que esperar la reconexión.
+
+**Nota de pruebas.** Las pruebas del canal usan un `HttpServer` real en loopback, no un cliente
+simulado, porque lo que hay que comprobar es justo lo que un simulado no reproduce: el troceado
+del flujo, la cabecera `Authorization`, que el canal no termine al caerse la conexión y que un
+401 provoque refresh y reconexión. Ese servidor necesita `response.bufferOutput = false`, o
+Dart retiene la respuesta hasta cerrarla y no hay nada "en vivo" que leer (por el mismo motivo
+el backend manda `x-accel-buffering: no`).
+
+---
+
+## D52 · Sensores y permisos reales del teléfono
+
+**Contexto.** La cámara, el GPS y la brújula eran simulados (`sensores_simulados.dart`), así
+que en un teléfono una alerta salía sin foto, sin coordenada y sin rumbo: el guardia no tenía
+a dónde ir. Los permisos del sistema no se pedían nunca (había un TODO en la pantalla de
+permisos).
+
+**Decisiones.**
+
+1. **Ningún sensor lanza nunca.** Si no responde, no hay permiso o el teléfono no tiene la
+   pieza, devuelven `null` y la alerta viaja igual (marcada como evidencia incompleta o
+   pendiente de ubicación). Una alerta de pánico no se pierde porque la cámara tardó. La
+   espera máxima por lectura son 8 segundos, corta a propósito.
+
+2. **El rumbo sale del propio GPS** (`Position.heading`), no de un paquete de brújula aparte:
+   es el curso del dispositivo, que es lo que importa para saber hacia dónde mira la foto, y
+   quita una dependencia. Con el teléfono quieto el GPS no da rumbo fiable y devuelve `null`.
+
+3. **La foto es automática, sin vista previa ni botón.** Se abre la cámara, se dispara y se
+   cierra en un `finally`: una cámara abierta deja el LED encendido y bloquea a las demás
+   apps. Resolución media, porque la foto tiene que salir y subir rápido, no quedar bonita.
+
+4. **Los permisos se piden al tocar "Continuar", nunca antes.** Primero la pantalla explica
+   para qué sirve cada uno y después el sistema pregunta; al revés, la persona ve tres
+   diálogos sin contexto. Negarse **no** bloquea la app ni deja a nadie atrapado en esa
+   pantalla.
+
+5. **La ubicación se pide "mientras se usa la app".** Android exige pedir la de segundo plano
+   en un paso aparte y posterior, así que eso queda para cuando haga falta (U-07 con la
+   pantalla apagada) y no en el alta.
+
+6. **`permission_handler` se queda en 12.x, no 13.x.** La 13 obliga a `compileSdk 37` y el
+   Android Gradle Plugin de este proyecto llega a 36: subirlo es un cambio de herramientas que
+   afecta a todo el equipo, no algo que meter de lado en esta tarjeta.
+
+7. **La capa de datos sigue sin conocer la interfaz.** Los adaptadores reales viven en
+   `lib/datos/sensores_reales.dart` y `permisos_sistema_real.dart`, implementan los mismos
+   contratos que los simulados, y la única línea que cambia es la de `main.dart`: en web,
+   escritorio y pruebas se siguen usando los simulados.
+
+**Lo que NO se puede probar aquí.** Los adaptadores son envoltorios finos sobre plugins de
+plataforma: no hay prueba automática que valga sin un teléfono. Lo que sí está probado es el
+enganche (7 pruebas de que los permisos se piden al continuar, que negarse no bloquea y que
+revisar el estado no suelta diálogos) y que el APK compila. La captura real de foto, GPS y
+rumbo es verificación en dispositivo: ver `docs/CONEXION_DISPOSITIVO.md`.
+
+---
+
 **Decisiones de diseño aún abiertas**
 
 - **Ventana de gracia del refresh (D25):** **cerrada en BE-01 paso 5.** Se eligió aceptar el token ya rotado una vez más y emitir un sucesor nuevo de la misma familia; `REFRESH_GRACE_SECONDS` vale 5 por defecto.

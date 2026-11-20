@@ -1,9 +1,11 @@
 import { z } from 'zod';
 import { AlertStatus } from '../../generated/prisma/enums.js';
+import { locationField } from '../../http/location-schema.js';
 import { userMsg } from '../../http/validate.js';
 import { emailField, nameField, passwordField, phoneField } from '../auth/schemas.js';
 
 const SEARCH_MAX = 100;
+const ZONE_MAX = 100;
 
 /** El front manda `search` siempre, aunque vaya vacío (nube_admin_repository.dart:23). */
 export const guardsQuerySchema = z
@@ -96,3 +98,27 @@ export const historyQuerySchema = z
 
 export type HistoryQuery = z.infer<typeof historyQuerySchema>;
 export type PeriodQuery = z.infer<typeof periodQuerySchema>;
+
+/**
+ * A-03 · Cobertura de un guardia (turno, centro, radio y zona).
+ *
+ * El esquema solo exige la FORMA. Las tres reglas de negocio (formato del turno, radio dentro
+ * de rango y zona no vacía) se aplican en el servicio y en ese orden, con los mismos mensajes
+ * que el front (`regla_turno.dart:31`, `regla_geocerca.dart:43-44,50`): el radio mínimo y el
+ * máximo son configuración (COVERAGE_RADIUS_*), así que el esquema no los conoce.
+ */
+export const coverageBodySchema = z
+  .object({
+    shiftStart: z.string(userMsg('Usa el formato HH:mm')).trim(),
+    shiftEnd: z.string(userMsg('Usa el formato HH:mm')).trim(),
+    center: locationField,
+    // Entero: el front lo castea con `as int?` (contrato, sección 1).
+    radiusMeters: z.int(userMsg('El radio de cobertura no es válido')),
+    zone: z.string(userMsg('Escribe la zona de cobertura')).max(
+      ZONE_MAX,
+      userMsg('La zona es demasiado larga'),
+    ),
+  })
+  .strict();
+
+export type CoverageBody = z.infer<typeof coverageBodySchema>;
