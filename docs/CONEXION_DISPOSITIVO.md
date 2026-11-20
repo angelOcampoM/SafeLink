@@ -87,7 +87,7 @@ Las URLs de esta guía son `http://`, no `https://`. Android (API 28 o superior)
 - Ya se agregó `<application android:usesCleartextTraffic="true" />` **solo** en `android/app/src/debug/AndroidManifest.xml` (builds de depuración). El manifest `main` no lo tiene, así que un release no permite `http://`.
 - **Pendiente de confirmar en un teléfono real:** no se ha comprobado en un dispositivo físico si hacía falta (Dart usa `dart:io` y quizá no aplique la política de cleartext de Android). Forma parte de la verificación final (sección 9).
 
-Hallazgo: el permiso `android.permission.INTERNET` está declarado solo en los manifests `debug` y `profile` (`android/app/src/debug/AndroidManifest.xml` y `android/app/src/profile/AndroidManifest.xml`). `android/app/src/main/AndroidManifest.xml` no lo tiene. Un build **release** no podría conectarse a la red. Hay que agregarlo al manifest `main` antes de generar un APK de entrega. Es un cambio en `android/`, fuera del alcance de este paso: queda como pendiente a confirmar con la responsable.
+Hallazgo, **resuelto en BE-07**: `android.permission.INTERNET` estaba declarado solo en los manifests `debug` y `profile`, así que un build **release** no podía conectarse a la red. Ya está en `android/app/src/main/AndroidManifest.xml`, junto con los dos de siempre. Eso **no** habilita tráfico en claro: `usesCleartextTraffic` sigue solo en el manifest `debug`, de modo que un release continúa exigiendo `https://`.
 
 ## 6. Ejecutar la app contra el backend
 

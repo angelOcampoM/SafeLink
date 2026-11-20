@@ -1,4 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- La app habla con la API por red en cualquier variante. Estaba declarado solo en los
+         manifests debug y profile, así que un APK de release no podía conectarse
+         (hallazgo de docs/CONEXION_DISPOSITIVO.md §5). No permite tráfico en claro: eso
+         sigue siendo solo de debug (usesCleartextTraffic). -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+
     <application
         android:allowBackup="false"
         android:label="safelink"
