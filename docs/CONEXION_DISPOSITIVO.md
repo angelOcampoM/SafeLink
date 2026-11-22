@@ -327,6 +327,26 @@ batería a SafeLink para que el servicio no se duerma.
 4. Pulsa volumen **una sola vez**: no debe pasar nada y el volumen debe cambiar normalmente.
 5. Apaga el atajo y repite el doble clic: no debe enviarse nada.
 
+### Verificado en un teléfono (vivo V2441, Android 16)
+
+Probado el 22/11/2026. Funciona con la pantalla apagada y bloqueada: vibra, se enciende la
+pantalla y SafeLink aparece **sobre el bloqueo** con la alerta registrada. Llegar ahí costó
+tres correcciones que ninguna prueba automática podía ver (D53):
+
+| Lo que fallaba | Por qué |
+|---|---|
+| El atajo se apagaba solo | La preferencia vivía en memoria y Android reinicia el proceso |
+| Con la pantalla apagada no pasaba nada | Sin ventana con foco, el sistema se queda las teclas: hay que observar el **valor** del volumen |
+| El observador no veía los cambios | Las teclas mueven el volumen del **timbre**, no el de música |
+| Se detectaba pero no se abría la app | Desde Android 10 el segundo plano no puede abrir pantallas: hace falta `setFullScreenIntent` + `WakeLock` |
+
+**Dos cosas esperadas al probarlo**, no son fallos:
+
+- Con la pantalla apagada **las dos pulsaciones mueven el volumen**. No hay evento de tecla
+  que consumir; con la pantalla encendida sí se consume la segunda.
+- Si un volumen está justo en el tope o en el mínimo, pulsar no cambia el valor y no hay nada
+  que observar.
+
 ### Diferencias a propósito con el código del profesor
 
 1. **El nativo emite cada pulsación, no el doble.** Así la regla del doble clic queda en un
