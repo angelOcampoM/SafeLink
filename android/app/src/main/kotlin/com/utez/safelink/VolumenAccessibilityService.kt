@@ -1,10 +1,12 @@
 package com.utez.safelink
 
 import android.accessibilityservice.AccessibilityService
-import android.content.BroadcastReceiver
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.database.ContentObserver
 import android.media.AudioManager
 import android.os.Handler
@@ -95,8 +97,18 @@ class VolumenAccessibilityService : AccessibilityService() {
     // ── Segundo camino: el volumen, para cuando la pantalla está apagada ──────────
 
     private var observadorVolumen: ContentObserver? = null
-    private var receptorPantalla: BroadcastReceiver? = null
-    private var volumenPrevio = -1
+    private var volumenes = mapOf<Int, Int>()
+
+    /**
+     * Streams que hay que vigilar. Con la pantalla apagada y sin música sonando, las teclas
+     * de volumen mueven el de TIMBRE, no el de música: observar solo música (como se intentó
+     * primero) no detecta nada. Se miran los tres y vale con que cambie cualquiera.
+     */
+    private val streamsVigilados = listOf(
+        AudioManager.STREAM_RING,
+        AudioManager.STREAM_NOTIFICATION,
+        AudioManager.STREAM_MUSIC,
+    )
 
     private val audio: AudioManager
         get() = getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -104,69 +116,34 @@ class VolumenAccessibilityService : AccessibilityService() {
     private val pantallaEncendida: Boolean
         get() = (getSystemService(Context.POWER_SERVICE) as PowerManager).isInteractive
 
+    private fun leerVolumenes(): Map<Int, Int> =
+        streamsVigilados.associateWith { audio.getStreamVolume(it) }
+
     private fun registrarObservadores() {
-        if (observadorVolumen == null) {
-            volumenPrevio = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
-            val observador = object : ContentObserver(Handler(Looper.getMainLooper())) {
-                override fun onChange(selfChange: Boolean) = alCambiarElVolumen()
-            }
-            contentResolver.registerContentObserver(Settings.System.CONTENT_URI, true, observador)
-            observadorVolumen = observador
+        if (observadorVolumen != null) return
+        volumenes = leerVolumenes()
+        val observador = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) = alCambiarElVolumen()
         }
-        if (receptorPantalla == null) {
-            val receptor = object : BroadcastReceiver() {
-                override fun onReceive(context: Context?, intent: Intent?) = alApagarsePantalla()
-            }
-            registerReceiver(receptor, IntentFilter(Intent.ACTION_SCREEN_OFF))
-            receptorPantalla = receptor
-        }
+        contentResolver.registerContentObserver(Settings.System.CONTENT_URI, true, observador)
+        observadorVolumen = observador
     }
 
     private fun quitarObservadores() {
         observadorVolumen?.let { contentResolver.unregisterContentObserver(it) }
         observadorVolumen = null
-        receptorPantalla?.let { runCatching { unregisterReceiver(it) } }
-        receptorPantalla = null
     }
 
     /**
-     * El volumen cambió. Con la pantalla encendida no se hace nada: las teclas ya llegan a
+     * Cambió algún volumen. Con la pantalla encendida no se hace nada: las teclas ya llegan a
      * `onKeyEvent` y contarlas también aquí duplicaría cada pulsación.
      */
     private fun alCambiarElVolumen() {
-        val actual = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
-        if (actual == volumenPrevio) return
-        volumenPrevio = actual
-        if (!escuchando || pantallaEncendida) return
+        val actuales = leerVolumenes()
+        val cambio = actuales != volumenes
+        volumenes = actuales
+        if (!cambio || !escuchando || pantallaEncendida) return
         registrarPulsacion(System.currentTimeMillis())
-    }
-
-    /**
-     * Al apagarse la pantalla, si el volumen quedó justo en el máximo o en el mínimo se mueve
-     * un paso hacia dentro.
-     *
-     * Hace falta porque en un extremo el valor YA NO CAMBIA al pulsar, y sin cambio no hay
-     * nada que observar: el atajo dejaría de funcionar en silencio justo cuando más falta
-     * hace. Es un paso de volumen, sin mostrar la barra, y solo con el atajo encendido.
-     */
-    private fun alApagarsePantalla() {
-        if (!escuchando) return
-        val maximo = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-        val actual = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
-        val corregido = when (actual) {
-            0 -> 1
-            maximo -> maximo - 1
-            else -> return
-        }
-        audio.setStreamVolume(AudioManager.STREAM_MUSIC, corregido, 0)
-        volumenPrevio = corregido
-        Log.i(TAG, "Volumen movido de $actual a $corregido para poder detectar pulsaciones")
-    }
-
-    override fun onDestroy() {
-        quitarObservadores()
-        if (instancia === this) instancia = null
-        super.onDestroy()
     }
 
     private fun marcarPendiente(pendiente: Boolean, timestamp: Long) {
@@ -177,6 +154,15 @@ class VolumenAccessibilityService : AccessibilityService() {
             .apply()
     }
 
+    /**
+     * Trae la app al frente, también con la pantalla apagada y bloqueada.
+     *
+     * Un `startActivity` suelto NO basta: desde Android 10 el sistema bloquea que una app en
+     * segundo plano abra pantallas, y con la pantalla apagada ni siquiera hay a dónde
+     * dibujar. El camino que sí funciona es el mismo de las llamadas y las alarmas: una
+     * notificación con `setFullScreenIntent`, que el sistema convierte en pantalla completa
+     * cuando el teléfono está bloqueado. El `WakeLock` enciende la pantalla para que se vea.
+     */
     private fun traerAppAlFrente() {
         val launch = packageManager.getLaunchIntentForPackage(packageName) ?: return
         launch.addFlags(
@@ -186,7 +172,46 @@ class VolumenAccessibilityService : AccessibilityService() {
                 Intent.FLAG_ACTIVITY_CLEAR_TOP,
         )
         launch.putExtra(EXTRA_ALERTA_VOLUMEN, true)
-        startActivity(launch)
+
+        encenderPantalla()
+
+        val gestor = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        gestor.createNotificationChannel(
+            NotificationChannel(CANAL_ALERTA, "Alerta por volumen", NotificationManager.IMPORTANCE_HIGH)
+                .apply { description = "Avisa cuando se dispara una alerta con el botón de volumen." },
+        )
+        val pendiente = PendingIntent.getActivity(
+            this,
+            0,
+            launch,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val aviso = Notification.Builder(this, CANAL_ALERTA)
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentTitle("Alerta enviada")
+            .setContentText("SafeLink está registrando tu alerta.")
+            .setCategory(Notification.CATEGORY_ALARM)
+            .setPriority(Notification.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setFullScreenIntent(pendiente, true)
+            .build()
+        gestor.notify(ID_NOTIFICACION, aviso)
+
+        // Por si el sistema decide no honrar la pantalla completa, se intenta igual.
+        runCatching { startActivity(launch) }
+    }
+
+    /** Enciende la pantalla unos segundos para que la alerta se vea. */
+    private fun encenderPantalla() {
+        val power = getSystemService(Context.POWER_SERVICE) as PowerManager
+        @Suppress("DEPRECATION")
+        val wakeLock = power.newWakeLock(
+            PowerManager.FULL_WAKE_LOCK or
+                PowerManager.ACQUIRE_CAUSES_WAKEUP or
+                PowerManager.ON_AFTER_RELEASE,
+            "SafeLink:alertaVolumen",
+        )
+        runCatching { wakeLock.acquire(SEGUNDOS_PANTALLA * 1000L) }
     }
 
     companion object {
@@ -198,6 +223,9 @@ class VolumenAccessibilityService : AccessibilityService() {
         const val CLAVE_VENTANA = "ventana_ms"
         const val EXTRA_ALERTA_VOLUMEN = "extra_alerta_volumen"
         const val VENTANA_POR_DEFECTO = 600L
+        private const val CANAL_ALERTA = "safelink_alerta_volumen"
+        private const val ID_NOTIFICACION = 4701
+        private const val SEGUNDOS_PANTALLA = 10
 
         @Volatile
         var instancia: VolumenAccessibilityService? = null

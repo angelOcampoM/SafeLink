@@ -2,6 +2,7 @@ package com.utez.safelink
 
 import android.content.Context
 import android.content.Intent
+import android.os.Bundle
 import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -17,6 +18,17 @@ import io.flutter.plugin.common.MethodChannel
  *   pendiente, si el servicio disparó con la app cerrada.
  */
 class MainActivity : FlutterActivity() {
+
+    /**
+     * U-05: la alerta tiene que verse aunque el teléfono esté bloqueado y la pantalla
+     * apagada. Sin esto, la notificación de pantalla completa del servicio abre la activity
+     * por detrás del bloqueo y la persona no ve nada.
+     */
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setShowWhenLocked(true)
+        setTurnScreenOn(true)
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
