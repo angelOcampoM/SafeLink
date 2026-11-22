@@ -683,6 +683,58 @@ rumbo es verificación en dispositivo: ver `docs/CONEXION_DISPOSITIVO.md`.
 
 ---
 
+## D53 · Lo que hizo falta para que el botón de volumen funcione de verdad en un teléfono
+
+**Contexto.** U-05 estaba "terminada" con 14 pruebas en verde y el APK compilando. La primera
+prueba en un teléfono real (vivo V2441, Android 16, issue #72) la rompió tres veces seguidas.
+Ninguno de los tres fallos era detectable sin dispositivo, y los tres fallaban **en silencio**:
+la app seguía mostrando el atajo encendido mientras el botón de pánico no hacía nada.
+
+**Los tres fallos y lo que se aprendió.**
+
+1. **La preferencia no sobrevivía al proceso.** `escuchando` vivía solo en memoria y arrancaba
+   en `false`; Android reinicia el proceso a menudo, justo con la pantalla bloqueada. Ahora se
+   guarda en `SharedPreferences` y el servicio la recupera en `onServiceConnected`. Además, en
+   Flutter `activar()` solo se llamaba desde el interruptor de Configuración, nunca al
+   arrancar: ahora la sesión sincroniza el servicio con la preferencia de quien entra.
+
+2. **Con la pantalla apagada no llegan las teclas.** Sin ventana con foco, el sistema se queda
+   los eventos de volumen antes de cualquier servicio de accesibilidad: `onKeyEvent` no corre.
+   No se puede arreglar desde la app. El segundo camino es observar el **valor** del volumen
+   (`ContentObserver` sobre `Settings.System`), que sí cambia y sí se puede escuchar.
+
+3. **Hay que observar el stream correcto.** Con la pantalla apagada y sin música sonando, las
+   teclas mueven el volumen del **timbre**, no el de música. En el teléfono de prueba la
+   música estaba además en 0 y muteada, así que observar solo ese stream no detectaba nada. Se
+   vigilan `RING`, `NOTIFICATION` y `MUSIC`, y basta con que cambie cualquiera.
+
+4. **Una app en segundo plano no puede abrir pantallas.** Desde Android 10 un `startActivity`
+   suelto se bloquea, y con la pantalla apagada no hay dónde dibujar. Hubo una detección
+   registrada en el log con la pantalla siempre negra: el atajo disparaba y no se veía. El
+   camino válido es el de las llamadas y las alarmas: notificación con `setFullScreenIntent`,
+   un `WakeLock` para encender la pantalla y `setShowWhenLocked`/`setTurnScreenOn` en la
+   activity. Requiere `USE_FULL_SCREEN_INTENT` y `WAKE_LOCK`, que el repositorio del profesor
+   sí declaraba y se pasaron por alto al portar el servicio.
+
+**Lo que se descartó.** Mover el volumen un paso cuando queda en un extremo, para que siempre
+haya un cambio que observar: no funcionaba (el sistema volvía a mutear el stream de música) y
+hacerlo sobre el timbre es intrusivo — podría dejar sonando un teléfono que su dueño puso en
+silencio a propósito.
+
+**Limitaciones que quedan, a propósito.**
+
+- Con la pantalla apagada **las dos pulsaciones mueven el volumen**: no hay evento de tecla
+  que consumir. Con la pantalla encendida se sigue consumiendo solo la que cierra el doble clic.
+- Si un volumen está justo en el extremo del rango, pulsar no cambia el valor y no hay nada
+  que observar.
+- Nada de esto aplica a iOS, que además no tiene proyecto en este repositorio.
+
+**La lección para el equipo.** Las 14 pruebas automáticas de U-05 seguían en verde con los
+cuatro fallos puestos, porque todos viven en la frontera con el sistema operativo. El criterio
+"probada en dispositivo físico" del DoD no es burocracia: es lo único que encontró esto.
+
+---
+
 **Decisiones de diseño aún abiertas**
 
 - **Ventana de gracia del refresh (D25):** **cerrada en BE-01 paso 5.** Se eligió aceptar el token ya rotado una vez más y emitir un sucesor nuevo de la misma familia; `REFRESH_GRACE_SECONDS` vale 5 por defecto.

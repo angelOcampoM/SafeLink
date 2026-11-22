@@ -21,6 +21,12 @@
     <!-- U-05 · Vibración de confirmación al disparar sin mirar la pantalla. -->
     <uses-permission android:name="android.permission.VIBRATE"/>
 
+    <!-- U-05 · Abrir la alerta con el teléfono bloqueado y la pantalla apagada. Desde
+         Android 10 una app en segundo plano no puede abrir pantallas por su cuenta: el
+         camino válido es una notificación de pantalla completa, como las llamadas. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+
     <application
         android:allowBackup="false"
         android:label="safelink"
