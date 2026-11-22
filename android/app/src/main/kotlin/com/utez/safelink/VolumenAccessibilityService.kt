@@ -1,8 +1,16 @@
 package com.utez.safelink
 
 import android.accessibilityservice.AccessibilityService
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.database.ContentObserver
+import android.media.AudioManager
+import android.os.Handler
+import android.os.Looper
+import android.os.PowerManager
+import android.provider.Settings
 import android.util.Log
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
@@ -20,6 +28,12 @@ import android.view.accessibility.AccessibilityEvent
  *     Aquí solo se consume la pulsación que COMPLETA el doble clic, para que esa no mueva el
  *     volumen; las demás siguen su camino normal.
  *  3. Nunca lee el contenido de otras apps: `onAccessibilityEvent` no hace nada.
+ *  4. Con la PANTALLA APAGADA, `onKeyEvent` no recibe nada: sin ventana con foco, el sistema
+ *     se queda las teclas de volumen antes de que lleguen a ningún servicio. Eso no se puede
+ *     arreglar desde aquí, así que se añade un segundo camino: observar el VALOR del volumen
+ *     (`ContentObserver` sobre Settings.System), que sí cambia y sí se puede escuchar con la
+ *     pantalla apagada. Los dos caminos alimentan el mismo contador; el del volumen solo
+ *     cuenta cuando la pantalla está apagada, para no duplicar cada pulsación.
  *
  * Requiere que la persona lo active en Ajustes → Accesibilidad → SafeLink. Android no deja
  * encenderlo desde la app (es una decisión del usuario, no un permiso que se pida).
@@ -32,6 +46,7 @@ class VolumenAccessibilityService : AccessibilityService() {
         // El proceso pudo morir y volver (con la pantalla bloqueada pasa todo el rato): se
         // recupera lo que la persona dejó configurado en vez de arrancar apagado.
         cargarPreferencias(this)
+        registrarObservadores()
         Log.i(TAG, "Servicio de volumen conectado (escuchando=$escuchando, ventana=${ventanaMs}ms)")
     }
 
@@ -49,7 +64,15 @@ class VolumenAccessibilityService : AccessibilityService() {
             event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN
         if (!esVolumen || event.action != KeyEvent.ACTION_DOWN) return super.onKeyEvent(event)
 
-        val ahora = System.currentTimeMillis()
+        // Solo la que completa el doble clic no mueve el volumen (cambio 2 del encabezado).
+        return registrarPulsacion(System.currentTimeMillis())
+    }
+
+    /**
+     * Cuenta una pulsación y avisa a Flutter. Devuelve `true` si esta cerró un doble clic.
+     * Lo comparten las teclas (pantalla encendida) y el observador del volumen (apagada).
+     */
+    private fun registrarPulsacion(ahora: Long): Boolean {
         contador = if (ahora - ultimaPulsacionMs <= ventanaMs) contador + 1 else 1
         ultimaPulsacionMs = ahora
 
@@ -66,11 +89,82 @@ class VolumenAccessibilityService : AccessibilityService() {
             marcarPendiente(pendiente = !entregada, timestamp = ahora)
             traerAppAlFrente()
         }
-        // Solo la que completa el doble clic no mueve el volumen (cambio 2 del encabezado).
         return completaDoble
     }
 
+    // ── Segundo camino: el volumen, para cuando la pantalla está apagada ──────────
+
+    private var observadorVolumen: ContentObserver? = null
+    private var receptorPantalla: BroadcastReceiver? = null
+    private var volumenPrevio = -1
+
+    private val audio: AudioManager
+        get() = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+
+    private val pantallaEncendida: Boolean
+        get() = (getSystemService(Context.POWER_SERVICE) as PowerManager).isInteractive
+
+    private fun registrarObservadores() {
+        if (observadorVolumen == null) {
+            volumenPrevio = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
+            val observador = object : ContentObserver(Handler(Looper.getMainLooper())) {
+                override fun onChange(selfChange: Boolean) = alCambiarElVolumen()
+            }
+            contentResolver.registerContentObserver(Settings.System.CONTENT_URI, true, observador)
+            observadorVolumen = observador
+        }
+        if (receptorPantalla == null) {
+            val receptor = object : BroadcastReceiver() {
+                override fun onReceive(context: Context?, intent: Intent?) = alApagarsePantalla()
+            }
+            registerReceiver(receptor, IntentFilter(Intent.ACTION_SCREEN_OFF))
+            receptorPantalla = receptor
+        }
+    }
+
+    private fun quitarObservadores() {
+        observadorVolumen?.let { contentResolver.unregisterContentObserver(it) }
+        observadorVolumen = null
+        receptorPantalla?.let { runCatching { unregisterReceiver(it) } }
+        receptorPantalla = null
+    }
+
+    /**
+     * El volumen cambió. Con la pantalla encendida no se hace nada: las teclas ya llegan a
+     * `onKeyEvent` y contarlas también aquí duplicaría cada pulsación.
+     */
+    private fun alCambiarElVolumen() {
+        val actual = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
+        if (actual == volumenPrevio) return
+        volumenPrevio = actual
+        if (!escuchando || pantallaEncendida) return
+        registrarPulsacion(System.currentTimeMillis())
+    }
+
+    /**
+     * Al apagarse la pantalla, si el volumen quedó justo en el máximo o en el mínimo se mueve
+     * un paso hacia dentro.
+     *
+     * Hace falta porque en un extremo el valor YA NO CAMBIA al pulsar, y sin cambio no hay
+     * nada que observar: el atajo dejaría de funcionar en silencio justo cuando más falta
+     * hace. Es un paso de volumen, sin mostrar la barra, y solo con el atajo encendido.
+     */
+    private fun alApagarsePantalla() {
+        if (!escuchando) return
+        val maximo = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        val actual = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
+        val corregido = when (actual) {
+            0 -> 1
+            maximo -> maximo - 1
+            else -> return
+        }
+        audio.setStreamVolume(AudioManager.STREAM_MUSIC, corregido, 0)
+        volumenPrevio = corregido
+        Log.i(TAG, "Volumen movido de $actual a $corregido para poder detectar pulsaciones")
+    }
+
     override fun onDestroy() {
+        quitarObservadores()
         if (instancia === this) instancia = null
         super.onDestroy()
     }
