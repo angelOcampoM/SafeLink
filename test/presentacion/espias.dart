@@ -10,7 +10,12 @@ import 'package:safelink/dominio/dominio.dart';
 final ahoraPrueba = DateTime(2026, 10, 26, 13, 0);
 const puntoAlerta = PuntoGeo(18.8400, -99.1800);
 
-Usuario usuarioPrueba({RolUsuario rol = RolUsuario.usuarioProtegido, DateTime? bloqueadoHasta}) => Usuario(
+Usuario usuarioPrueba({
+  RolUsuario rol = RolUsuario.usuarioProtegido,
+  DateTime? bloqueadoHasta,
+  bool dobleClicVolumenActivo = false,
+}) =>
+    Usuario(
       id: 'u-1',
       nombre: 'Fernanda Morales Gil',
       correo: 'usuario@safelink.mx',
@@ -18,6 +23,7 @@ Usuario usuarioPrueba({RolUsuario rol = RolUsuario.usuarioProtegido, DateTime? b
       rol: rol,
       creadoEn: ahoraPrueba,
       bloqueadoHasta: bloqueadoHasta,
+      dobleClicVolumenActivo: dobleClicVolumenActivo,
     );
 
 Alerta alertaPrueba({EstadoAlerta estado = EstadoAlerta.buscando, PuntoGeo? ubicacion = puntoAlerta}) => Alerta(
@@ -43,18 +49,21 @@ Guardia guardiaPrueba({PuntoGeo? ubicacion, int radio = 4000}) => Guardia(
     );
 
 class AuthEspia implements AuthRepository {
-  AuthEspia({this.usuarioActual, this.falla});
+  AuthEspia({this.usuarioActual, this.falla, this.conDobleClicVolumen = false});
 
   @override
   Usuario? usuarioActual;
   ErrorDominio? falla;
+
+  /// U-05: con qué preferencia de atajo entra quien inicia sesión.
+  final bool conDobleClicVolumen;
   int llamadasLogin = 0;
 
   @override
   Future<Usuario> iniciarSesion({required String correo, required String contrasena}) async {
     llamadasLogin++;
     if (falla != null) throw falla!;
-    return usuarioActual = usuarioPrueba();
+    return usuarioActual = usuarioPrueba(dobleClicVolumenActivo: conDobleClicVolumen);
   }
 
   @override

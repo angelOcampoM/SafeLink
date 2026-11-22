@@ -6,6 +6,7 @@
 //
 // Regla de dependencias: presentacion → datos → dominio (dominio no depende de nadie).
 
+import 'dart:async' show unawaited;
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb, kProfileMode, kReleaseMode;
@@ -130,6 +131,11 @@ class Dependencias {
       alertas: alertasUsuario,
       evidencia: CapturaEvidencia(camara: this.camara, ubicacion: this.ubicacion, brujula: this.brujula),
     );
+    // U-05: el atajo tiene que volver a engancharse en CADA arranque, no solo cuando la
+    // persona toca el interruptor. Si no, al reabrir la app (o al reiniciarla Android con el
+    // teléfono bloqueado) el servicio nativo sigue filtrando teclas pero nadie las escucha
+    // en Flutter, así que el doble clic no crea ninguna alerta y nada lo avisa.
+    sesion.addListener(_sincronizarDisparoRapido);
     // U-07: la ubicación viaja mientras la alerta esté activa, sin depender
     // de qué pantalla tenga el usuario abierta.
     seguimiento = SeguimientoUbicacion(alertas: alertasUsuario, ubicacion: this.ubicacion, sesion: sesion);
@@ -232,6 +238,18 @@ class Dependencias {
   final void Function() iniciarSimulaciones;
   late final SesionViewModel sesion;
   late final FabricaViewModels fabrica;
+
+  /// Pone el servicio de disparo rápido de acuerdo con la preferencia de quien esté en
+  /// sesión: encendido si lo tenía activado, apagado al cerrar sesión. Las dos llamadas son
+  /// idempotentes, así que repetirlas no hace nada.
+  void _sincronizarDisparoRapido() {
+    final debeEstarActivo = sesion.usuario?.dobleClicVolumenActivo ?? false;
+    if (debeEstarActivo && !disparoRapido.activo) {
+      unawaited(disparoRapido.activar());
+    } else if (!debeEstarActivo && disparoRapido.activo) {
+      unawaited(disparoRapido.desactivar());
+    }
+  }
 
   static void _nada() {}
 }

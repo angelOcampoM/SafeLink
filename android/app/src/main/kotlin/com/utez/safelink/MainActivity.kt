@@ -25,13 +25,17 @@ class MainActivity : FlutterActivity() {
         MethodChannel(mensajero, CANAL_METODOS).setMethodCallHandler { llamada, respuesta ->
             when (llamada.method) {
                 "iniciar" -> {
-                    val ventana = (llamada.argument<Number>("ventanaMs"))?.toLong()
-                    if (ventana != null) VolumenAccessibilityService.ventanaMs = ventana
-                    VolumenAccessibilityService.escuchando = true
+                    // Se guarda en disco, no solo en memoria: el servicio tiene que seguir
+                    // escuchando aunque Android reinicie el proceso de la app.
+                    VolumenAccessibilityService.guardarPreferencias(
+                        this,
+                        escuchar = true,
+                        ventana = (llamada.argument<Number>("ventanaMs"))?.toLong(),
+                    )
                     respuesta.success(null)
                 }
                 "detener" -> {
-                    VolumenAccessibilityService.escuchando = false
+                    VolumenAccessibilityService.guardarPreferencias(this, escuchar = false, ventana = null)
                     respuesta.success(null)
                 }
                 "accesibilidadActiva" -> respuesta.success(servicioEnAjustes())

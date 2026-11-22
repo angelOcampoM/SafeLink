@@ -29,7 +29,10 @@ class VolumenAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         instancia = this
-        Log.i(TAG, "Servicio de volumen conectado")
+        // El proceso pudo morir y volver (con la pantalla bloqueada pasa todo el rato): se
+        // recupera lo que la persona dejó configurado en vez de arrancar apagado.
+        cargarPreferencias(this)
+        Log.i(TAG, "Servicio de volumen conectado (escuchando=$escuchando, ventana=${ventanaMs}ms)")
     }
 
     /** No leemos nada de otras apps: el servicio solo existe para las teclas. */
@@ -97,19 +100,49 @@ class VolumenAccessibilityService : AccessibilityService() {
         const val PREFS = "safelink_volumen"
         const val CLAVE_PENDIENTE = "alerta_pendiente"
         const val CLAVE_TIMESTAMP = "alerta_timestamp"
+        const val CLAVE_ESCUCHANDO = "escuchando"
+        const val CLAVE_VENTANA = "ventana_ms"
         const val EXTRA_ALERTA_VOLUMEN = "extra_alerta_volumen"
+        const val VENTANA_POR_DEFECTO = 600L
 
         @Volatile
         var instancia: VolumenAccessibilityService? = null
             private set
 
-        /** Lo apaga `detener()` desde Flutter: el servicio sigue vivo pero deja de contar. */
+        /**
+         * Lo apaga `detener()` desde Flutter: el servicio sigue vivo pero deja de contar.
+         *
+         * NO basta con tenerlo en memoria. Android mata y reinicia el proceso de la app a
+         * menudo —justo con la pantalla bloqueada, que es para lo que existe U-05—, y cuando
+         * eso pasa el servicio vuelve a arrancar sin que Flutter haya llamado a `iniciar`.
+         * Si el valor viviera solo aquí, el atajo se apagaría solo y en silencio: la app
+         * seguiría enseñando el interruptor encendido y el botón de pánico no haría nada.
+         * Por eso se guarda también en SharedPreferences y se recupera al conectar.
+         */
         @Volatile
         var escuchando: Boolean = false
 
         /** Ventana del doble clic en milisegundos; la fija Flutter al iniciar (600 ms). */
         @Volatile
-        var ventanaMs: Long = 600L
+        var ventanaMs: Long = VENTANA_POR_DEFECTO
+
+        /** Guarda lo que pidió Flutter, para que sobreviva al reinicio del proceso. */
+        fun guardarPreferencias(context: Context, escuchar: Boolean, ventana: Long?) {
+            escuchando = escuchar
+            if (ventana != null) ventanaMs = ventana
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean(CLAVE_ESCUCHANDO, escuchar)
+                .putLong(CLAVE_VENTANA, ventanaMs)
+                .apply()
+        }
+
+        /** Recupera lo guardado. Lo llama el servicio cada vez que se conecta. */
+        fun cargarPreferencias(context: Context) {
+            val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            escuchando = prefs.getBoolean(CLAVE_ESCUCHANDO, false)
+            ventanaMs = prefs.getLong(CLAVE_VENTANA, VENTANA_POR_DEFECTO)
+        }
 
         private var ultimaPulsacionMs: Long = 0L
         private var contador: Int = 0
