@@ -5,6 +5,99 @@ Tarjeta: BE-01 (paso 7, `docs(BE-01): guía para conectar un dispositivo físico
 
 > Estado: la app ya tiene un cliente HTTP mínimo (`lib/datos/http_safelink_service.dart`), que se activa con `--dart-define=API_URL=...`. Sin `API_URL` la app sigue en modo simulado (memoria).
 
+## 0. Arranque rápido (lo mínimo para probar)
+
+Si solo quieres ver la app corriendo contra el backend real, con esto basta. El resto del
+documento explica cada paso a fondo y los casos raros.
+
+### Antes de empezar
+
+| Necesitas | Cómo comprobarlo |
+|---|---|
+| **Flutter 3.47.4** (la del equipo) | `flutter --version` |
+| **Node 24** | `node -v` · se baja de [nodejs.org](https://nodejs.org/) |
+| **PostgreSQL** | Docker Desktop, o [Postgres.app](https://postgresapp.com/) en Mac (más simple) |
+| **adb** y un Android con depuración USB | `adb devices` debe listarlo como `device` |
+
+### 1 · Base de datos
+
+**Con Docker** (es lo que asume el repo):
+
+```bash
+cd backend
+cp .env.example .env
+npm run db:up          # Postgres en el puerto 5433
+```
+
+**Con Postgres.app** (escucha en el 5432, no en el 5433):
+
+```bash
+cd backend
+cp .env.example .env
+createuser -s safelink          # desde psql, o con el usuario de tu Mac
+createdb -O safelink safelink
+createdb -O safelink safelink_test
+```
+
+Y en tu `.env` cambia el puerto a `5432` en `DATABASE_URL` y `DATABASE_URL_TEST`.
+
+### 2 · Tu `.env`
+
+Dos valores son tuyos y **no se comparten con nadie**:
+
+```bash
+# un JWT_SECRET aleatorio de verdad (no una palabra):
+openssl rand -hex 32
+```
+
+Pégalo en `JWT_SECRET=` y pon en `POSTGRES_PASSWORD` la contraseña que hayas usado.
+El `.env` está en `.gitignore`: nunca se sube.
+
+### 3 · Levantar la API
+
+```bash
+cd backend
+npm ci
+npx prisma generate
+npx prisma migrate deploy
+npm run db:seed        # 44 cuentas, 8 guardias, 30 alertas
+npm run dev            # queda corriendo; déjalo en su terminal
+```
+
+Comprueba en otra terminal: `curl http://127.0.0.1:3000/health` → `{"data":{"status":"ok"}}`
+
+### 4 · La app en el teléfono
+
+```bash
+adb reverse tcp:3000 tcp:3000
+flutter run --debug --dart-define=API_URL=http://127.0.0.1:3000/api/v1
+```
+
+> ⚠️ **Tiene que ser `--debug`.** En release y profile la app **rechaza `http://`** y se vuelve
+> al modo simulado **sin avisar** (`lib/datos/url_api.dart`). Parecería funcionar, pero
+> estarías viendo datos falsos. Si vas a usar release, la API tiene que ir por `https://`.
+
+Entra con `usuario@safelink.mx`, `guardia@safelink.mx` o `admin@safelink.mx`, contraseña
+`SafeLink1`.
+
+### Cómo saber que NO estás en modo simulado
+
+- El admin ve **8 guardias y 30 alertas** (la semilla del backend). En modo memoria la lista
+  es distinta.
+- En la terminal donde corre `npm run dev` aparece una línea por cada petición de la app.
+  Si no se mueve, la app no está hablando con el backend.
+
+### Si algo falla
+
+| Síntoma | Causa casi siempre |
+|---|---|
+| La app entra pero los datos no son los de arriba | Se te olvidó el `--dart-define`, o usaste release |
+| `SERVICE_UNAVAILABLE` en todas las pantallas | Falta `adb reverse`, o la API no está corriendo |
+| `adb devices` no lista el teléfono | Depuración USB apagada, o el cable en modo "solo carga" |
+| La API no arranca | Postgres apagado, o el puerto del `.env` no coincide |
+
+---
+
 ## 1. Requisitos
 
 - Docker Desktop.
@@ -114,9 +207,9 @@ Qué hace el cliente (`lib/datos/http_safelink_service.dart`, `lib/datos/almacen
 - **Logout:** borra los tokens locales aunque el servidor falle. Si el access token ya venció, primero hace refresh y reintenta, para revocar la sesión también en el servidor.
 - **HTTPS en release/profile:** en esos modos la app rechaza un `API_URL` sin `https` y se queda en modo memoria (`urlApiPermitida` en `lib/datos/url_api.dart`, evaluada en `lib/main.dart`). En debug se permite `http://`.
 - **Respaldo de Android:** `android:allowBackup="false"` en el manifest `main`, para que el refresh token no entre al respaldo del teléfono.
-- **Hallazgo pendiente:** el permiso `INTERNET` no está en el manifest `main` (solo en debug/profile). Un build release no tendría red; hay que resolverlo en la tarjeta que haga el build release.
+- **Permiso `INTERNET`:** ya está en el manifest `main` (se agregó en BE-07). Un build release sí tiene red.
 - **Errores de red**, tiempo agotado (15 s) o respuestas que no son JSON del backend se convierten en `SERVICE_UNAVAILABLE`.
-- **Tiempo real:** aún no disponible. `escuchar()` emite `SERVICE_UNAVAILABLE` ("Tiempo real disponible en una tarjeta posterior") hasta BE-03/BE-04.
+- **Tiempo real:** funcionando (D51). `escuchar()` abre el canal SSE de verdad, reconecta solo con espera creciente y, cuando el servidor cierra el canal porque venció el access token (D26), hace refresh y vuelve a conectar sin que la pantalla se entere.
 
 Cuentas de la semilla (`backend/prisma/seed.ts`), contraseña `SafeLink1` (solo desarrollo): `usuario@safelink.mx` (protected_user), `guardia@safelink.mx` (guard), `admin@safelink.mx` (admin).
 
