@@ -5,13 +5,42 @@ seguridad privada**. Proyecto académico UTEZ.
 
 > **Arquitectura:** tres capas (dominio · datos · presentación) + MVVM pragmático,
 > calcada de [`ecotrack_arquitectura`](https://github.com/cristiancampos-docente/ecotrack-reto-solucion).
-> Todo funciona con datos simulados de Morelos; la "nube" es una API falsa.
+
+El repositorio tiene **dos proyectos**: la app Flutter (`lib/`) y el backend
+(`backend/`: Node 24, Fastify, Prisma y PostgreSQL, con las 38 rutas del contrato
+implementadas).
 
 ## Primeros pasos
+
+La app arranca sola, sin backend ni base de datos, con datos simulados de Morelos:
 
 ```bash
 flutter pub get
 flutter run
+```
+
+### Los tres modos
+
+| Modo | Cómo se arranca | Para qué sirve |
+|---|---|---|
+| **Memoria** (por defecto) | `flutter run` | Demo y desarrollo de pantallas: todo en RAM, sin red |
+| **Nube simulada** | `--dart-define=USAR_NUBE=true` | Igual, pero con latencia y errores de red fingidos (ver `tasaFallo`) |
+| **Backend real** | `--dart-define=API_URL=http://127.0.0.1:3000/api/v1` | Contra el servidor de verdad |
+
+En un teléfono, los sensores (cámara, GPS, rumbo) y el doble clic de volumen son
+**reales en los tres modos**: lo decide `enTelefono` en `main.dart`, no el modo.
+En web y escritorio siguen siendo simulados.
+
+Para levantar el backend y conectar un teléfono: **`docs/CONEXION_DISPOSITIVO.md`**.
+
+```bash
+cd backend
+cp .env.example .env     # define JWT_SECRET (32+ caracteres) y la contraseña de Postgres
+npm install
+npm run db:up            # Postgres en 127.0.0.1:5433 (necesita Docker)
+npm run db:deploy        # migraciones
+npm run db:seed          # datos de demostración
+npm run dev              # API en http://127.0.0.1:3000
 ```
 
 Si faltan las carpetas de plataforma: `flutter create . --org mx.edu.utez --project-name safelink --platforms android,ios`
@@ -21,7 +50,7 @@ Si faltan las carpetas de plataforma: `flutter create . --org mx.edu.utez --proj
 
 | Correo | Rol | Qué probar |
 |---|---|---|
-| `usuario@safelink.mx` | Usuario protegido | Toque con cuenta regresiva, mantener y descartar, "Simular agitación", guardia y ETA simulados, "Ya fui atendido", historial |
+| `usuario@safelink.mx` | Usuario protegido | Toque con cuenta regresiva, mantener y descartar, doble clic de volumen, guardia y ETA, "Ya fui atendido", historial |
 | `rosa.diaz@mail.com` | Usuario protegido | Tiene 2 falsas alarmas: una más y queda bloqueada |
 | `bloqueado@safelink.mx` | Usuario protegido | Pantalla de cuenta bloqueada |
 | `guardia@safelink.mx` | Guardia | Listado ordenado, banner "Alerta entrante" cada 20–40 s, detalle, aceptar, "Simular acercamiento", "Llegué", historial con métricas |
@@ -55,10 +84,23 @@ test/
   presentacion/              ViewModels con repositorios espía (sin pantallas, sin red)
   interfaz/                  widgets, login y recorrido de todas las pantallas por rol
   arquitectura_test.dart     verifica la regla de dependencias leyendo los imports
+backend/
+  src/
+    domain/                  reglas puras del servidor (geocerca, turnos, métricas, zona horaria)
+    modules/                 auth, alerts, guard, admin, escalation, devices, events (SSE)
+    security/policies.ts     tabla de permisos por ruta: deny por defecto
+  prisma/                    esquema, migraciones y semilla
+  tests/unit/                sin base de datos
+  tests/integration/         contra Postgres (las corre CI)
 docs/
   GUIA_ESTILOS.md
   HISTORIAS_DE_USUARIO.md    U-01…U-09, G-01…G-07, A-01…A-08 con sus criterios y su estado
   PLAN_DE_PRUEBAS.md         los 83 casos del esquema y la prueba que cubre cada uno
+  API_CONTRATO.md            las 38 rutas, sus cuerpos, sus errores y quién las implementó
+  MODELO_DATOS.md            tablas, relaciones y restricciones
+  PERMISOS.md                qué rol puede llamar a qué
+  DECISIONES.md              D1…D53: cada decisión de diseño y por qué se tomó
+  CONEXION_DISPOSITIVO.md    levantar el backend y probar en un teléfono físico
   CONTRATO_AUTENTICACION.md  BE-02: lo que el backend debe cumplir, sea cual sea
 ```
 
@@ -77,16 +119,24 @@ presentacion  →  datos  →  dominio
 
 `test/arquitectura_test.dart` falla si alguien rompe estas reglas.
 
-## Cómo cambiar a la nube
+## Cómo cambiar de modo
 
-En `lib/main.dart`:
+Sin tocar código, al arrancar:
 
-```dart
-const usarNube = false; // cámbialo a true y haz hot restart.
+```bash
+flutter run --dart-define=USAR_NUBE=true                             # nube simulada
+flutter run --dart-define=API_URL=http://127.0.0.1:3000/api/v1       # backend real
 ```
 
-Con `true`, los repositorios `Nube*` traducen entidad ↔ JSON y hablan con
-`SafeLinkService` (latencia de 400–800 ms). No hay que tocar nada más.
+También se puede cambiar `const usarNube` en `lib/main.dart` y hacer hot restart.
+
+En los dos casos los repositorios `Nube*` traducen entidad ↔ JSON; lo único que
+cambia es si detrás hay un `SafeLinkService` simulado (latencia de 400–800 ms) o
+`HttpSafeLinkService` hablando con el servidor. Ningún otro archivo cambia: esa es
+la razón de ser de la capa de datos.
+
+En release y profile solo se acepta `https://`; con `http://` la app se queda en
+modo simulado y lo avisa por consola.
 
 ### Probar los estados de error: `tasaFallo`
 
@@ -109,7 +159,7 @@ En modo memoria no aplica.
 | Service (Gateway) | `datos/safelink_service.dart` | Es el único punto que "habla" con la API (latencia, errores, `tasaFallo`) |
 | MVVM + Observer | `presentacion/**/*_view_model.dart` (`ChangeNotifier`), Views con `ListenableBuilder`, `Stream` en los repositorios | Separa estado y orquestación de la pintura; el tiempo real (ETA, alertas nuevas, escaladas) llega solo |
 | Inyección de dependencias / Composition Root | `main.dart` (`Dependencias`), constructores de cada ViewModel | Todo se arma en un lugar y se pasa por constructor; las pruebas inyectan espías |
-| Strategy | `presentacion/usuario/estrategias_disparo.dart` (toque con cuenta regresiva, mantener con descarte, agitación) | Cada método de disparo decide cuándo enviar, sin `if` por método dentro del ViewModel |
+| Strategy | `presentacion/usuario/estrategias_disparo.dart` (toque con cuenta regresiva, mantener con descarte, doble clic de volumen) | Cada método de disparo decide cuándo enviar, sin `if` por método dentro del ViewModel |
 | State | `presentacion/comun/estado_vista.dart` (`Cargando`, `Vacio`, `ErrorVista`, `Listo`) + `SlStateView` | Cada pantalla cubre siempre los cuatro estados; el `switch` sobre la sealed class obliga a no olvidar ninguno |
 | Factory | `presentacion/comun/rutas/fabrica_view_models.dart` y `desdeJson` de los mapeadores | El router crea el ViewModel de cada ruta sin conocer implementaciones; el JSON se convierte en entidades en un solo lugar |
 
@@ -129,16 +179,40 @@ Los tiempos se cambian en `dominio/configuracion.dart`.
 
 ## Comandos
 
+App:
+
 ```bash
 flutter analyze
-flutter test                      # todas
+flutter test                      # todas (422)
 flutter test test/dominio         # solo reglas
 flutter test test/presentacion    # solo ViewModels
+flutter build apk --release
 ```
 
-## Pendiente para siguientes sprints
-- API real: cambiar el cuerpo de `SafeLinkService` por HTTP; los `nube_*` no cambian.
-- Cámara, GPS, brújula y servicio de agitación (U-05, U-06, U-07).
-- Google Maps real y `url_launcher` (G-06), FCM para la alerta entrante (G-02).
-- Mover el centro de la zona tocando el mapa (A-03).
-- Los temporizadores de escalamiento los hará la API.
+Backend (desde `backend/`):
+
+```bash
+npm run typecheck
+npm run lint
+npx vitest run tests/unit         # sin base de datos
+npm test                          # todas: las de integración necesitan Postgres
+```
+
+CI (`.github/workflows/calidad.yml`) corre los dos en cada PR hacia `develop`.
+
+## Estado
+
+Implementado y probado: **las 38 rutas** del contrato, el tiempo real por SSE, los
+sensores reales del teléfono y el doble clic de volumen con la pantalla apagada
+(verificado en un vivo V2441 con Android 16; ver D53).
+
+Lo que falta **no es código**, son credenciales o una decisión del equipo:
+
+| Pendiente | Qué hace falta |
+|---|---|
+| Mapas de verdad (G-06, A-03) | Una clave de Google Maps y `google_maps_flutter`; hoy se ve `MapPlaceholder` con los mismos datos |
+| Aviso push al guardia (G-02) | Un proyecto de Firebase (`google-services.json`) y `PUSH_PROVIDER=fcm` |
+| Gráficas del panel (A-06) | Decidir si se usa `fl_chart`; hoy los números se muestran sin gráfica |
+| App de iOS | No hay carpeta `ios/`: el atajo de volumen con la pantalla bloqueada tampoco es posible ahí (limitación de Apple) |
+
+Los 4 casos del plan de pruebas marcados 📱 dependen de esos tres puntos.

@@ -57,7 +57,7 @@
 | `textSecondary` | `#94A3B8` | Descripciones, metadatos |
 | `textMuted` | `#64748B` | Placeholder, deshabilitado |
 | `emergency` | `#EF4444` | **Solo** botón de alerta y alertas activas |
-| `warning` | `#F59E0B` | Urgente (agitación), pendiente, escalada |
+| `warning` | `#F59E0B` | Urgente (doble clic de volumen), pendiente, escalada |
 | `success` | `#22C55E` | Confirmado, en turno, seguro, "Llegué" |
 | `info` | `#3B82F6` | Acción principal, mapas, navegación, enlaces |
 | `danger` | `#F87171` | Errores de formulario, dar de baja, falsa alarma |
