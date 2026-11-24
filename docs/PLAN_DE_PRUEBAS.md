@@ -117,16 +117,29 @@ Estado al 02/11/2026 · rama `feat/pruebas-tres-roles` · **309 pruebas pasan**,
 
 ---
 
-## Los 5 casos que no se pueden automatizar
+## Los 4 casos que no se pueden automatizar
 
-Cuatro de G-02 y G-06 necesitan hardware o servicios externos que el prototipo
-todavía no tiene: notificaciones push reales (FCM), un teléfono Android, uno
-iOS y la app de Google Maps instalada.
+Son los marcados 📱 en la tabla del guardia. Necesitan servicios externos que el
+proyecto todavía no tiene: notificaciones push reales (FCM), la app de Google Maps
+instalada y un teléfono iOS, que además no existe (no hay carpeta `ios/`).
 
-**Propuesta para el equipo:** marcarlos en el esquema como *prueba manual en
-dispositivo*, ejecutarlos una vez cuando haya build instalable y adjuntar la
-captura como evidencia. Si se dejan como pruebas automatizadas, van a quedar
-en rojo para siempre sin que eso signifique nada.
+| Historia | Caso | Qué hace falta |
+|---|---|---|
+| G-02 | Apertura del detalle desde la notificación | Un proyecto de Firebase |
+| G-02 | Recepción en Android con el teléfono en silencio | Un proyecto de Firebase |
+| G-02 | Recepción en iOS | No hay app de iOS |
+| G-06 | Apertura de la ruta en Google Maps | Clave de Google Maps y `url_launcher` |
+
+**Acuerdo del equipo:** quedan marcados como *prueba manual en dispositivo*. Se
+ejecutan una vez cuando existan esas credenciales y se adjunta la captura como
+evidencia. Si se dejaran como pruebas automatizadas estarían en rojo para siempre
+sin que eso signifique nada.
+
+**Lo que sí se verificó en un teléfono** (vivo V2441, Android 16, el 22/11/2026):
+los permisos del sistema, la cámara, el GPS, el rumbo y el doble clic de volumen
+con la pantalla apagada y bloqueada. Ese paso encontró cuatro fallos que ninguna
+prueba automática podía ver, porque viven en la frontera con el sistema operativo
+(ver D53 en `DECISIONES.md`). Detalle y pasos en `CONEXION_DISPOSITIVO.md` §11-§12.
 
 ## Backend, tarjeta BE-04 (despacho de alertas al guardia)
 
