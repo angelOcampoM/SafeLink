@@ -101,6 +101,7 @@ docs/
   PERMISOS.md                qué rol puede llamar a qué
   DECISIONES.md              D1…D53: cada decisión de diseño y por qué se tomó
   CONEXION_DISPOSITIVO.md    levantar el backend y probar en un teléfono físico
+  PLAN_CONSUMO_REAL.md       banco de tareas para que todo use la API real (sin simulados)
   CONTRATO_AUTENTICACION.md  BE-02: lo que el backend debe cumplir, sea cual sea
 ```
 
