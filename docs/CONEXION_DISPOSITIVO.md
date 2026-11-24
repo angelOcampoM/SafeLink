@@ -78,10 +78,13 @@ flutter run --debug --dart-define=API_URL=http://127.0.0.1:3000/api/v1
 > estarías viendo datos falsos. Si vas a usar release, la API tiene que ir por `https://`.
 
 Entra con `usuario@safelink.mx`, `guardia@safelink.mx` o `admin@safelink.mx`, contraseña
-`SafeLink1`.
+`SafeLink1`. Con la API real hay que escribirlas: el login no ofrece cuentas para rellenar (D54).
 
 ### Cómo saber que NO estás en modo simulado
 
+- **El login no muestra cuentas de prueba**, y no hay botones "Simular …" (ni "Simular
+  acercamiento" en el guardia ni "Simular doble clic" en el usuario). Es la señal más rápida:
+  se ve antes de entrar. Si aparecen, la app está en modo simulado.
 - El admin ve **8 guardias y 30 alertas** (la semilla del backend). En modo memoria la lista
   es distinta.
 - En la terminal donde corre `npm run dev` aparece una línea por cada petición de la app.
@@ -92,6 +95,9 @@ Entra con `usuario@safelink.mx`, `guardia@safelink.mx` o `admin@safelink.mx`, co
 | Síntoma | Causa casi siempre |
 |---|---|
 | La app entra pero los datos no son los de arriba | Se te olvidó el `--dart-define`, o usaste release |
+| Siguen las cuentas de prueba después de volver a lanzar | `API_URL` se compila dentro del APK: cerrar y abrir la app o un hot restart no la cambian. Sal de `flutter run` (`q`) y córrelo otra vez |
+| El guardia no ve la alerta que disparó la usuaria | La alerta cayó fuera de su cobertura: la alerta lleva el GPS real del teléfono de la usuaria y las zonas de la semilla están en puntos fijos de Morelos. Amplía la cobertura desde el admin (radio máximo 10 km; el centro todavía no se puede mover desde la app). Revisa también que el guardia esté en turno |
+| "Llegué" no se habilita aunque estés en el punto | La app no tiene permiso de ubicación o el GPS está apagado. El permiso es de la app, no del rol: si ya lo diste como usuaria no se vuelve a pedir, y si lo negaste hay que activarlo en Ajustes > Apps > SafeLink > Ubicación |
 | `SERVICE_UNAVAILABLE` en todas las pantallas | Falta `adb reverse`, o la API no está corriendo |
 | `adb devices` no lista el teléfono | Depuración USB apagada, o el cable en modo "solo carga" |
 | La API no arranca | Postgres apagado, o el puerto del `.env` no coincide |
