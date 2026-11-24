@@ -1,0 +1,97 @@
+// CAPA: DOMINIO — la alerta de seguridad (sección 4.3)
+// U-03 a U-09 · G-02 a G-07 · A-04 · A-05
+// Incluye campos "de lectura" que la API agrega para la UI (nombreUsuario,
+// nombreGuardia, etaSegundos) y que no existen en la tabla.
+// No hace: no decide transiciones (ReglaAlerta) ni sabe de JSON.
+
+import 'enums.dart';
+import 'punto_geo.dart';
+
+class Alerta {
+  const Alerta({
+    required this.id,
+    required this.usuarioId,
+    required this.estado,
+    required this.metodo,
+    required this.disparadaEn,
+    this.nombreUsuario,
+    this.telefonoUsuario,
+    this.guardiaId,
+    this.nombreGuardia,
+    this.fotoUrl,
+    this.evidenciaIncompleta = false,
+    this.ubicacion,
+    this.rumbo,
+    this.aceptadaEn,
+    this.llegadaEn,
+    this.cerradaEn,
+    this.razonEscalamiento,
+    this.resolucion,
+    this.notaAdmin,
+    this.etaSegundos,
+  });
+
+  final String id;
+  final String usuarioId;
+  final String? nombreUsuario;
+  final String? telefonoUsuario;
+  final String? guardiaId;
+  final String? nombreGuardia;
+  final EstadoAlerta estado;
+  final MetodoDisparo metodo;
+  final String? fotoUrl;
+  final bool evidenciaIncompleta;
+  final PuntoGeo? ubicacion;
+  final int? rumbo;
+  final DateTime disparadaEn;
+  final DateTime? aceptadaEn;
+  final DateTime? llegadaEn;
+  final DateTime? cerradaEn;
+  final RazonEscalamiento? razonEscalamiento;
+  final Resolucion? resolucion;
+
+  /// A-04: nota que escribe el admin al resolver una alerta escalada.
+  final String? notaAdmin;
+  final int? etaSegundos;
+
+  /// Doble clic de volumen = urgente: el usuario no pudo desbloquear (U-05).
+  bool get esUrgente => metodo == MetodoDisparo.dobleClicVolumen;
+
+  Duration esperaA(DateTime ahora) => ahora.difference(disparadaEn);
+
+  Alerta copyWith({
+    EstadoAlerta? estado,
+    String? guardiaId,
+    String? nombreGuardia,
+    DateTime? aceptadaEn,
+    DateTime? llegadaEn,
+    DateTime? cerradaEn,
+    RazonEscalamiento? razonEscalamiento,
+    Resolucion? resolucion,
+    String? notaAdmin,
+    PuntoGeo? ubicacion,
+    int? etaSegundos,
+  }) =>
+      Alerta(
+        id: id,
+        usuarioId: usuarioId,
+        nombreUsuario: nombreUsuario,
+        telefonoUsuario: telefonoUsuario,
+        guardiaId: guardiaId ?? this.guardiaId,
+        nombreGuardia: nombreGuardia ?? this.nombreGuardia,
+        estado: estado ?? this.estado,
+        metodo: metodo,
+        fotoUrl: fotoUrl,
+        evidenciaIncompleta: evidenciaIncompleta,
+        ubicacion: ubicacion ?? this.ubicacion,
+        rumbo: rumbo,
+        disparadaEn: disparadaEn,
+        aceptadaEn: aceptadaEn ?? this.aceptadaEn,
+        llegadaEn: llegadaEn ?? this.llegadaEn,
+        cerradaEn: cerradaEn ?? this.cerradaEn,
+        razonEscalamiento: razonEscalamiento ?? this.razonEscalamiento,
+        resolucion: resolucion ?? this.resolucion,
+        notaAdmin: notaAdmin ?? this.notaAdmin,
+        etaSegundos: etaSegundos ?? this.etaSegundos,
+      );
+}

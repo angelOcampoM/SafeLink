@@ -1,0 +1,92 @@
+# Control de calidad del repositorio (metodología §11).
+# Corre en cada Pull Request hacia develop y en cada empujón a develop y main.
+# Si algo falla, el PR sale en rojo y no debe mergearse: así no se repite un
+# develop roto como el de las semanas pasadas.
+#
+# No se incluye `dart format` como compuerta todavía: hoy reformatearía 62
+# archivos y ese commit chocaría con el trabajo en curso.
+name: Calidad
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+
+jobs:
+  app:
+    name: App · análisis estático y pruebas
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Versión fija, la misma que usa el equipo. Con `channel: stable` el CI
+      # instalaba la última (3.50) y el analyzer marcaba cosas que la nuestra
+      # no: el CI se ponía rojo sin que nadie hubiera tocado el código.
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.4
+          cache: true
+
+      - name: Instalar dependencias
+        run: flutter pub get
+
+      - name: Análisis estático
+        run: flutter analyze
+
+      - name: Pruebas
+        run: flutter test --reporter=expanded
+
+  backend:
+    name: Backend · análisis estático y pruebas
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    # Postgres de usar y tirar para las pruebas de integración. Sin contraseña
+    # (trust): es un contenedor efímero que solo escucha dentro del runner.
+    services:
+      db:
+        image: postgres:16
+        env:
+          POSTGRES_USER: safelink
+          POSTGRES_DB: safelink_test
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://safelink@localhost:5432/safelink_test
+      DATABASE_URL_TEST: postgresql://safelink@localhost:5432/safelink_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: backend/.nvmrc
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Análisis de tipos
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Migraciones sobre la base de pruebas
+        run: npx prisma migrate deploy
+
+      # Incluye las pruebas de integración: aquí sí hay base, a diferencia de
+      # las máquinas sin Docker.
+      - name: Pruebas
+        run: npm test

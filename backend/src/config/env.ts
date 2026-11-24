@@ -1,0 +1,149 @@
+import { z } from 'zod';
+import { DURATION_PATTERN } from './duration.js';
+
+function esZonaIana(timeZone: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const entero = (def: number) => z.coerce.number().int().positive().default(def);
+const duracion = (def: string) =>
+  z
+    .string()
+    .regex(DURATION_PATTERN, 'formato esperado: número y unidad s, m, h o d (ej. 15m)')
+    .default(def);
+
+export const envSchema = z.object({
+  // Si falta, se asume 'production' (lo más restrictivo): el modo desarrollo hay que pedirlo.
+  NODE_ENV: z.enum(['development', 'test', 'production']).default('production'),
+  HOST: z.string().min(1).default('127.0.0.1'),
+  PORT: z.coerce.number().int().min(1).max(65535).default(3000),
+  DATABASE_URL: z.string().min(1).optional(),
+  DATABASE_URL_TEST: z.string().min(1).optional(),
+  JWT_SECRET: z.string().min(32, 'debe tener al menos 32 caracteres'),
+  JWT_ACCESS_EXPIRES_IN: duracion('15m'),
+  JWT_REFRESH_EXPIRES_IN: duracion('30d'),
+  // Ventana (segundos) en que un refresh token recién usado se acepta una vez más (D25). 0 la desactiva.
+  REFRESH_GRACE_SECONDS: z.coerce.number().int().min(0).max(60).default(5),
+  // Vida máxima absoluta de una sesión, aunque se siga rotando el refresh token.
+  JWT_SESSION_MAX_AGE: duracion('90d'),
+  // Rate limit por IP (memoria del proceso) de POST /auth/login y /auth/refresh.
+  RATE_LIMIT_LOGIN_MAX: entero(10),
+  RATE_LIMIT_LOGIN_WINDOW: duracion('1m'),
+  RATE_LIMIT_REFRESH_MAX: entero(30),
+  RATE_LIMIT_REFRESH_WINDOW: duracion('1m'),
+  // Rate limit POR USUARIO (BE-03): alertas creadas por minuto y envíos de ubicación por
+  // ventana de LOCATION_UPDATE_SECONDS (holgura para el jitter del teléfono).
+  RATE_LIMIT_ALERTS_PER_MINUTE: entero(5),
+  RATE_LIMIT_LOCATIONS_PER_WINDOW: entero(3),
+  // Parámetros de argon2id (por defecto, los de la librería).
+  ARGON2_MEMORY_KIB: entero(65536).pipe(z.number().min(19456).max(1048576)),
+  ARGON2_TIME_COST: entero(3).pipe(z.number().min(2).max(10)),
+  ARGON2_PARALLELISM: entero(4).pipe(z.number().min(1).max(16)),
+  CORS_ORIGINS: z
+    .string()
+    .default('')
+    .transform((v) =>
+      v
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0),
+    ),
+  TZ_SHIFTS: z
+    .string()
+    .refine(
+      (v) => v.length > 0 && esZonaIana(v),
+      'debe ser una zona horaria IANA válida (ej. America/Mexico_City)',
+    )
+    .default('America/Mexico_City'),
+  GEOFENCE_METERS: entero(50),
+  ACCEPT_TIMEOUT_SECONDS: entero(300),
+  CONFIRM_TIMEOUT_SECONDS: entero(900),
+  // BE-05: cada cuántos segundos se revisan las alertas vencidas para escalarlas. 0 lo apaga
+  // (pruebas que escalan a mano). Un retraso de hasta este valor sobre los límites de arriba.
+  ESCALATION_SWEEP_SECONDS: z.coerce.number().int().min(0).max(300).default(15),
+  FALSE_ALARM_LIMIT: entero(3),
+  BLOCK_DAYS: entero(7),
+  LOCATION_UPDATE_SECONDS: entero(5),
+  WAIT_METERS_PER_MINUTE: entero(100),
+  GUARD_METERS_PER_MINUTE: entero(250),
+  // D47: el ETA que ve el dueño se redondea hacia arriba a este múltiplo (segundos) (mínimo 30) y se calcula
+  // con la posición del guardia ajustada al centro de una celda de ETA_GUARD_GRID_METERS (mínimo 100).
+  // Redondeo + celda dificultan, no eliminan, deducir al guardia con ubicaciones falsas: solo revelan la celda.
+  ETA_ROUNDING_SECONDS: entero(60).pipe(z.number().min(30)),
+  ETA_GUARD_GRID_METERS: entero(250).pipe(z.number().min(100)),
+  COVERAGE_RADIUS_MIN_METERS: entero(500),
+  COVERAGE_RADIUS_MAX_METERS: entero(10000),
+  ADMIN_NOTE_MAX_LENGTH: entero(300),
+  TRIGGERED_AT_TOLERANCE_SECONDS: entero(600),
+  BODY_LIMIT_BYTES: entero(1048576).pipe(z.number().max(10 * 1024 * 1024)),
+  // Foto de evidencia (D2 · BE-03): carpeta local, tamaño máximo y vida de la URL firmada.
+  PHOTO_DIR: z.string().min(1).default('storage/fotos'),
+  PHOTO_MAX_BYTES: entero(5 * 1024 * 1024).pipe(z.number().max(15 * 1024 * 1024)),
+  PHOTO_URL_TTL_SECONDS: entero(900).pipe(z.number().max(86400)),
+  // Base de la API tal como la abre la app (la misma API_URL del front, D4). Sin ella se usa
+  // http://127.0.0.1:PORT/api/v1, que solo sirve en esta computadora.
+  PUBLIC_API_URL: z.url({ protocol: /^https?$/ }).optional(),
+  // Tiempo real (D3, D26): cada cuánto se manda `: ping` (y se revisa la sesión) y cuántos
+  // streams puede tener abiertos un mismo usuario (al pasarse se cierra el más antiguo).
+  SSE_PING_SECONDS: entero(25).pipe(z.number().max(300)),
+  SSE_MAX_CONNECTIONS_PER_USER: entero(3).pipe(z.number().max(20)),
+  // Push (D43): 'none' no envía nada. Con 'fcm' hacen falta el proyecto de Firebase y la RUTA a
+  // la cuenta de servicio (un JSON fuera del repo; el archivo nunca se versiona).
+  PUSH_PROVIDER: z.enum(['none', 'fcm']).default('none'),
+  // Vacías (como en .env.example) cuentan como ausentes.
+  FCM_PROJECT_ID: z.string().optional().transform((v) => (v?.trim() ? v.trim() : undefined)),
+  FCM_SERVICE_ACCOUNT_FILE: z.string().optional().transform((v) => (v?.trim() ? v.trim() : undefined)),
+  // Intentos totales por token ante 429, 5xx o error de red.
+  PUSH_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(5).default(2),
+  // Tope de tokens por alerta (D44). FCM v1 manda un mensaje por token, así que el tope acota las
+  // peticiones y el tiempo de un solo aviso; 500 era también el tamaño de lote del envío multicast
+  // de FCM. Si se rebasa, se prioriza a los guardias más cercanos.
+  PUSH_MAX_TOKENS_PER_ALERT: z.coerce.number().int().min(1).max(500).default(500),
+});
+
+export type Config = z.infer<typeof envSchema>;
+
+export class ConfigError extends Error {
+  constructor(public readonly details: string[]) {
+    super(
+      `Configuración inválida. Revisa estas variables de entorno:\n${details
+        .map((d) => `  - ${d}`)
+        .join('\n')}`,
+    );
+    this.name = 'ConfigError';
+  }
+}
+
+export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
+  const result = envSchema.safeParse(env);
+  if (!result.success) {
+    const details = result.error.issues.map((i) => {
+      const nombre = i.path.join('.') || '(general)';
+      const faltante = env[nombre] === undefined;
+      return faltante
+        ? `${nombre}: es obligatoria y no está definida`
+        : `${nombre}: valor inválido (${i.message})`;
+    });
+    throw new ConfigError(details);
+  }
+  const cfg = result.data;
+  if (cfg.COVERAGE_RADIUS_MIN_METERS > cfg.COVERAGE_RADIUS_MAX_METERS) {
+    throw new ConfigError([
+      'COVERAGE_RADIUS_MIN_METERS: no puede ser mayor que COVERAGE_RADIUS_MAX_METERS',
+    ]);
+  }
+  // Con PUSH_PROVIDER=fcm hacen falta el proyecto y la ruta de la cuenta de servicio (no va en el
+  // esquema como refinamiento porque la semilla usa envSchema.pick, que no admite refinamientos).
+  if (cfg.PUSH_PROVIDER === 'fcm') {
+    const faltantes = (['FCM_PROJECT_ID', 'FCM_SERVICE_ACCOUNT_FILE'] as const)
+      .filter((nombre) => !cfg[nombre])
+      .map((nombre) => `${nombre}: es obligatoria con PUSH_PROVIDER=fcm`);
+    if (faltantes.length > 0) throw new ConfigError(faltantes);
+  }
+  return cfg;
+}

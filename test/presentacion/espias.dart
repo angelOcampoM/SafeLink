@@ -1,0 +1,276 @@
+// Repositorios espía para probar ViewModels sin abrir pantallas y sin red.
+// Cada espía cumple el contrato real, guarda lo que le pidieron y devuelve
+// lo que la prueba configuró.
+import 'package:safelink/datos/admin_repository.dart';
+import 'package:safelink/datos/alerta_guardia_repository.dart';
+import 'package:safelink/datos/alerta_usuario_repository.dart';
+import 'package:safelink/datos/auth_repository.dart';
+import 'package:safelink/dominio/dominio.dart';
+
+final ahoraPrueba = DateTime(2026, 10, 26, 13, 0);
+const puntoAlerta = PuntoGeo(18.8400, -99.1800);
+
+Usuario usuarioPrueba({
+  RolUsuario rol = RolUsuario.usuarioProtegido,
+  DateTime? bloqueadoHasta,
+  bool dobleClicVolumenActivo = false,
+}) =>
+    Usuario(
+      id: 'u-1',
+      nombre: 'Fernanda Morales Gil',
+      correo: 'usuario@safelink.mx',
+      telefono: '7771234567',
+      rol: rol,
+      creadoEn: ahoraPrueba,
+      bloqueadoHasta: bloqueadoHasta,
+      dobleClicVolumenActivo: dobleClicVolumenActivo,
+    );
+
+Alerta alertaPrueba({EstadoAlerta estado = EstadoAlerta.buscando, PuntoGeo? ubicacion = puntoAlerta}) => Alerta(
+      id: 'alt-1',
+      usuarioId: 'u-1',
+      nombreUsuario: 'Fernanda Morales Gil',
+      estado: estado,
+      metodo: MetodoDisparo.toque,
+      disparadaEn: ahoraPrueba,
+      ubicacion: ubicacion,
+    );
+
+Guardia guardiaPrueba({PuntoGeo? ubicacion, int radio = 4000}) => Guardia(
+      usuario: usuarioPrueba(rol: RolUsuario.guardia),
+      perfil: PerfilGuardia(
+        usuarioId: 'u-1',
+        inicioTurno: '08:00',
+        finTurno: '16:00',
+        centroCobertura: puntoAlerta,
+        radioCoberturaMetros: radio,
+        ultimaUbicacion: ubicacion,
+      ),
+    );
+
+class AuthEspia implements AuthRepository {
+  AuthEspia({this.usuarioActual, this.falla, this.conDobleClicVolumen = false});
+
+  @override
+  Usuario? usuarioActual;
+  ErrorDominio? falla;
+
+  /// U-05: con qué preferencia de atajo entra quien inicia sesión.
+  final bool conDobleClicVolumen;
+  int llamadasLogin = 0;
+
+  @override
+  Future<Usuario> iniciarSesion({required String correo, required String contrasena}) async {
+    llamadasLogin++;
+    if (falla != null) throw falla!;
+    return usuarioActual = usuarioPrueba(dobleClicVolumenActivo: conDobleClicVolumen);
+  }
+
+  @override
+  Future<Usuario> registrar({required String nombre, required String correo, required String telefono, required String contrasena}) async =>
+      usuarioActual = usuarioPrueba();
+
+  @override
+  Future<void> cerrarSesion() async => usuarioActual = null;
+
+  @override
+  Future<Usuario> refrescarSesion() async => usuarioActual!;
+
+  @override
+  Future<Usuario?> restaurarSesion(String usuarioId) async => usuarioActual = usuarioPrueba();
+
+  @override
+  Future<Usuario> actualizarDobleClicVolumen({required bool activa}) async =>
+      usuarioActual = usuarioActual!.copyWith(dobleClicVolumenActivo: activa);
+}
+
+/// Lo que viajó en una llamada a `crearAlerta` (U-06: evidencia completa).
+typedef AlertaCreada = ({
+  MetodoDisparo metodo,
+  DateTime disparadaEn,
+  PuntoGeo? ubicacion,
+  int? rumbo,
+  String? rutaFoto,
+});
+
+class AlertaUsuarioEspia implements AlertaUsuarioRepository {
+  final creadas = <MetodoDisparo>[];
+
+  /// U-06: la evidencia con la que se registró cada alerta.
+  final evidencias = <AlertaCreada>[];
+
+  /// U-07: posiciones enviadas mientras la alerta estaba activa.
+  final ubicacionesEnviadas = <PuntoGeo>[];
+
+  @override
+  Future<Alerta> crearAlerta({required MetodoDisparo metodo, required DateTime disparadaEn, PuntoGeo? ubicacion, int? rumbo, String? rutaFoto}) async {
+    creadas.add(metodo);
+    evidencias.add((metodo: metodo, disparadaEn: disparadaEn, ubicacion: ubicacion, rumbo: rumbo, rutaFoto: rutaFoto));
+    return alertaPrueba();
+  }
+
+  @override
+  Stream<Alerta?> escucharAlertaActiva() => Stream.value(null);
+
+  @override
+  Future<void> enviarUbicacion(String alertaId, PuntoGeo ubicacion) async => ubicacionesEnviadas.add(ubicacion);
+
+  @override
+  Future<Alerta> confirmarAtencion(String alertaId) async => alertaPrueba(estado: EstadoAlerta.cerrada);
+
+  @override
+  Future<List<Alerta>> obtenerHistorial() async => [];
+}
+
+class AlertaGuardiaEspia implements AlertaGuardiaRepository {
+  AlertaGuardiaEspia({required this.alerta, required this.guardia, this.fallaAceptar});
+
+  Alerta alerta;
+  Guardia guardia;
+  ErrorDominio? fallaAceptar;
+  final aceptadas = <String>[];
+  final llegadas = <String>[];
+  final ubicaciones = <PuntoGeo>[];
+
+  @override
+  Future<Guardia> obtenerMiPerfil() async => guardia;
+
+  @override
+  Stream<List<AlertaPriorizada>> escucharAlertasDisponibles() => Stream.value(const []);
+
+  @override
+  Future<Alerta> obtenerAlerta(String alertaId) async => alerta;
+
+  @override
+  Stream<Alerta> escucharAlerta(String alertaId) => Stream.value(alerta);
+
+  @override
+  Future<Alerta> aceptarAlerta(String alertaId) async {
+    aceptadas.add(alertaId);
+    if (fallaAceptar != null) throw fallaAceptar!;
+    return alerta = alerta.copyWith(estado: EstadoAlerta.enAtencion);
+  }
+
+  @override
+  Future<void> ignorarAlerta(String alertaId) async {}
+
+  @override
+  Future<void> actualizarMiUbicacion(PuntoGeo ubicacion) async => ubicaciones.add(ubicacion);
+
+  @override
+  Future<Alerta> marcarLlegada(String alertaId) async {
+    llegadas.add(alertaId);
+    return alerta.copyWith(estado: EstadoAlerta.guardiaEnLugar);
+  }
+
+  @override
+  Future<List<Alerta>> obtenerMiHistorial() async => [];
+
+  @override
+  Future<MetricasGuardia> obtenerMisMetricas() async => MetricasGuardia.vacias;
+}
+
+typedef CoberturaGuardada = ({String id, String inicio, String fin, PuntoGeo centro, int radio, String zona});
+typedef LlamadaMetricasGuardia = ({String id, DateTime? desde, DateTime? hasta});
+typedef LlamadaMetricas = ({DateTime? desde, DateTime? hasta});
+typedef LlamadaResolucion = ({String id, Resolucion resolucion, String nota});
+typedef GuardiaCreada = ({String nombre, String correo, String telefono, String contrasena});
+
+class AdminEspia implements AdminRepository {
+  AdminEspia({
+    required this.guardia,
+    this.metricasGuardia = MetricasGuardia.vacias,
+    this.metricasGenerales = MetricasGenerales.vacias,
+    this.falla,
+    this.fallaResolver,
+    this.usuarios = const [],
+    this.historial = const [],
+  });
+
+  Guardia guardia;
+  final coberturas = <CoberturaGuardada>[];
+  final llamadasMetricasGuardia = <LlamadaMetricasGuardia>[];
+  final llamadasMetricas = <LlamadaMetricas>[];
+  final resoluciones = <LlamadaResolucion>[];
+  final creadas = <GuardiaCreada>[];
+  final desbloqueados = <String>[];
+  MetricasGuardia metricasGuardia;
+  MetricasGenerales metricasGenerales;
+  ErrorDominio? falla;
+  ErrorDominio? fallaResolver;
+  List<Usuario> usuarios;
+  List<Alerta> historial;
+
+  @override
+  Future<Guardia> obtenerGuardia(String guardiaId) async => guardia;
+
+  @override
+  Future<Guardia> actualizarCobertura(
+    String guardiaId, {
+    required String inicioTurno,
+    required String finTurno,
+    required PuntoGeo centro,
+    required int radioMetros,
+    required String zona,
+  }) async {
+    coberturas.add((id: guardiaId, inicio: inicioTurno, fin: finTurno, centro: centro, radio: radioMetros, zona: zona));
+    return guardia;
+  }
+
+  @override
+  Future<List<Guardia>> obtenerGuardias({String busqueda = ''}) async {
+    if (falla != null) throw falla!;
+    return [guardia];
+  }
+
+  @override
+  Future<Guardia> crearGuardia({required String nombre, required String correo, required String telefono, required String contrasena}) async {
+    creadas.add((nombre: nombre, correo: correo, telefono: telefono, contrasena: contrasena));
+    return guardia;
+  }
+
+  @override
+  Future<Guardia> actualizarGuardia(String guardiaId, {String? nombre, String? correo, String? telefono}) async => guardia;
+
+  @override
+  Future<void> darDeBajaGuardia(String guardiaId) async {}
+
+  @override
+  Stream<List<Alerta>> escucharEscaladas() => falla == null ? Stream.value(const []) : Stream.error(falla!);
+
+  @override
+  Future<Alerta> resolverAlerta(String alertaId, Resolucion resolucion, {required String nota}) async {
+    if (fallaResolver != null) throw fallaResolver!;
+    resoluciones.add((id: alertaId, resolucion: resolucion, nota: nota));
+    return alertaPrueba(estado: EstadoAlerta.resueltaPorAdmin);
+  }
+
+  @override
+  Future<List<Alerta>> obtenerHistorial(FiltroHistorial filtro) async {
+    if (falla != null) throw falla!;
+    return historial;
+  }
+
+  @override
+  Future<MetricasGenerales> obtenerMetricas({DateTime? desde, DateTime? hasta}) async {
+    llamadasMetricas.add((desde: desde, hasta: hasta));
+    if (falla != null) throw falla!;
+    return metricasGenerales;
+  }
+
+  @override
+  Future<MetricasGuardia> obtenerMetricasGuardia(String guardiaId, {DateTime? desde, DateTime? hasta}) async {
+    llamadasMetricasGuardia.add((id: guardiaId, desde: desde, hasta: hasta));
+    if (falla != null) throw falla!;
+    return metricasGuardia;
+  }
+
+  @override
+  Future<List<Usuario>> obtenerUsuarios() async => usuarios;
+
+  @override
+  Future<List<Usuario>> obtenerUsuariosBloqueados() async => [];
+
+  @override
+  Future<void> desbloquearUsuario(String usuarioId) async => desbloqueados.add(usuarioId);
+}

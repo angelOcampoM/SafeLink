@@ -1,0 +1,14 @@
+node_modules
+dist
+coverage
+.env
+.env.*
+!.env.example
+*.log
+src/generated
+# Fotos de evidencia guardadas en local (D2): datos personales, nunca al repo.
+/storage
+# Credenciales de cuenta de servicio (FCM, D43): viven fuera del repo; por si se copian aquí.
+*service-account*.json
+*-firebase-adminsdk-*.json
+firebase-*.json
