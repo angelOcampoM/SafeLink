@@ -48,6 +48,7 @@ import 'dominio/configuracion.dart';
 import 'presentacion/comun/rutas/app_router.dart';
 import 'presentacion/comun/rutas/fabrica_view_models.dart';
 import 'presentacion/comun/tema/theme.dart';
+import 'presentacion/guardia/seguimiento_guardia.dart';
 import 'presentacion/sesion/sesion_view_model.dart';
 import 'presentacion/usuario/captura_evidencia.dart';
 import 'presentacion/usuario/disparo_rapido.dart';
@@ -138,7 +139,22 @@ class Dependencias {
     sesion.addListener(_sincronizarDisparoRapido);
     // U-07: la ubicación viaja mientras la alerta esté activa, sin depender
     // de qué pantalla tenga el usuario abierta.
-    seguimiento = SeguimientoUbicacion(alertas: alertasUsuario, ubicacion: this.ubicacion, sesion: sesion);
+    final intervaloUbicacion = Duration(seconds: config.segundosActualizacionUbicacion);
+    seguimiento = SeguimientoUbicacion(
+      alertas: alertasUsuario,
+      ubicacion: this.ubicacion,
+      sesion: sesion,
+      intervalo: intervaloUbicacion,
+    );
+    // CR-F02: con la API real el guardia manda su GPS; en la demo lo mueve "Simular acercamiento".
+    seguimientoGuardia = config.modoDemo
+        ? null
+        : SeguimientoGuardia(
+            alertas: alertasGuardia,
+            ubicacion: this.ubicacion,
+            sesion: sesion,
+            intervalo: intervaloUbicacion,
+          );
     fabrica = FabricaViewModels(
       sesion: sesion,
       alertasUsuario: alertasUsuario,
@@ -150,6 +166,7 @@ class Dependencias {
       ubicacion: this.ubicacion,
       brujula: this.brujula,
       centroPorDefecto: DatosSemilla.centroEmilianoZapata,
+      seguimientoGuardia: seguimientoGuardia,
       cuentasDemo: DatosSemilla.cuentasDemo,
       contrasenaDemo: DatosSemilla.contrasena,
     );
@@ -173,6 +190,8 @@ class Dependencias {
   }) {
     if (usarNube) {
       // Con URL de API: cliente HTTP real; sin ella: servicio simulado en memoria.
+      // CR-F01: con la API real no hay cuentas de prueba ni botones "Simular …".
+      if (urlApi.isNotEmpty) config = config.conModoDemo(false);
       final SafeLinkService? simulado = urlApi.isEmpty
           ? SafeLinkService(servidor: MemoriaBaseDatos(config: config, latencia: Duration.zero), tasaFallo: tasaFallo)
           : null;
@@ -235,6 +254,9 @@ class Dependencias {
 
   /// U-07: transmisión de la ubicación mientras dura la alerta.
   late final SeguimientoUbicacion seguimiento;
+
+  /// CR-F02: transmisión del GPS del guardia. Solo existe con la API real.
+  late final SeguimientoGuardia? seguimientoGuardia;
   final void Function() iniciarSimulaciones;
   late final SesionViewModel sesion;
   late final FabricaViewModels fabrica;
@@ -272,6 +294,7 @@ class _SafeLinkAppState extends State<SafeLinkApp> {
   void initState() {
     super.initState();
     widget.dependencias.seguimiento.iniciar(); // U-07
+    widget.dependencias.seguimientoGuardia?.iniciar(); // CR-F02
     if (widget.simular) widget.dependencias.iniciarSimulaciones();
   }
 

@@ -27,6 +27,7 @@ import '../../guardia/historial_guardia_view_model.dart';
 import '../../guardia/inicio_guardia_view_model.dart';
 import '../../guardia/listado_alertas_view_model.dart';
 import '../../guardia/navegacion_view_model.dart';
+import '../../guardia/seguimiento_guardia.dart';
 import '../../sesion/sesion_view_model.dart';
 import '../../usuario/configuracion_view_model.dart';
 import '../../usuario/disparo_rapido.dart';
@@ -46,6 +47,7 @@ class FabricaViewModels {
     required this.ubicacion,
     required this.brujula,
     required this.centroPorDefecto,
+    this.seguimientoGuardia,
     this.cuentasDemo = const [],
     this.contrasenaDemo = '',
     DateTime Function()? reloj,
@@ -69,6 +71,9 @@ class FabricaViewModels {
 
   /// Centro de cobertura para guardias que aún no tienen zona (A-03).
   final PuntoGeo centroPorDefecto;
+
+  /// CR-F03: GPS real del guardia; `null` en la demo (ahí lo mueve "Simular acercamiento").
+  final SeguimientoGuardia? seguimientoGuardia;
 
   /// Solo en demo: cuentas que el login ofrece rellenar.
   final List<(String, String)> cuentasDemo;
@@ -101,7 +106,7 @@ class FabricaViewModels {
   ListadoAlertasViewModel listadoAlertas() => ListadoAlertasViewModel(alertasGuardia, sesion, reloj: reloj);
   AlertaEntranteViewModel alertaEntrante(String id) => AlertaEntranteViewModel(alertasGuardia, id, reloj: reloj);
   DetalleAlertaViewModel detalleAlerta(String id) => DetalleAlertaViewModel(alertasGuardia, id, reloj: reloj);
-  NavegacionViewModel navegacion(String id) => NavegacionViewModel(alertasGuardia, id, config: config);
+  NavegacionViewModel navegacion(String id) => NavegacionViewModel(alertasGuardia, id, config: config, seguimiento: seguimientoGuardia);
   HistorialGuardiaViewModel historialGuardia() => HistorialGuardiaViewModel(alertasGuardia, reloj: reloj);
 
   // ── Administrador ──

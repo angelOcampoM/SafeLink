@@ -46,5 +46,26 @@ class Configuracion {
   /// Muestra cuentas de prueba y botones "Simular …" (datos ficticios).
   final bool modoDemo;
 
+  /// La misma configuración con otro [modoDemo]. Con la API real se apaga (CR-F01): los
+  /// botones "Simular …" mandarían datos ficticios al servidor.
+  /// OJO: si agregas un campo al constructor, cópialo también aquí o se perderá con la API real.
+  Configuracion conModoDemo(bool modoDemo) => Configuracion(
+        segundosCuentaRegresiva: segundosCuentaRegresiva,
+        radioGeocercaMetros: radioGeocercaMetros,
+        minutosAceptacion: minutosAceptacion,
+        minutosConfirmacion: minutosConfirmacion,
+        limiteFalsasAlarmas: limiteFalsasAlarmas,
+        diasBloqueo: diasBloqueo,
+        segundosActualizacionUbicacion: segundosActualizacionUbicacion,
+        metrosPorMinutoEspera: metrosPorMinutoEspera,
+        metrosPorMinutoGuardia: metrosPorMinutoGuardia,
+        radioCoberturaMinMetros: radioCoberturaMinMetros,
+        radioCoberturaMaxMetros: radioCoberturaMaxMetros,
+        segundosEscalamientoDemo: segundosEscalamientoDemo,
+        segundosNuevaAlertaMin: segundosNuevaAlertaMin,
+        segundosNuevaAlertaMax: segundosNuevaAlertaMax,
+        modoDemo: modoDemo,
+      );
+
   static const porDefecto = Configuracion();
 }

@@ -12,6 +12,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:safelink/datos/almacen_tokens.dart';
+import 'package:safelink/dominio/configuracion.dart';
 import 'package:safelink/dominio/errores.dart';
 import 'package:safelink/main.dart';
 
@@ -99,6 +100,28 @@ void main() {
     final deps = conApi();
     deps.iniciarSimulaciones(); // con API real es un no-op; si creara alertas, fallaría aquí
     expect(recibidas, isEmpty, reason: 'arrancar simulaciones no debe generar tráfico ni datos');
+  });
+
+  test('CR-F01 · sin modo demo: ni cuentas de prueba ni botones "Simular", y el GPS del guardia viaja', () {
+    final deps = conApi();
+    expect(deps.config.modoDemo, isFalse);
+    expect(deps.fabrica.login().cuentasDemo, isEmpty, reason: 'el login no ofrece cuentas de la semilla');
+    final navegacion = deps.fabrica.navegacion('a-1');
+    expect(navegacion.modoDemo, isFalse, reason: 'sin "Simular acercamiento"');
+    navegacion.dispose();
+    expect(deps.seguimientoGuardia, isNotNull, reason: 'CR-F02: la ubicación del guardia sale del GPS');
+    expect(
+      deps.config.radioGeocercaMetros,
+      Configuracion.porDefecto.radioGeocercaMetros,
+      reason: 'solo cambia el modo demo, lo demás queda igual',
+    );
+  });
+
+  test('CR-F01 · sin API_URL la demo sigue igual', () {
+    for (final deps in [Dependencias.crear(usarNube: true), Dependencias.crear(usarNube: false)]) {
+      expect(deps.config.modoDemo, isTrue);
+      expect(deps.seguimientoGuardia, isNull, reason: 'en la demo la ubicación la mueve "Simular acercamiento"');
+    }
   });
 
   test('sin API_URL sí se usa el simulado: el contraste de la prueba anterior', () async {

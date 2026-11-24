@@ -2,9 +2,11 @@
 // G-06 Ruta hacia el usuario · G-07 Registro de llegada · Esperando confirmación
 // Escucha la alerta asignada, guarda la ubicación del guardia y pregunta a
 // ReglaGeocerca si "Llegué" está permitido. No importa material.dart.
+// Con la API real la posición sale del GPS ([SeguimientoGuardia], CR-F03); en la
+// demo sale del perfil y la mueve "Simular acercamiento".
 //
-// TODO(G-06): leer el GPS real cada `segundosActualizacionUbicacion` y abrir
-// Google Maps con url_launcher (https://www.google.com/maps/dir/?api=1&destination=lat,lng).
+// TODO(G-06): abrir Google Maps con url_launcher (CR-F04,
+// https://www.google.com/maps/dir/?api=1&destination=lat,lng).
 
 import 'dart:async';
 
@@ -13,13 +15,19 @@ import '../../dominio/dominio.dart';
 import '../comun/estado_vista.dart';
 import '../comun/formato.dart';
 import '../comun/view_model.dart';
+import 'seguimiento_guardia.dart';
 
 class NavegacionViewModel extends ViewModel {
-  NavegacionViewModel(this._alertas, this.alertaId, {required this.config});
+  NavegacionViewModel(this._alertas, this.alertaId, {required this.config, SeguimientoGuardia? seguimiento})
+      : _seguimiento = seguimiento;
 
   final AlertaGuardiaRepository _alertas;
   final String alertaId;
   final Configuracion config;
+
+  /// GPS real del guardia; `null` en la demo.
+  final SeguimientoGuardia? _seguimiento;
+  StreamSubscription<PuntoGeo>? _subPosicion;
 
   EstadoVista<Alerta> estado = const Cargando();
   PuntoGeo? miUbicacion;
@@ -59,6 +67,18 @@ class NavegacionViewModel extends ViewModel {
       notifyListeners();
       return;
     }
+    if (desechado) return; // se salió de la pantalla mientras cargaba: nada que escuchar
+    // Con GPS real manda lo último que leyó el sensor; el perfil queda de respaldo
+    // mientras llega la primera lectura.
+    final gps = _seguimiento;
+    if (gps != null) {
+      miUbicacion = gps.ultimaPosicion ?? miUbicacion;
+      _subPosicion?.cancel();
+      _subPosicion = gps.posiciones.listen((p) {
+        miUbicacion = p;
+        notifyListeners();
+      });
+    }
     _sub?.cancel();
     _sub = _alertas.escucharAlerta(alertaId).listen(
       (a) {
@@ -74,6 +94,7 @@ class NavegacionViewModel extends ViewModel {
 
   /// Solo en demo: avanza el 60 % de la distancia restante.
   Future<void> simularAcercamiento() async {
+    if (!modoDemo) return; // con la API real mandaría una posición falsa al servidor
     final destino = alerta?.ubicacion;
     final yo = miUbicacion;
     if (destino == null || yo == null) return;
@@ -97,6 +118,17 @@ class NavegacionViewModel extends ViewModel {
     llegando = true;
     notifyListeners();
     try {
+      // El servidor valida la geocerca con la última posición que recibió, que puede ir
+      // hasta un intervalo atrás del GPS: se le manda la de ahora antes de pedir la llegada.
+      // Es un envío extra fuera del espaciado; el límite de la API admite 3 por ventana.
+      final yo = miUbicacion;
+      if (_seguimiento != null && yo != null) {
+        try {
+          await _alertas.actualizarMiUbicacion(yo);
+        } on Object {
+          // Si falla, la llegada se intenta igual con la última posición guardada.
+        }
+      }
       await _alertas.marcarLlegada(alertaId);
     } on FueraDeGeocercaError catch (e) {
       mensaje = '${e.mensaje}. Faltan ${Fmt.distance(e.metrosRestantes)}.';
@@ -113,6 +145,7 @@ class NavegacionViewModel extends ViewModel {
   @override
   void dispose() {
     _sub?.cancel();
+    _subPosicion?.cancel();
     super.dispose();
   }
 }

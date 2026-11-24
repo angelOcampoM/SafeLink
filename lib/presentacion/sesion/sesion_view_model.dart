@@ -122,9 +122,14 @@ class SesionViewModel extends ViewModel {
   }
 
   Future<void> cerrarSesion() async {
-    await _auth.cerrarSesion();
-    await _guardada.borrarUsuarioId();
-    permisosPendientes = false;
-    notifyListeners();
+    // Aunque el cierre en el servidor falle, la sesión local se cierra igual y se avisa:
+    // así se apagan el GPS del guardia y la transmisión de ubicación (CR-F02).
+    try {
+      await _auth.cerrarSesion();
+    } finally {
+      await _guardada.borrarUsuarioId();
+      permisosPendientes = false;
+      notifyListeners();
+    }
   }
 }

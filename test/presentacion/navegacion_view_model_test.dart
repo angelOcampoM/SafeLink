@@ -1,7 +1,11 @@
 // G-07 Registro de llegada — "Llegué" solo dentro de la geocerca.
 import 'package:flutter_test/flutter_test.dart';
+import 'package:safelink/datos/memoria_sesion_guardada.dart';
+import 'package:safelink/datos/sensores_simulados.dart';
 import 'package:safelink/dominio/dominio.dart';
 import 'package:safelink/presentacion/guardia/navegacion_view_model.dart';
+import 'package:safelink/presentacion/guardia/seguimiento_guardia.dart';
+import 'package:safelink/presentacion/sesion/sesion_view_model.dart';
 
 import 'espias.dart';
 
@@ -49,5 +53,94 @@ void main() {
     expect(repo.ubicaciones, hasLength(1));
     expect(vm.distancia, closeTo(antes * 0.4, 5));
     vm.dispose();
+  });
+
+  group('CR-F03 · con la API real la posición sale del GPS', () {
+    const configReal = Configuracion(radioGeocercaMetros: 50, modoDemo: false);
+    const afuera = PuntoGeo(18.8390, -99.1800); // ~111 m al sur de la alerta
+    late UbicacionSimulada gps;
+    late SeguimientoGuardia seguimiento;
+
+    SesionViewModel sesionGuardia() =>
+        SesionViewModel(AuthEspia(usuarioActual: usuarioPrueba(rol: RolUsuario.guardia)), MemoriaSesionGuardada());
+
+    Future<(NavegacionViewModel, AlertaGuardiaEspia)> crearReal({required PuntoGeo perfil}) async {
+      final repo = AlertaGuardiaEspia(
+        alerta: alertaPrueba(estado: EstadoAlerta.enAtencion),
+        guardia: guardiaPrueba(ubicacion: perfil),
+      );
+      gps = UbicacionSimulada(inicial: afuera, paso: 0.0008); // un paso = ~89 m al norte
+      seguimiento = SeguimientoGuardia(alertas: repo, ubicacion: gps, sesion: sesionGuardia())..iniciar();
+      await Future<void>.delayed(const Duration(milliseconds: 10)); // lectura inicial del GPS
+      final vm = NavegacionViewModel(repo, 'alt-1', config: configReal, seguimiento: seguimiento);
+      await vm.iniciar();
+      await Future<void>.delayed(Duration.zero);
+      return (vm, repo);
+    }
+
+    tearDown(() {
+      seguimiento.dispose();
+      gps.dispose();
+    });
+
+    test('manda el GPS sobre la última ubicación guardada en el servidor', () async {
+      final (vm, _) = await crearReal(perfil: cerca); // el servidor cree que ya está cerca
+
+      expect(vm.miUbicacion, afuera);
+      expect(vm.puedeMarcarLlegada, isFalse, reason: 'la geocerca usa la posición real, no la guardada');
+      vm.dispose();
+    });
+
+    test('al caminar hacia la alerta se habilita "Llegué"', () async {
+      final (vm, repo) = await crearReal(perfil: lejos);
+      expect(vm.puedeMarcarLlegada, isFalse);
+
+      gps.mover();
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      expect(vm.distancia, lessThan(50));
+      expect(vm.puedeMarcarLlegada, isTrue);
+      final enviadasAntes = repo.ubicaciones.length;
+      await vm.marcarLlegada();
+      expect(repo.llegadas, ['alt-1']);
+      expect(
+        repo.ubicaciones,
+        hasLength(enviadasAntes + 1),
+        reason: 'antes de la llegada se manda la posición de ahora: el servidor valida con esa',
+      );
+      expect(repo.ubicaciones.last, vm.miUbicacion);
+      vm.dispose();
+    });
+
+    test('si la pantalla se cierra mientras carga, no queda escuchando el GPS', () async {
+      final repo = AlertaGuardiaEspia(
+        alerta: alertaPrueba(estado: EstadoAlerta.enAtencion),
+        guardia: guardiaPrueba(ubicacion: lejos),
+      );
+      gps = UbicacionSimulada(inicial: afuera, paso: 0.0008);
+      seguimiento = SeguimientoGuardia(alertas: repo, ubicacion: gps, sesion: sesionGuardia())..iniciar();
+      final vm = NavegacionViewModel(repo, 'alt-1', config: configReal, seguimiento: seguimiento);
+
+      final carga = vm.iniciar();
+      vm.dispose(); // se salió antes de que respondiera el perfil
+      await carga;
+      final antes = vm.miUbicacion;
+      gps.mover();
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      expect(vm.miUbicacion, antes, reason: 'el ViewModel desechado ya no recibe posiciones');
+    });
+
+    test('"Simular acercamiento" no hace nada fuera del modo demo', () async {
+      final (vm, repo) = await crearReal(perfil: lejos);
+      final enviadasAntes = repo.ubicaciones.length;
+      final antes = vm.miUbicacion;
+
+      await vm.simularAcercamiento();
+
+      expect(vm.miUbicacion, antes);
+      expect(repo.ubicaciones, hasLength(enviadasAntes), reason: 'no manda una posición falsa al servidor');
+      vm.dispose();
+    });
   });
 }
