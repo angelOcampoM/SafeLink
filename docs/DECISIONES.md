@@ -735,6 +735,99 @@ cuatro fallos puestos, porque todos viven en la frontera con el sistema operativ
 
 ---
 
+## D54 · Con la API real no hay modo demo y el guardia usa su GPS
+
+**Contexto.** En la primera prueba en teléfono contra la API local (2026-11-24) todo lo del
+usuario y el admin ya era real, pero el guardia no: su posición salía de la última guardada en
+el servidor y solo cambiaba con "Simular acercamiento (demo)". Así se pasó la geocerca de
+llegada, y los toques seguidos de ese botón provocaron dos `429` en `PUT /guard/location`.
+Además, `Configuracion.modoDemo` valía `true` siempre, así que con la API real seguían
+apareciendo las cuentas de prueba y los botones "Simular …". Tareas CR-F01, CR-F02, CR-F03 y
+CR-F05 del plan de consumo real (DA-1).
+
+**Decisiones.**
+
+1. **El modo demo se apaga solo cuando hay `API_URL`** (`Dependencias.crear`), sin una bandera
+   aparte. Con la API real esos botones mandarían datos ficticios al servidor, así que no hay
+   caso en que convenga dejarlos. Sin `API_URL` (memoria o nube simulada) todo sigue igual.
+2. **La ubicación del guardia vive con la sesión** (`SeguimientoGuardia`), igual que la del
+   usuario (`SeguimientoUbicacion`): mientras haya un guardia en sesión se lee el GPS y se manda
+   a la API, aunque no tenga una alerta abierta, porque el servidor la usa para la distancia y la
+   prioridad del listado (G-03) y para el tiempo estimado que ve el usuario (U-08). Al cerrar
+   sesión se detiene. Solo existe con la API real.
+3. **Al entrar se manda la posición actual**, no solo las del flujo: el GPS real tiene
+   `distanceFilter` de 10 m y un guardia quieto nunca emitiría.
+4. **La navegación prefiere el GPS sobre lo guardado en el servidor**; lo guardado queda de
+   respaldo mientras llega la primera lectura. "Simular acercamiento" no hace nada fuera del
+   modo demo, aunque alguien lo llame.
+5. **Los envíos de ubicación van espaciados** (`EnvioEspaciado`): como mucho uno cada
+   `segundosActualizacionUbicacion`, un solo envío en vuelo, y de una ráfaga solo sale la
+   posición más reciente. Aplica al guardia y al usuario. Con intervalo cero no se espacia, para
+   que las pruebas existentes no dependan de tiempos. `segundosActualizacionUbicacion` (front) y
+   `LOCATION_UPDATE_SECONDS` (backend) **deben cambiar juntos**: el backend admite 3 envíos por
+   ventana, así que un front más rápido que eso vuelve a provocar `429` (CR-B04 lo vigilará).
+6. **Antes de "Llegué" se manda la posición de ese momento**, fuera del espaciado. El servidor
+   valida la geocerca con la última posición que recibió, que puede ir hasta un intervalo atrás
+   del GPS; sin esto, justo al entrar a la geocerca el botón se veía activo y la API respondía
+   `OUTSIDE_GEOFENCE`. Es como mucho un envío extra por ventana, dentro del límite.
+7. **Un solo pedido de permiso de ubicación a la vez** (`sensores_reales.dart`). Al entrar, el
+   guardia pide la posición y empieza a seguir al mismo tiempo; Geolocator rechaza un segundo
+   `requestPermission` mientras el primero está abierto, y el seguimiento moría sin avisar. Las
+   llamadas simultáneas ahora comparten la misma comprobación. Si el flujo del GPS termina
+   (permiso negado), se reintenta en el siguiente cambio de sesión.
+8. **Cerrar sesión apaga el GPS aunque el servidor falle**: `SesionViewModel.cerrarSesion` avisa
+   en un `finally`.
+
+**Pendiente de decidir (privacidad).** Hoy el guardia se rastrea **todo el tiempo que tenga la
+app abierta con sesión**, también fuera de turno o sin cobertura, y el servidor guarda su
+última posición y la hora. Es lo más simple y lo que necesita el listado, pero va contra la
+minimización de datos (D23, D47): quien vea la base sabría dónde está el guardia en su tiempo
+libre. La alternativa es mandar solo en turno o con una alerta en atención (y, como respaldo,
+que el backend ignore `PUT /guard/location` fuera de turno). Queda como tarea del plan de
+consumo real.
+
+**Lo que no se puede probar aquí.** Que el GPS real emita y que Android pida el permiso al
+guardia (que nunca pasa por la pantalla de permisos de U-01; `UbicacionReal` lo pide al primer
+uso) solo se verifica en un teléfono: ver la sección 6 del plan de consumo real.
+
+---
+
+## D55 · Ruta en Google Maps, tiempo estimado del guardia, reinicio de la demo y paridad de configuración
+
+**Contexto.** Tareas CR-F04, CR-B01 y CR-B04 del plan de consumo real, más un hueco de G-06 que
+el plan no listaba: la navegación del guardia mostraba la distancia restante pero no el tiempo
+estimado de llegada.
+
+**Decisiones.**
+
+1. **"Abrir en Google Maps" usa la URL universal** `https://www.google.com/maps/dir/?api=1&destination=<lat>,<lng>`,
+   sin origen: Maps usa el GPS del teléfono, que es más fresco que el último que tiene la app.
+   No requiere llave ni cuenta. Si el teléfono no tiene Maps, Android la abre en el navegador.
+   El destino es la ubicación más reciente de la alerta (el usuario puede moverse).
+2. **El lanzador va detrás de un contrato** (`AbridorEnlaces` en `lib/datos/`), igual que los
+   sensores (D52): real con `url_launcher` en el teléfono y simulado en pruebas, web y
+   escritorio. Si no se puede abrir, la pantalla avisa en español y sigue viva. `url_launcher` es
+   la única dependencia nueva (paquete oficial de Flutter); Android 11+ exige el bloque
+   `<queries>` para intents `https` en el manifest.
+3. **El tiempo estimado del guardia usa `ReglaEta`**, la misma regla y la misma velocidad
+   (`metrosPorMinutoGuardia` ↔ `GUARD_METERS_PER_MINUTE`) que el estimado que ve el usuario (U-08).
+   El servidor redondea el del usuario (D47); en la pantalla del guardia no hace falta, porque es
+   su propia posición.
+4. **`npm run demo:reset`** borra todas las alertas (el historial y los "ignorar" caen en
+   cascada) y conserva cuentas, perfiles, sesiones y tokens de dispositivo. Con `--center` mueve
+   la cobertura solo de los guardias **activos y de turno** (con la misma regla de turno que la
+   API) y conserva su radio salvo que se pase `--radius`, que se valida contra
+   `COVERAGE_RADIUS_MIN/MAX_METERS`. Igual que la semilla, se niega a correr si `NODE_ENV` no es
+   `development` ni `test` (D28), y valida los argumentos antes de tocar la base.
+5. **Prueba de paridad** (`backend/tests/contract/paridad-configuracion.test.ts`): compara los
+   valores por defecto de `Configuracion` (front) con los de `env.ts` (backend): geocerca,
+   tiempos de aceptación y confirmación, intervalo de ubicación, falsas alarmas, días de bloqueo,
+   velocidades y radios de cobertura. Lee Dart con expresiones regulares; si no encuentra un
+   campo, falla con su nombre en lugar de pasar. Solo compara los valores por defecto del
+   código: un `.env` local no la afecta.
+
+---
+
 **Decisiones de diseño aún abiertas**
 
 - **Ventana de gracia del refresh (D25):** **cerrada en BE-01 paso 5.** Se eligió aceptar el token ya rotado una vez más y emitir un sucesor nuevo de la misma familia; `REFRESH_GRACE_SECONDS` vale 5 por defecto.

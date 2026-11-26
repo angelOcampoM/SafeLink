@@ -39,6 +39,7 @@ Para levantar todo en contenedores: `docker compose up --build`. Para apagar: `d
 | `npm run db:deploy` | `prisma migrate deploy`: aplica migraciones pendientes (sin crear) |
 | `npm run db:seed` | Semilla idempotente; exige `NODE_ENV=development` o `test` definido de forma explícita (`.env.example` ya trae `NODE_ENV=development`) y se niega en cualquier otro caso, incluido no definido |
 | `npm run db:reset` | `prisma migrate reset --force`: BORRA la base de desarrollo y reaplica migraciones; luego corre `npm run db:seed`. Solo desarrollo; Prisma exige que lo ejecute una persona |
+| `npm run demo:reset` | Borra todas las alertas (con su historial y sus "ignorar") y conserva cuentas, perfiles y sesiones: nadie vuelve a iniciar sesión. Con `-- --center <lat>,<lng>` mueve la cobertura de los guardias **de turno** a ese punto (conserva su radio, o usa `--radius <m>` dentro de `COVERAGE_RADIUS_MIN/MAX_METERS`). Igual que la semilla, exige `NODE_ENV=development` o `test` (CR-B01) |
 | `npm run db:test:create` | Crea la base `safelink_test` (nombre tomado de `DATABASE_URL_TEST`) si no existe |
 | `npm run db:test:deploy` | Aplica las migraciones a la base de pruebas |
 | `npm run db:test:reset` | Borra y recrea la base de pruebas (sin semilla) |

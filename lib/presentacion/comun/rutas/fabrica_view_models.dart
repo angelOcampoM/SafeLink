@@ -4,6 +4,7 @@
 // decide si son de memoria o de la nube.
 // No hace: no pinta, no navega y no guarda estado propio.
 
+import '../../../datos/abridor_enlaces.dart';
 import '../../../datos/admin_repository.dart';
 import '../../../datos/alerta_guardia_repository.dart';
 import '../../../datos/alerta_usuario_repository.dart';
@@ -27,6 +28,7 @@ import '../../guardia/historial_guardia_view_model.dart';
 import '../../guardia/inicio_guardia_view_model.dart';
 import '../../guardia/listado_alertas_view_model.dart';
 import '../../guardia/navegacion_view_model.dart';
+import '../../guardia/seguimiento_guardia.dart';
 import '../../sesion/sesion_view_model.dart';
 import '../../usuario/configuracion_view_model.dart';
 import '../../usuario/disparo_rapido.dart';
@@ -46,10 +48,13 @@ class FabricaViewModels {
     required this.ubicacion,
     required this.brujula,
     required this.centroPorDefecto,
+    this.seguimientoGuardia,
+    AbridorEnlaces? enlaces,
     this.cuentasDemo = const [],
     this.contrasenaDemo = '',
     DateTime Function()? reloj,
-  }) : reloj = reloj ?? DateTime.now;
+  })  : reloj = reloj ?? DateTime.now,
+        enlaces = enlaces ?? AbridorEnlacesSimulado();
 
   final SesionViewModel sesion;
   final AlertaUsuarioRepository alertasUsuario;
@@ -69,6 +74,12 @@ class FabricaViewModels {
 
   /// Centro de cobertura para guardias que aún no tienen zona (A-03).
   final PuntoGeo centroPorDefecto;
+
+  /// CR-F03: GPS real del guardia; `null` en la demo (ahí lo mueve "Simular acercamiento").
+  final SeguimientoGuardia? seguimientoGuardia;
+
+  /// CR-F04: abre la ruta en Google Maps (url_launcher en el teléfono).
+  final AbridorEnlaces enlaces;
 
   /// Solo en demo: cuentas que el login ofrece rellenar.
   final List<(String, String)> cuentasDemo;
@@ -101,7 +112,8 @@ class FabricaViewModels {
   ListadoAlertasViewModel listadoAlertas() => ListadoAlertasViewModel(alertasGuardia, sesion, reloj: reloj);
   AlertaEntranteViewModel alertaEntrante(String id) => AlertaEntranteViewModel(alertasGuardia, id, reloj: reloj);
   DetalleAlertaViewModel detalleAlerta(String id) => DetalleAlertaViewModel(alertasGuardia, id, reloj: reloj);
-  NavegacionViewModel navegacion(String id) => NavegacionViewModel(alertasGuardia, id, config: config);
+  NavegacionViewModel navegacion(String id) =>
+      NavegacionViewModel(alertasGuardia, id, config: config, seguimiento: seguimientoGuardia, enlaces: enlaces);
   HistorialGuardiaViewModel historialGuardia() => HistorialGuardiaViewModel(alertasGuardia, reloj: reloj);
 
   // ── Administrador ──

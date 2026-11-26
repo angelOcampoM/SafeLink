@@ -1,8 +1,22 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+// Firma de release (FIRMA-01): los datos viven en android/key.properties, que nunca se versiona
+// (ver android/key.properties.example y docs/FIRMA_Y_EMPAQUETADO.md). El keystore vive fuera del repo.
+val keystorePropertiesFile = rootProject.file("key.properties")
+val hayFirmaRelease = keystorePropertiesFile.exists()
+val keystoreProperties = Properties().apply {
+    if (hayFirmaRelease) keystorePropertiesFile.inputStream().use { load(it) }
+}
+
+fun claveFirma(nombre: String): String =
+    keystoreProperties.getProperty(nombre)?.takeIf { it.isNotBlank() }
+        ?: throw GradleException("Falta \"$nombre\" en android/key.properties (ver android/key.properties.example).")
 
 android {
     namespace = "com.utez.safelink"
@@ -29,11 +43,30 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hayFirmaRelease) {
+            create("release") {
+                keyAlias = claveFirma("keyAlias")
+                keyPassword = claveFirma("keyPassword")
+                storeFile = file(claveFirma("storeFile"))
+                storePassword = claveFirma("storePassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Sin key.properties (p. ej. en la computadora de un compañero) se firma con la llave
+            // debug para que `flutter run --release` siga funcionando. Ese APK NO se entrega.
+            signingConfig = if (hayFirmaRelease) {
+                signingConfigs.getByName("release")
+            } else {
+                logger.warn(
+                    "ADVERTENCIA SafeLink: no existe android/key.properties; el release se firma con la " +
+                        "llave DEBUG y no sirve para entregar. Ver docs/FIRMA_Y_EMPAQUETADO.md.",
+                )
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }

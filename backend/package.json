@@ -21,6 +21,7 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed",
     "db:reset": "prisma migrate reset --force",
+    "demo:reset": "tsx --env-file-if-exists=.env scripts/demo-reset.ts",
     "db:test:create": "node scripts/db-test.mjs create",
     "db:test:reset": "node scripts/db-test.mjs reset",
     "db:test:deploy": "node scripts/db-test.mjs deploy",

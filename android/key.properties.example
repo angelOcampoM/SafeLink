@@ -1,0 +1,10 @@
+# Firma de release de SafeLink (FIRMA-01). ESTE ARCHIVO ES SOLO UN EJEMPLO.
+# Cópialo a android/key.properties (ignorado por git) y llénalo con tus datos reales.
+# Nunca subas key.properties ni el keystore al repositorio. Ver docs/FIRMA_Y_EMPAQUETADO.md.
+#
+# storeFile: ruta ABSOLUTA al keystore, FUERA del repo. En Windows usa diagonales normales (/)
+# o dobles (\\): en un .properties una sola "\" es un carácter de escape y rompe la ruta.
+storePassword=CAMBIA_ESTO
+keyPassword=CAMBIA_ESTO
+keyAlias=safelink
+storeFile=C:/Users/TU_USUARIO/.keystores/safelink-release.jks

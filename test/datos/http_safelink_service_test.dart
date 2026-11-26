@@ -429,11 +429,11 @@ void main() {
     });
   });
 
-  test('escuchar informa que el tiempo real llega después', () async {
-    final s = servicio((r) async => _json({'data': null}));
-    final e = await s.escuchar('alerts/active').first;
-    expect((e['error']! as Map)['code'], 'SERVICE_UNAVAILABLE');
-  });
+  // El canal en tiempo real ya no se prueba aquí. Esta prueba afirmaba que `escuchar()`
+  // devolvía SERVICE_UNAVAILABLE ("llega en una tarjeta posterior"), y dejó de ser cierto al
+  // implementarlo (D51). Además era inestable: con el cliente simulado competían dos caminos
+  // (fallo de red contra 401 y refresh) y ganaba uno u otro según el momento.
+  // Ahora el canal tiene sus propias pruebas contra un servidor real: test/datos/http_sse_test.dart.
 
   group('modo predeterminado', () {
     test('sin API_URL ni USAR_NUBE la app usa memoria', () {
@@ -451,6 +451,9 @@ void main() {
       expect(d.auth, isA<NubeAuthRepository>());
       d.iniciarSimulaciones(); // no hace nada y no falla
     });
+    // Ojo: `isA<NubeAuthRepository>()` se cumple TAMBIÉN con el servicio simulado, así que
+    // estas dos no distinguen mock de real. Que con API_URL no se use ningún dato simulado
+    // del front lo demuestra test/datos/sin_mocks_test.dart, con un servidor de verdad.
   });
 
   test('SafeLinkService simulado sigue cumpliendo el envoltorio', () async {

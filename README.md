@@ -99,8 +99,9 @@ docs/
   API_CONTRATO.md            las 38 rutas, sus cuerpos, sus errores y quién las implementó
   MODELO_DATOS.md            tablas, relaciones y restricciones
   PERMISOS.md                qué rol puede llamar a qué
-  DECISIONES.md              D1…D53: cada decisión de diseño y por qué se tomó
+  DECISIONES.md              D1…D54: cada decisión de diseño y por qué se tomó
   CONEXION_DISPOSITIVO.md    levantar el backend y probar en un teléfono físico
+  PLAN_CONSUMO_REAL.md       banco de tareas para que todo use la API real (sin simulados)
   CONTRATO_AUTENTICACION.md  BE-02: lo que el backend debe cumplir, sea cual sea
 ```
 

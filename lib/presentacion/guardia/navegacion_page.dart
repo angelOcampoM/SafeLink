@@ -70,13 +70,18 @@ class _NavegacionPageState extends State<NavegacionPage> {
                     children: [
                       MapaRutaGuardia(distancia: distancia),
                       AppSpacing.gapMd,
-                      TarjetaUsuarioDistancia(alerta: a, distancia: distancia, dentro: dentro),
+                      TarjetaUsuarioDistancia(
+                        alerta: a,
+                        distancia: distancia,
+                        dentro: dentro,
+                        segundosEstimados: vm.segundosEstimados,
+                      ),
                       AppSpacing.gapMd,
                       SlButton(
                         label: 'Abrir en Google Maps',
                         icon: Icons.map_outlined,
                         variant: SlButtonVariant.secondary,
-                        onPressed: () => context.showSnack('Pendiente (G-06): abrir Google Maps'),
+                        onPressed: vm.abrirEnGoogleMaps,
                       ),
                       if (vm.modoDemo) ...[
                         AppSpacing.gapSm,

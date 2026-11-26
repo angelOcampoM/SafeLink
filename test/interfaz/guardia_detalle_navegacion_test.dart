@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:safelink/datos/abridor_enlaces.dart';
 import 'package:safelink/datos/memoria_admin_repository.dart';
 import 'package:safelink/datos/memoria_alerta_guardia_repository.dart';
 import 'package:safelink/datos/memoria_alerta_usuario_repository.dart';
@@ -95,7 +96,23 @@ void main() {
     expect(find.text('En camino'), findsOneWidget);
     expect(find.byType(MapPlaceholder), findsOneWidget);
     expect(find.text('Abrir en Google Maps'), findsOneWidget);
+    expect(find.textContaining('llegada en ~'), findsOneWidget, reason: 'G-06: tiempo estimado de llegada');
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('G-06 (CR-F04): "Abrir en Google Maps" abre la ruta hacia la alerta', (tester) async {
+    final deps = await abrirComoGuardia(tester);
+    await ir(tester, AppRoutes.guardNavigation('alt-202'));
+
+    await tester.tap(find.text('Abrir en Google Maps'));
+    await bombear(tester);
+
+    final destino = db.alertas.firstWhere((a) => a.id == 'alt-202').ubicacion!;
+    final abiertos = (deps.enlaces as AbridorEnlacesSimulado).abiertos;
+    expect(abiertos, hasLength(1));
+    expect(abiertos.single.host, 'www.google.com');
+    expect(abiertos.single.queryParameters['destination'], '${destino.lat},${destino.lng}');
+    expect(find.textContaining('Pendiente'), findsNothing);
   });
 
   // ── G-07 · Registro de llegada ──────────────────────────────────────────

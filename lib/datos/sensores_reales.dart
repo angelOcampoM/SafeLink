@@ -120,7 +120,16 @@ class CamaraReal implements Camara {
 
 /// ¿El GPS está encendido y con permiso? Se comprueba antes de cada lectura porque la persona
 /// puede apagarlo o quitar el permiso con la app abierta.
-Future<bool> _servicioYPermisoListos() async {
+///
+/// Las llamadas simultáneas comparten una sola comprobación: Geolocator rechaza un segundo
+/// `requestPermission` mientras el primero sigue abierto, y eso pasa cuando se pide la posición
+/// y se empieza a seguir a la vez (el guardia al entrar, la evidencia con posición y rumbo).
+Future<bool>? _comprobacionEnCurso;
+
+Future<bool> _servicioYPermisoListos() =>
+    _comprobacionEnCurso ??= _comprobarServicioYPermiso().whenComplete(() => _comprobacionEnCurso = null);
+
+Future<bool> _comprobarServicioYPermiso() async {
   if (!await Geolocator.isLocationServiceEnabled()) return false;
   var permiso = await Geolocator.checkPermission();
   if (permiso == LocationPermission.denied) permiso = await Geolocator.requestPermission();

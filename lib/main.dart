@@ -14,6 +14,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
 
+import 'datos/abridor_enlaces.dart';
+import 'datos/abridor_enlaces_real.dart';
 import 'datos/admin_repository.dart';
 import 'datos/alerta_guardia_repository.dart';
 import 'datos/alerta_usuario_repository.dart';
@@ -48,6 +50,7 @@ import 'dominio/configuracion.dart';
 import 'presentacion/comun/rutas/app_router.dart';
 import 'presentacion/comun/rutas/fabrica_view_models.dart';
 import 'presentacion/comun/tema/theme.dart';
+import 'presentacion/guardia/seguimiento_guardia.dart';
 import 'presentacion/sesion/sesion_view_model.dart';
 import 'presentacion/usuario/captura_evidencia.dart';
 import 'presentacion/usuario/disparo_rapido.dart';
@@ -94,6 +97,8 @@ Future<void> main() async {
     brujula: enTelefono ? BrujulaReal() : null,
     // U-01 · U-02: los permisos se los pide al sistema al tocar "Continuar".
     permisos: enTelefono ? const PermisosSistemaReal() : null,
+    // G-06 (CR-F04): "Abrir en Google Maps" con url_launcher en el teléfono.
+    enlaces: enTelefono ? const AbridorEnlacesReal() : null,
   );
   // U-02: si quedó una sesión abierta, se entra directo sin pasar por el login.
   await dependencias.sesion.restaurar();
@@ -115,8 +120,10 @@ class Dependencias {
     ServicioDisparoRapido? servicioDisparoRapido,
     Vibrador? vibrador,
     PermisosSistema? permisos,
+    AbridorEnlaces? enlaces,
     void Function()? iniciarSimulaciones,
   })  : sesionGuardada = sesionGuardada ?? MemoriaSesionGuardada(),
+        enlaces = enlaces ?? AbridorEnlacesSimulado(),
         camara = camara ?? CamaraSimulada(),
         ubicacion = ubicacion ?? UbicacionSimulada(inicial: DatosSemilla.ubicacionDispositivoUsuario),
         brujula = brujula ?? BrujulaSimulada(),
@@ -138,7 +145,22 @@ class Dependencias {
     sesion.addListener(_sincronizarDisparoRapido);
     // U-07: la ubicación viaja mientras la alerta esté activa, sin depender
     // de qué pantalla tenga el usuario abierta.
-    seguimiento = SeguimientoUbicacion(alertas: alertasUsuario, ubicacion: this.ubicacion, sesion: sesion);
+    final intervaloUbicacion = Duration(seconds: config.segundosActualizacionUbicacion);
+    seguimiento = SeguimientoUbicacion(
+      alertas: alertasUsuario,
+      ubicacion: this.ubicacion,
+      sesion: sesion,
+      intervalo: intervaloUbicacion,
+    );
+    // CR-F02: con la API real el guardia manda su GPS; en la demo lo mueve "Simular acercamiento".
+    seguimientoGuardia = config.modoDemo
+        ? null
+        : SeguimientoGuardia(
+            alertas: alertasGuardia,
+            ubicacion: this.ubicacion,
+            sesion: sesion,
+            intervalo: intervaloUbicacion,
+          );
     fabrica = FabricaViewModels(
       sesion: sesion,
       alertasUsuario: alertasUsuario,
@@ -150,6 +172,8 @@ class Dependencias {
       ubicacion: this.ubicacion,
       brujula: this.brujula,
       centroPorDefecto: DatosSemilla.centroEmilianoZapata,
+      seguimientoGuardia: seguimientoGuardia,
+      enlaces: this.enlaces,
       cuentasDemo: DatosSemilla.cuentasDemo,
       contrasenaDemo: DatosSemilla.contrasena,
     );
@@ -170,9 +194,12 @@ class Dependencias {
     Ubicacion? ubicacion,
     Brujula? brujula,
     PermisosSistema? permisos,
+    AbridorEnlaces? enlaces,
   }) {
     if (usarNube) {
       // Con URL de API: cliente HTTP real; sin ella: servicio simulado en memoria.
+      // CR-F01: con la API real no hay cuentas de prueba ni botones "Simular …".
+      if (urlApi.isNotEmpty) config = config.conModoDemo(false);
       final SafeLinkService? simulado = urlApi.isEmpty
           ? SafeLinkService(servidor: MemoriaBaseDatos(config: config, latencia: Duration.zero), tasaFallo: tasaFallo)
           : null;
@@ -190,6 +217,7 @@ class Dependencias {
         ubicacion: ubicacion,
         brujula: brujula,
         permisos: permisos,
+        enlaces: enlaces,
         iniciarSimulaciones: simulado?.iniciarSimulaciones,
       );
     }
@@ -207,6 +235,7 @@ class Dependencias {
       ubicacion: ubicacion,
       brujula: brujula,
       permisos: permisos,
+      enlaces: enlaces,
       iniciarSimulaciones: db.iniciarSimulaciones,
     );
   }
@@ -227,6 +256,9 @@ class Dependencias {
   /// U-01 · U-02: los permisos del sistema. Reales en el teléfono, concedidos en la demo.
   final PermisosSistema permisos;
 
+  /// G-06 (CR-F04): abre la ruta en Google Maps. Real en el teléfono, simulado en el resto.
+  final AbridorEnlaces enlaces;
+
   /// U-05: servicio en segundo plano y vibración. En Android son los reales
   /// (`ServicioDisparoRapidoNativo` y `VibradorNativo`); en el resto, simulados.
   final ServicioDisparoRapido servicioDisparoRapido;
@@ -235,6 +267,9 @@ class Dependencias {
 
   /// U-07: transmisión de la ubicación mientras dura la alerta.
   late final SeguimientoUbicacion seguimiento;
+
+  /// CR-F02: transmisión del GPS del guardia. Solo existe con la API real.
+  late final SeguimientoGuardia? seguimientoGuardia;
   final void Function() iniciarSimulaciones;
   late final SesionViewModel sesion;
   late final FabricaViewModels fabrica;
@@ -272,6 +307,7 @@ class _SafeLinkAppState extends State<SafeLinkApp> {
   void initState() {
     super.initState();
     widget.dependencias.seguimiento.iniciar(); // U-07
+    widget.dependencias.seguimientoGuardia?.iniciar(); // CR-F02
     if (widget.simular) widget.dependencias.iniciarSimulaciones();
   }
 

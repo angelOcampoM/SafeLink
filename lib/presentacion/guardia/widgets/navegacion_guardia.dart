@@ -39,12 +39,21 @@ class MapaRutaGuardia extends StatelessWidget {
   }
 }
 
-/// Nombre y teléfono del usuario con la distancia restante.
+/// Nombre y teléfono del usuario con la distancia restante y el tiempo estimado (G-06).
 class TarjetaUsuarioDistancia extends StatelessWidget {
-  const TarjetaUsuarioDistancia({super.key, required this.alerta, required this.distancia, required this.dentro});
+  const TarjetaUsuarioDistancia({
+    super.key,
+    required this.alerta,
+    required this.distancia,
+    required this.dentro,
+    this.segundosEstimados,
+  });
   final Alerta alerta;
   final double distancia;
   final bool dentro;
+
+  /// `null` mientras no se sabe dónde está el guardia.
+  final int? segundosEstimados;
 
   @override
   Widget build(BuildContext context) {
@@ -64,7 +73,14 @@ class TarjetaUsuarioDistancia extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(Fmt.distance(distancia), style: context.text.displaySmall?.copyWith(color: dentro ? AppColors.success : AppColors.info)),
-              Text(dentro ? 'Dentro de la zona' : 'restantes', style: context.text.bodySmall),
+              Text(
+                dentro
+                    ? 'Dentro de la zona'
+                    : segundosEstimados == null
+                        ? 'restantes'
+                        : 'restantes · llegada en ~${Fmt.duration(segundosEstimados!)}',
+                style: context.text.bodySmall,
+              ),
             ],
           ),
         ],
