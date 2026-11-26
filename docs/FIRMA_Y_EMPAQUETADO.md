@@ -286,7 +286,7 @@ Resumen de los puntos que se acordaron para el empaquetado, qué quedó hecho en
 | Instalación y prueba | ✅ En emulador: APK release instalado, modo simulado y login con cuenta semilla. Falta un teléfono físico | Secciones 3 y 7 |
 | Modos de compilación | ✅ Dev (debug) y Producción (release firmado). Sin R8, ofuscación, flavors ni profile | Sección 4 |
 | Ambientes `config/dev.json` y `config/prod.json` | ✅ Probados: Dev contra el backend local en el emulador; Producción en modo simulado | Sección 4 |
-| Manual del proyecto integrador | ⏳ Pendiente | Ver abajo |
+| Manual del proyecto integrador | ◐ Escrito (`MANUAL_FIRMA_Y_EMPAQUETADO.md`); faltan 4 capturas | Ver abajo |
 | Entregable de integradora | ⏳ Pendiente hasta que publiquen la rúbrica | Ver abajo |
 
 ### Lo que cualquiera del equipo necesita saber
@@ -313,12 +313,12 @@ Resumen de los puntos que se acordaron para el empaquetado, qué quedó hecho en
 entrar con `usuario@safelink.mx` / `SafeLink1` (sección 3). Si ya tenía una versión debug,
 desinstalarla primero (sección 6).
 
-**Manual del proyecto integrador.** Esta guía ya cubre el proceso técnico: versión (1), firma
-(2), APK y AAB (3), ambientes (4) y problemas frecuentes (5 y 6). Para el manual faltaría,
-según lo que pida la rúbrica: capturas de cada paso (Android Studio, `keytool`, resultado de
-`apksigner`), una explicación breve de por qué se firma una app y la evidencia de la prueba en
-el teléfono. **Nunca** incluir en capturas la contraseña del keystore ni el contenido de
-`key.properties`.
+**Manual del proyecto integrador.** Escrito en
+[`MANUAL_FIRMA_Y_EMPAQUETADO.md`](MANUAL_FIRMA_Y_EMPAQUETADO.md): explica por qué se firma una
+app, recorre los puntos del pizarrón y referencia esta guía para el detalle técnico, sin
+duplicarla. Le faltan **cuatro capturas**, marcadas con 📷 en el propio documento; la primera
+(salida de `apksigner` con la huella del proyecto) solo puede hacerla quien tiene el keystore.
+**Nunca** incluir en capturas la contraseña del keystore ni el contenido de `key.properties`.
 
 **Entregable de integradora.** Cuando publiquen la rúbrica, revisar si pide algo que hoy quedó
 fuera: R8 u ofuscación, *flavors*, backend con HTTPS o publicación en Google Play. Cada uno es
