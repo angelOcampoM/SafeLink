@@ -281,12 +281,12 @@ Resumen de los puntos que se acordaron para el empaquetado, qué quedó hecho en
 | Versionamiento | ✅ Hecho: `1.0.0+1` | Sección 1 |
 | Keystore y firma | ✅ Hecho: el release se firma con la llave del proyecto, no con la debug | Sección 2 |
 | APK y AAB | ✅ Hecho: los dos compilan y están firmados con la misma llave | Sección 3 |
-| Resguardo de credenciales | ◐ Parcial: `key.properties` ignorado y keystore respaldado fuera del repo. El token de sesión en almacenamiento seguro queda fuera | Ver abajo |
+| Resguardo de credenciales | ✅ Hecho: `key.properties` ignorado, keystore fuera del repo y el token de sesión ya va al almacenamiento seguro del sistema (FIRMA-02) | Sección 9 |
 | HTTPS para el backend | ✖ Descartado: no se despliega el backend; el release corre en modo simulado | Sección 4 |
 | Instalación y prueba | ✅ En emulador: APK release instalado, modo simulado y login con cuenta semilla. Falta un teléfono físico | Secciones 3 y 7 |
 | Modos de compilación | ✅ Dev (debug) y Producción (release firmado). Sin R8, ofuscación, flavors ni profile | Sección 4 |
 | Ambientes `config/dev.json` y `config/prod.json` | ✅ Probados: Dev contra el backend local en el emulador; Producción en modo simulado | Sección 4 |
-| Manual del proyecto integrador | ⏳ Pendiente | Ver abajo |
+| Manual del proyecto integrador | ◐ Escrito (`MANUAL_FIRMA_Y_EMPAQUETADO.md`); faltan 4 capturas | Ver abajo |
 | Entregable de integradora | ⏳ Pendiente hasta que publiquen la rúbrica | Ver abajo |
 
 ### Lo que cualquiera del equipo necesita saber
@@ -308,24 +308,17 @@ Resumen de los puntos que se acordaron para el empaquetado, qué quedó hecho en
 
 ### Cómo avanzar en los pendientes
 
-**Resguardo de credenciales (lo que queda fuera).** Hoy los tokens de sesión se guardan con
-`shared_preferences` (`lib/datos/almacen_tokens.dart`, `DispositivoAlmacenTokens`), que en
-Android es un archivo privado de la app, no cifrado. Pasarlos a almacenamiento seguro
-(por ejemplo, `flutter_secure_storage`, que usa el Keystore de Android) sería una tarea aparte:
-toca `lib/` y sus pruebas, agrega una dependencia y debe confirmarse con el equipo. Solo importa
-si se usa la API real; en el release en modo simulado no hay tokens del servidor.
-
 **Instalación en teléfono físico.** Con depuración USB activada:
 `adb devices` → `adb install -r build\app\outputs\flutter-apk\app-release.apk` → abrir la app y
 entrar con `usuario@safelink.mx` / `SafeLink1` (sección 3). Si ya tenía una versión debug,
 desinstalarla primero (sección 6).
 
-**Manual del proyecto integrador.** Esta guía ya cubre el proceso técnico: versión (1), firma
-(2), APK y AAB (3), ambientes (4) y problemas frecuentes (5 y 6). Para el manual faltaría,
-según lo que pida la rúbrica: capturas de cada paso (Android Studio, `keytool`, resultado de
-`apksigner`), una explicación breve de por qué se firma una app y la evidencia de la prueba en
-el teléfono. **Nunca** incluir en capturas la contraseña del keystore ni el contenido de
-`key.properties`.
+**Manual del proyecto integrador.** Escrito en
+[`MANUAL_FIRMA_Y_EMPAQUETADO.md`](MANUAL_FIRMA_Y_EMPAQUETADO.md): explica por qué se firma una
+app, recorre los puntos del pizarrón y referencia esta guía para el detalle técnico, sin
+duplicarla. Le faltan **cuatro capturas**, marcadas con 📷 en el propio documento; la primera
+(salida de `apksigner` con la huella del proyecto) solo puede hacerla quien tiene el keystore.
+**Nunca** incluir en capturas la contraseña del keystore ni el contenido de `key.properties`.
 
 **Entregable de integradora.** Cuando publiquen la rúbrica, revisar si pide algo que hoy quedó
 fuera: R8 u ofuscación, *flavors*, backend con HTTPS o publicación en Google Play. Cada uno es
@@ -336,3 +329,43 @@ una tarea nueva:
   (sección 4); el modo demo se apaga solo.
 - *Google Play:* se sube el AAB, no el APK; Play pide una cuenta de desarrollador (cuenta externa,
   se decide en equipo).
+
+---
+
+## 9. Resguardo del token de sesión (FIRMA-02)
+
+Hecho sobre lo que dejó planteado FIRMA-01.
+
+**El problema.** El refresh token es la llave de la sesión: con él se piden access tokens
+nuevos cuantas veces haga falta. Se guardaba con `shared_preferences`, que en Android es un
+XML sin cifrar dentro del sandbox de la app. Basta un teléfono con root, o una copia de
+seguridad, para leerlo.
+
+**Qué cambió.** `DispositivoAlmacenTokens` (`lib/datos/almacen_tokens.dart`) usa ahora
+`flutter_secure_storage`, que en Android guarda el valor cifrado con AES-GCM usando una llave
+del **Keystore**, que no sale del hardware. En iOS sería el Keychain. No hubo que configurar
+nada: son las opciones por defecto de la versión 11.
+
+**Tres decisiones que conviene conocer.**
+
+1. **Se migra lo que ya estaba guardado.** Quien tenga la sesión abierta con una versión
+   anterior tiene el token en texto plano. Al leerlo por primera vez se mueve al
+   almacenamiento seguro y **se borra el original**. Si no se hiciera, la persona tendría que
+   iniciar sesión otra vez al actualizar y —peor— la copia sin cifrar seguiría en el teléfono.
+
+2. **Si el almacenamiento seguro falla, NO se cae a texto plano.** Hay dispositivos con el
+   Keystore roto por una actualización del sistema. En ese caso se pierde la persistencia de
+   la sesión y hay que volver a iniciarla. Es lo correcto: la alternativa sería dejar la llave
+   sin cifrar, que es justo lo que se vino a arreglar.
+
+3. **Aun fallando, la copia en claro se borra.** Esto no estaba en la primera versión del
+   código y lo encontró una prueba: si el Keystore fallaba, el código salía antes de limpiar y
+   el token de la versión anterior se quedaba ahí para siempre.
+
+**Pruebas.** `test/datos/almacen_tokens_seguro_test.dart`, 11 casos: que no se toque
+`shared_preferences`, la migración completa, que solo migre una vez, y los cuatro caminos con
+el Keystore roto.
+
+**Lo que sigue fuera.** El access token vive en memoria a propósito (dura 15 minutos y no se
+persiste). Y esto solo importa cuando se usa la API real: en el release en modo simulado no
+hay tokens del servidor.

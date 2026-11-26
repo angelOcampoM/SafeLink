@@ -28,6 +28,7 @@ dependencies:
   camera: ^0.12.1
   # G-06 (CR-F04): abrir la ruta en Google Maps. Paquete oficial de Flutter para enlaces.
   url_launcher: ^6.3.3
+  flutter_secure_storage: ^11.2.0
 
 dev_dependencies:
   flutter_test:
