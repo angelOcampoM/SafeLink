@@ -2,7 +2,11 @@
 
 Fecha del diagnóstico: 2026-11-24. Rama base: `develop` (`2d46f5b`).
 
-Objetivo: que con `--dart-define=API_URL=...` **ninguna pantalla muestre ni produzca datos simulados**. Este documento es un **banco de tareas**: cada tarea es pequeña, se puede tomar por separado, tiene sus archivos, su criterio de aceptación y sus pruebas, y equivale a **un commit**. Nada de lo que aquí se describe está implementado todavía.
+Objetivo: que con `--dart-define=API_URL=...` **ninguna pantalla muestre ni produzca datos simulados**. Este documento es un **banco de tareas**: cada tarea es pequeña, se puede tomar por separado, tiene sus archivos, su criterio de aceptación y sus pruebas, y equivale a **un commit**.
+
+> **Avance (2026-11-26).** Hechas: CR-F01, CR-F02, CR-F03 y CR-F05 (D54); CR-F04, CR-B01 y CR-B04, más el tiempo estimado de llegada en la navegación del guardia (G-06, D55); CR-D01. Pendientes: la verificación en el teléfono (sección 6), CR-D02, y las que dependen de una decisión (CR-B02, CR-F06, CR-F07, CR-B03, CR-F08). También sigue abierta la privacidad de la ubicación del guardia fuera de turno (D54).
+>
+> **Pendientes para cerrar el rol del guardia:** verificación en el teléfono (sección 6) · CR-D02 (casillas de G-01…G-07) · DA-5 / CR-B02 (turno de 24 h en la semilla) · DA-2 / CR-F06 (mapa real en G-04 y G-06; hoy es un dibujo) · DA-3 / CR-F07 + CR-B03 (push de G-02; hoy solo con la app abierta) · privacidad de la ubicación fuera de turno (D54).
 
 ---
 

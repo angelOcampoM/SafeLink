@@ -86,5 +86,11 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <!-- G-06 (CR-F04): url_launcher necesita ver qué app abre enlaces https (Google Maps
+             o el navegador) para "Abrir en Google Maps". Android 11+ lo exige. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
+        </intent>
     </queries>
 </manifest>

@@ -792,6 +792,42 @@ uso) solo se verifica en un teléfono: ver la sección 6 del plan de consumo rea
 
 ---
 
+## D55 · Ruta en Google Maps, tiempo estimado del guardia, reinicio de la demo y paridad de configuración
+
+**Contexto.** Tareas CR-F04, CR-B01 y CR-B04 del plan de consumo real, más un hueco de G-06 que
+el plan no listaba: la navegación del guardia mostraba la distancia restante pero no el tiempo
+estimado de llegada.
+
+**Decisiones.**
+
+1. **"Abrir en Google Maps" usa la URL universal** `https://www.google.com/maps/dir/?api=1&destination=<lat>,<lng>`,
+   sin origen: Maps usa el GPS del teléfono, que es más fresco que el último que tiene la app.
+   No requiere llave ni cuenta. Si el teléfono no tiene Maps, Android la abre en el navegador.
+   El destino es la ubicación más reciente de la alerta (el usuario puede moverse).
+2. **El lanzador va detrás de un contrato** (`AbridorEnlaces` en `lib/datos/`), igual que los
+   sensores (D52): real con `url_launcher` en el teléfono y simulado en pruebas, web y
+   escritorio. Si no se puede abrir, la pantalla avisa en español y sigue viva. `url_launcher` es
+   la única dependencia nueva (paquete oficial de Flutter); Android 11+ exige el bloque
+   `<queries>` para intents `https` en el manifest.
+3. **El tiempo estimado del guardia usa `ReglaEta`**, la misma regla y la misma velocidad
+   (`metrosPorMinutoGuardia` ↔ `GUARD_METERS_PER_MINUTE`) que el estimado que ve el usuario (U-08).
+   El servidor redondea el del usuario (D47); en la pantalla del guardia no hace falta, porque es
+   su propia posición.
+4. **`npm run demo:reset`** borra todas las alertas (el historial y los "ignorar" caen en
+   cascada) y conserva cuentas, perfiles, sesiones y tokens de dispositivo. Con `--center` mueve
+   la cobertura solo de los guardias **activos y de turno** (con la misma regla de turno que la
+   API) y conserva su radio salvo que se pase `--radius`, que se valida contra
+   `COVERAGE_RADIUS_MIN/MAX_METERS`. Igual que la semilla, se niega a correr si `NODE_ENV` no es
+   `development` ni `test` (D28), y valida los argumentos antes de tocar la base.
+5. **Prueba de paridad** (`backend/tests/contract/paridad-configuracion.test.ts`): compara los
+   valores por defecto de `Configuracion` (front) con los de `env.ts` (backend): geocerca,
+   tiempos de aceptación y confirmación, intervalo de ubicación, falsas alarmas, días de bloqueo,
+   velocidades y radios de cobertura. Lee Dart con expresiones regulares; si no encuentra un
+   campo, falla con su nombre en lugar de pasar. Solo compara los valores por defecto del
+   código: un `.env` local no la afecta.
+
+---
+
 **Decisiones de diseño aún abiertas**
 
 - **Ventana de gracia del refresh (D25):** **cerrada en BE-01 paso 5.** Se eligió aceptar el token ya rotado una vez más y emitir un sucesor nuevo de la misma familia; `REFRESH_GRACE_SECONDS` vale 5 por defecto.

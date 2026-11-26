@@ -4,12 +4,11 @@
 // ReglaGeocerca si "Llegué" está permitido. No importa material.dart.
 // Con la API real la posición sale del GPS ([SeguimientoGuardia], CR-F03); en la
 // demo sale del perfil y la mueve "Simular acercamiento".
-//
-// TODO(G-06): abrir Google Maps con url_launcher (CR-F04,
-// https://www.google.com/maps/dir/?api=1&destination=lat,lng).
+// "Abrir en Google Maps" (CR-F04) pasa por [AbridorEnlaces]; aquí solo se arma la dirección.
 
 import 'dart:async';
 
+import '../../datos/abridor_enlaces.dart';
 import '../../datos/alerta_guardia_repository.dart';
 import '../../dominio/dominio.dart';
 import '../comun/estado_vista.dart';
@@ -18,8 +17,14 @@ import '../comun/view_model.dart';
 import 'seguimiento_guardia.dart';
 
 class NavegacionViewModel extends ViewModel {
-  NavegacionViewModel(this._alertas, this.alertaId, {required this.config, SeguimientoGuardia? seguimiento})
-      : _seguimiento = seguimiento;
+  NavegacionViewModel(
+    this._alertas,
+    this.alertaId, {
+    required this.config,
+    SeguimientoGuardia? seguimiento,
+    AbridorEnlaces? enlaces,
+  })  : _seguimiento = seguimiento,
+        _enlaces = enlaces ?? AbridorEnlacesSimulado();
 
   final AlertaGuardiaRepository _alertas;
   final String alertaId;
@@ -28,6 +33,9 @@ class NavegacionViewModel extends ViewModel {
   /// GPS real del guardia; `null` en la demo.
   final SeguimientoGuardia? _seguimiento;
   StreamSubscription<PuntoGeo>? _subPosicion;
+
+  /// CR-F04: abre la ruta en Google Maps.
+  final AbridorEnlaces _enlaces;
 
   EstadoVista<Alerta> estado = const Cargando();
   PuntoGeo? miUbicacion;
@@ -53,6 +61,19 @@ class NavegacionViewModel extends ViewModel {
     final yo = miUbicacion;
     return a == null || yo == null ? double.infinity : ReglaGeocerca.metrosRestantes(yo, a, radio);
   }
+
+  /// G-06: tiempo estimado de llegada, con la misma regla que ve el usuario (U-08).
+  int? get segundosEstimados {
+    final d = distancia;
+    return d == null ? null : ReglaEta.segundos(distanciaMetros: d, metrosPorMinutoGuardia: config.metrosPorMinutoGuardia);
+  }
+
+  /// G-06: ruta en Google Maps hacia el punto de la alerta. Sin origen: Maps usa el GPS del
+  /// teléfono, que es más fresco que el último que tenemos aquí.
+  static Uri urlRuta(PuntoGeo destino) => Uri.https('www.google.com', '/maps/dir/', {
+        'api': '1',
+        'destination': '${destino.lat},${destino.lng}',
+      });
 
   /// G-07: solo con la alerta en atención y dentro de la geocerca.
   bool get puedeMarcarLlegada => alerta?.estado == EstadoAlerta.enAtencion && dentroDeGeocerca && !llegando;
@@ -106,6 +127,17 @@ class NavegacionViewModel extends ViewModel {
       mensaje = ViewModel.mensajeDe(e);
     }
     notifyListeners();
+  }
+
+  /// CR-F04: abre la ruta hacia la posición más reciente del usuario.
+  Future<void> abrirEnGoogleMaps() async {
+    final destino = alerta?.ubicacion;
+    if (destino == null) {
+      mensaje = 'Aún no hay ubicación del usuario para trazar la ruta';
+    } else if (!await _enlaces.abrir(urlRuta(destino))) {
+      mensaje = 'No se pudo abrir Google Maps. Revisa que esté instalado.';
+    }
+    if (mensaje != null) notifyListeners();
   }
 
   Future<void> marcarLlegada() async {

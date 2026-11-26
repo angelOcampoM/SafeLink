@@ -14,6 +14,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
 
+import 'datos/abridor_enlaces.dart';
+import 'datos/abridor_enlaces_real.dart';
 import 'datos/admin_repository.dart';
 import 'datos/alerta_guardia_repository.dart';
 import 'datos/alerta_usuario_repository.dart';
@@ -95,6 +97,8 @@ Future<void> main() async {
     brujula: enTelefono ? BrujulaReal() : null,
     // U-01 · U-02: los permisos se los pide al sistema al tocar "Continuar".
     permisos: enTelefono ? const PermisosSistemaReal() : null,
+    // G-06 (CR-F04): "Abrir en Google Maps" con url_launcher en el teléfono.
+    enlaces: enTelefono ? const AbridorEnlacesReal() : null,
   );
   // U-02: si quedó una sesión abierta, se entra directo sin pasar por el login.
   await dependencias.sesion.restaurar();
@@ -116,8 +120,10 @@ class Dependencias {
     ServicioDisparoRapido? servicioDisparoRapido,
     Vibrador? vibrador,
     PermisosSistema? permisos,
+    AbridorEnlaces? enlaces,
     void Function()? iniciarSimulaciones,
   })  : sesionGuardada = sesionGuardada ?? MemoriaSesionGuardada(),
+        enlaces = enlaces ?? AbridorEnlacesSimulado(),
         camara = camara ?? CamaraSimulada(),
         ubicacion = ubicacion ?? UbicacionSimulada(inicial: DatosSemilla.ubicacionDispositivoUsuario),
         brujula = brujula ?? BrujulaSimulada(),
@@ -167,6 +173,7 @@ class Dependencias {
       brujula: this.brujula,
       centroPorDefecto: DatosSemilla.centroEmilianoZapata,
       seguimientoGuardia: seguimientoGuardia,
+      enlaces: this.enlaces,
       cuentasDemo: DatosSemilla.cuentasDemo,
       contrasenaDemo: DatosSemilla.contrasena,
     );
@@ -187,6 +194,7 @@ class Dependencias {
     Ubicacion? ubicacion,
     Brujula? brujula,
     PermisosSistema? permisos,
+    AbridorEnlaces? enlaces,
   }) {
     if (usarNube) {
       // Con URL de API: cliente HTTP real; sin ella: servicio simulado en memoria.
@@ -209,6 +217,7 @@ class Dependencias {
         ubicacion: ubicacion,
         brujula: brujula,
         permisos: permisos,
+        enlaces: enlaces,
         iniciarSimulaciones: simulado?.iniciarSimulaciones,
       );
     }
@@ -226,6 +235,7 @@ class Dependencias {
       ubicacion: ubicacion,
       brujula: brujula,
       permisos: permisos,
+      enlaces: enlaces,
       iniciarSimulaciones: db.iniciarSimulaciones,
     );
   }
@@ -245,6 +255,9 @@ class Dependencias {
 
   /// U-01 · U-02: los permisos del sistema. Reales en el teléfono, concedidos en la demo.
   final PermisosSistema permisos;
+
+  /// G-06 (CR-F04): abre la ruta en Google Maps. Real en el teléfono, simulado en el resto.
+  final AbridorEnlaces enlaces;
 
   /// U-05: servicio en segundo plano y vibración. En Android son los reales
   /// (`ServicioDisparoRapidoNativo` y `VibradorNativo`); en el resto, simulados.

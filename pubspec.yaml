@@ -26,6 +26,8 @@ dependencies:
   geolocator: ^14.1.2
   # U-06: la foto automática de la alerta, sin que el usuario tenga que encuadrar.
   camera: ^0.12.1
+  # G-06 (CR-F04): abrir la ruta en Google Maps. Paquete oficial de Flutter para enlaces.
+  url_launcher: ^6.3.3
 
 dev_dependencies:
   flutter_test:
