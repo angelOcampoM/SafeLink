@@ -127,6 +127,28 @@ void main() {
     semantica.dispose();
   });
 
+  testWidgets('G-04: la capa del toque va encima de la foto en la miniatura', (tester) async {
+    await fotoEnCache(tester, _url);
+    await tester.pumpWidget(envolver(const FotoEvidencia(url: _url)));
+    await bombear(tester);
+
+    final stack = tester.widget<Stack>(
+      find.descendant(of: find.byType(FotoEvidencia), matching: find.byType(Stack)).first,
+    );
+    final hijos = stack.children;
+    // La foto es el único hijo que no va posicionado: fija el tamaño del Stack.
+    final indiceFoto = hijos.indexWhere((w) => w is! Positioned);
+    final indiceToque = hijos.length - 1;
+
+    expect(indiceFoto, isNonNegative, reason: 'la foto va de fondo');
+    expect(hijos[indiceToque], isA<Positioned>(), reason: 'la capa del toque va al final del Stack');
+    expect(indiceToque, greaterThan(indiceFoto), reason: 'el toque va encima de la foto');
+
+    final capa = (hijos[indiceToque] as Positioned).child as Material;
+    expect(capa.type, MaterialType.transparency);
+    expect(capa.child, isA<InkWell>());
+  });
+
   testWidgets('G-04: sin foto no se puede ampliar y el aviso no cambia', (tester) async {
     await tester.pumpWidget(envolver(const FotoEvidencia(url: null)));
 

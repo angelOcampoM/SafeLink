@@ -89,29 +89,30 @@ class _FotoAmpliable extends StatelessWidget {
       // toque accesible. Lo que haya dentro no se anuncia aparte.
       excludeSemantics: true,
       onTap: abrir,
-      // El Material deja que el efecto del toque se pinte sobre la foto.
-      child: Material(
-        type: MaterialType.transparency,
-        child: InkWell(
-          onTap: abrir,
-          child: Stack(
-            children: [
-              foto,
-              Positioned(
-                right: AppSpacing.xs,
-                bottom: AppSpacing.xs,
-                child: Container(
-                  padding: const EdgeInsets.all(AppSpacing.xxs),
-                  decoration: BoxDecoration(
-                    color: AppColors.background.withValues(alpha: 0.7),
-                    borderRadius: AppRadius.brSm,
-                  ),
-                  child: const Icon(Icons.open_in_full_rounded, size: AppSizes.iconSm, color: AppColors.textPrimary),
-                ),
+      child: Stack(
+        children: [
+          foto,
+          Positioned(
+            right: AppSpacing.xs,
+            bottom: AppSpacing.xs,
+            child: Container(
+              padding: const EdgeInsets.all(AppSpacing.xxs),
+              decoration: BoxDecoration(
+                color: AppColors.background.withValues(alpha: 0.7),
+                borderRadius: AppRadius.brSm,
               ),
-            ],
+              child: const Icon(Icons.open_in_full_rounded, size: AppSizes.iconSm, color: AppColors.textPrimary),
+            ),
           ),
-        ),
+          // La capa del toque va al final: encima de la foto, para que el
+          // efecto del InkWell se vea.
+          Positioned.fill(
+            child: Material(
+              type: MaterialType.transparency,
+              child: InkWell(onTap: abrir),
+            ),
+          ),
+        ],
       ),
     );
   }
