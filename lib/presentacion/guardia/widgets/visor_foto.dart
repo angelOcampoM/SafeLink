@@ -66,10 +66,13 @@ class _VisorFotoState extends State<VisorFoto> {
       widget.url,
       fit: BoxFit.contain,
       semanticLabel: widget.etiqueta,
-      errorBuilder: (_, __, ___) => Text(
-        'No se pudo cargar la foto',
-        style: context.text.bodyMedium,
-        textAlign: TextAlign.center,
+      errorBuilder: (_, __, ___) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.broken_image_outlined, color: AppColors.textMuted, size: AppSizes.iconLg),
+          AppSpacing.gapXs,
+          Text('No se pudo cargar la foto', style: context.text.bodyMedium, textAlign: TextAlign.center),
+        ],
       ),
       loadingBuilder: (_, child, progreso) => progreso == null ? child : const LoadingView(),
     );

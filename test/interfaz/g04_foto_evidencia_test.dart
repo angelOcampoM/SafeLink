@@ -146,6 +146,22 @@ void main() {
     expect(find.byType(VisorFoto), findsNothing);
   });
 
+  testWidgets('G-04: el visor avisa cuando la foto no carga y no anuncia imagen', (tester) async {
+    final semantica = tester.ensureSemantics();
+
+    await tester.pumpWidget(
+      MaterialApp(theme: AppTheme.dark(), home: const VisorFoto(url: _url, etiqueta: _etiqueta)),
+    );
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await bombear(tester);
+
+    expect(find.text('No se pudo cargar la foto'), findsOneWidget);
+    expect(find.byIcon(Icons.broken_image_outlined), findsOneWidget);
+    expect(find.bySemanticsLabel(_etiqueta), findsNothing, reason: 'no hay imagen que anunciar');
+    expect(find.byTooltip('Cerrar'), findsOneWidget, reason: 'se puede salir del visor');
+    semantica.dispose();
+  });
+
   // ── G-04, criterio 4: se indica qué dato falta ───────────────────────────
 
   testWidgets('G-04: sin ubicación la tarjeta dice "Ubicación no disponible"', (tester) async {

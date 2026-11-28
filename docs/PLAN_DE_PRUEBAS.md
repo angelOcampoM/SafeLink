@@ -3,7 +3,7 @@
 Cada caso del esquema de pruebas del equipo, con la prueba automatizada que lo
 cubre. **85 casos: 29 de Usuario, 29 de Guardia y 27 de Administrador.**
 
-Estado al 28/11/2026 · rama `feat/pruebas-tres-roles` · **462 pruebas pasan**,
+Estado al 28/11/2026 · rama `feat/pruebas-tres-roles` · **463 pruebas pasan**,
 `flutter analyze` sin incidencias.
 
 | | Significado |
