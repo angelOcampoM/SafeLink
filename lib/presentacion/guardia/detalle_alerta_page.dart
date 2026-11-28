@@ -71,7 +71,7 @@ class _DetalleAlertaPageState extends State<DetalleAlertaPage> {
                         ],
                       ),
                       AppSpacing.gapMd,
-                      FotoEvidencia(url: a.fotoUrl),
+                      FotoEvidencia(url: a.fotoUrl, heroTag: 'foto-${a.id}'),
                       AppSpacing.gapMd,
                       MapaDetalleAlerta(rumbo: a.rumbo),
                       AppSpacing.gapMd,

@@ -10,3 +10,4 @@ export 'inicio_guardia.dart';
 export 'listado_guardia.dart';
 export 'navegacion_guardia.dart';
 export 'turno_guardia.dart';
+export 'visor_foto.dart';

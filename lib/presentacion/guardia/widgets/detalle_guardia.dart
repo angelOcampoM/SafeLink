@@ -11,17 +11,31 @@ import '../../../dominio/dominio.dart';
 import '../../comun/formato.dart';
 import '../../comun/tema/theme.dart';
 import '../../comun/widgets/widgets.dart';
+import 'visor_foto.dart';
 
 /// Alto de la foto y del mapa del detalle (aún no hay token en AppSizes).
 const _altoMedio = 200.0;
 
+/// G-04: la alerta no trae coordenadas. Lo reutiliza UI-01 en el mapa.
+const String textoUbicacionNoDisponible = 'Ubicación no disponible';
+
+/// Texto para lectores de pantalla de la foto ampliada.
+const _etiquetaFoto = 'Fotografía del entorno de la alerta';
+
 /// Foto de evidencia o aviso de "evidencia incompleta".
+///
+/// Con foto cargada se puede tocar para abrirla en [VisorFoto]. Sin foto o con
+/// error de carga solo se muestra el aviso: no hay nada que ampliar.
 class FotoEvidencia extends StatelessWidget {
-  const FotoEvidencia({super.key, required this.url});
+  const FotoEvidencia({super.key, required this.url, this.heroTag});
   final String? url;
+
+  /// Tag del `Hero` que comparte con el visor (por ejemplo, `foto-$alertaId`).
+  final String? heroTag;
 
   @override
   Widget build(BuildContext context) {
+    final url = this.url;
     final placeholder = Container(
       height: _altoMedio,
       color: AppColors.surface,
@@ -41,13 +55,60 @@ class FotoEvidencia extends StatelessWidget {
       child: url == null
           ? placeholder
           : Image.network(
-              url!,
+              url,
               height: _altoMedio,
               width: double.infinity,
               fit: BoxFit.cover,
               errorBuilder: (_, __, ___) => placeholder,
               loadingBuilder: (_, child, p) => p == null ? child : const SizedBox(height: _altoMedio, child: LoadingView()),
+              // El toque solo se habilita cuando hay imagen: si falla la carga,
+              // `errorBuilder` ya sustituyó todo y aquí no se llega.
+              frameBuilder: (context, child, frame, sincrona) =>
+                  frame == null && !sincrona ? child : _FotoAmpliable(url: url, heroTag: heroTag, child: child),
             ),
+    );
+  }
+}
+
+/// Miniatura tocable con el indicador de "se puede ampliar".
+class _FotoAmpliable extends StatelessWidget {
+  const _FotoAmpliable({required this.url, required this.heroTag, required this.child});
+
+  final String url;
+  final String? heroTag;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    void abrir() => VisorFoto.abrir(context, url: url, etiqueta: _etiquetaFoto, heroTag: heroTag);
+    final foto = heroTag == null ? child : Hero(tag: heroTag!, child: child);
+    return Semantics(
+      button: true,
+      label: 'Ampliar fotografía',
+      // Un solo nodo para el lector de pantalla: la etiqueta, el botón y el
+      // toque accesible. Lo que haya dentro no se anuncia aparte.
+      excludeSemantics: true,
+      onTap: abrir,
+      child: InkWell(
+        onTap: abrir,
+        child: Stack(
+          children: [
+            foto,
+            Positioned(
+              right: AppSpacing.xs,
+              bottom: AppSpacing.xs,
+              child: Container(
+                padding: const EdgeInsets.all(AppSpacing.xxs),
+                decoration: BoxDecoration(
+                  color: AppColors.background.withValues(alpha: 0.7),
+                  borderRadius: AppRadius.brSm,
+                ),
+                child: const Icon(Icons.open_in_full_rounded, size: AppSizes.iconSm, color: AppColors.textPrimary),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -84,7 +145,15 @@ class TarjetaDatosAlerta extends StatelessWidget {
       child: Column(
         children: [
           InfoRow(icon: Icons.schedule_rounded, label: 'Hora', value: '${Fmt.time(a.disparadaEn)} · ${Fmt.ago(a.disparadaEn, ahora)}'),
-          if (distancia != null)
+          // G-04: sin coordenadas el guardia debe saberlo, no ver una fila menos.
+          if (a.ubicacion == null)
+            const InfoRow(
+              icon: Icons.location_off_outlined,
+              label: 'Ubicación',
+              value: textoUbicacionNoDisponible,
+              valueColor: AppColors.textMuted,
+            )
+          else if (distancia != null)
             InfoRow(icon: Icons.near_me_outlined, label: 'Distancia', value: Fmt.distance(distancia!), valueColor: AppColors.info),
           InfoRow(
             icon: Icons.explore_outlined,

@@ -1,9 +1,9 @@
 # SafeLink — Plan de pruebas
 
 Cada caso del esquema de pruebas del equipo, con la prueba automatizada que lo
-cubre. **83 casos: 29 de Usuario, 27 de Guardia y 27 de Administrador.**
+cubre. **85 casos: 29 de Usuario, 29 de Guardia y 27 de Administrador.**
 
-Estado al 02/11/2026 · rama `feat/pruebas-tres-roles` · **309 pruebas pasan**,
+Estado al 28/11/2026 · rama `feat/pruebas-tres-roles` · **462 pruebas pasan**,
 `flutter analyze` sin incidencias.
 
 | | Significado |
@@ -49,7 +49,7 @@ Estado al 02/11/2026 · rama `feat/pruebas-tres-roles` · **309 pruebas pasan**,
 
 ---
 
-## Guardia de respuesta — 27 casos · 23 cubiertos · 4 📱
+## Guardia de respuesta — 29 casos · 25 cubiertos · 4 📱
 
 | Historia | Qué comprueba | Tipo | | Prueba |
 |---|---|---|---|---|
@@ -70,6 +70,8 @@ Estado al 02/11/2026 · rama `feat/pruebas-tres-roles` · **309 pruebas pasan**,
 | G-04 | Conversión del rumbo a la orientación en el mapa | Unitaria | ✅ | `regla_geocerca_test` |
 | G-04 | Carga de los datos de la alerta seleccionada | Integración | ✅ | `detalle_alerta_view_model_test` |
 | G-04 | Indicación de evidencia incompleta | Interfaz | ✅ | `guardia_detalle_navegacion_test` |
+| G-04 | La foto se amplía a pantalla completa y se cierra | Interfaz | ✅ | `g04_foto_evidencia_test` |
+| G-04 | Ubicación no disponible cuando la alerta no trae ubicación | Interfaz | ✅ | `g04_foto_evidencia_test` |
 | G-05 | Botón de aceptar y cambio de estado | Interfaz | ✅ | `guardia_detalle_navegacion_test` |
 | G-05 | Reglas de aceptación | Unitaria | ✅ | `regla_alerta_test` |
 | G-05 | Aceptación simultánea desde dos dispositivos | Integración | ✅ | `detalle_alerta_view_model_test` |
@@ -143,7 +145,7 @@ prueba automática podía ver, porque viven en la frontera con el sistema operat
 
 ## Backend, tarjeta BE-04 (despacho de alertas al guardia)
 
-Casos del backend que cubren, del lado del servidor, las historias G-02, G-03, G-05 (HU-11, HU-12 y HU-24 del issue #54, D33) y las de soporte G-04, G-06 y G-07. Se ejecutan con `npm test` desde `backend/` (Vitest). Las pruebas de integración usan Postgres real (`safelink_test`; ver `backend/README.md`); las unitarias no necesitan base. Rutas de archivo relativas a `backend/tests/`. Este bloque no cuenta en los 83 casos del front. Ninguna de estas pruebas toca FCM real (D43).
+Casos del backend que cubren, del lado del servidor, las historias G-02, G-03, G-05 (HU-11, HU-12 y HU-24 del issue #54, D33) y las de soporte G-04, G-06 y G-07. Se ejecutan con `npm test` desde `backend/` (Vitest). Las pruebas de integración usan Postgres real (`safelink_test`; ver `backend/README.md`); las unitarias no necesitan base. Rutas de archivo relativas a `backend/tests/`. Este bloque no cuenta en los 85 casos del front. Ninguna de estas pruebas toca FCM real (D43).
 
 | Historia | Qué comprueba | Tipo | Prueba |
 |---|---|---|---|

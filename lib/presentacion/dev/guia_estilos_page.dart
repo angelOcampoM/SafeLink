@@ -9,6 +9,7 @@ import '../../dominio/dominio.dart';
 import '../comun/estado_vista.dart';
 import '../comun/tema/theme.dart';
 import '../comun/widgets/widgets.dart';
+import '../guardia/widgets/widgets_guardia.dart';
 
 class GuiaEstilosPage extends StatelessWidget {
   const GuiaEstilosPage({super.key});
@@ -345,6 +346,15 @@ class _Content extends StatelessWidget {
           AppSpacing.gapSm,
           AlertCard(alert: sample.copyWith(estado: EstadoAlerta.cerrada, resolucion: Resolucion.resuelta), now: now),
         ]),
+        const _Section(
+          'FotoEvidencia · visor a pantalla completa',
+          [
+            FotoEvidencia(url: null),
+            AppSpacing.gapSm,
+            FotoEvidencia(url: 'https://picsum.photos/seed/safelink/640/420', heroTag: 'guia-foto'),
+          ],
+          note: 'Con foto se toca y se amplía; sin foto avisa que la evidencia está incompleta.',
+        ),
         _Section('AlertDetailSheet', note: 'Detalle de una alerta del historial (usuario, guardia y admin).', [
           SlButton(
             label: 'Abrir detalle',
@@ -396,6 +406,12 @@ class _Content extends StatelessWidget {
                 InfoRow(icon: Icons.schedule_rounded, label: 'Hora', value: '18:17'),
                 InfoRow(icon: Icons.near_me_outlined, label: 'Distancia', value: '640 m', valueColor: AppColors.info),
                 InfoRow(icon: Icons.explore_outlined, label: 'Rumbo', value: '40° NE'),
+                InfoRow(
+                  icon: Icons.location_off_outlined,
+                  label: 'Ubicación',
+                  value: textoUbicacionNoDisponible,
+                  valueColor: AppColors.textMuted,
+                ),
               ],
             ),
           ),
